@@ -1,0 +1,118 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply bg-ink-950 text-white/90 antialiased;
+  background-image: radial-gradient(
+      80% 50% at 50% -10%,
+      rgba(109, 124, 255, 0.18) 0%,
+      transparent 60%
+    ),
+    radial-gradient(50% 40% at 100% 0%, rgba(45, 212, 191, 0.1) 0%, transparent 60%);
+  background-attachment: fixed;
+}
+
+@layer components {
+  /* Frosted glass surface */
+  .glass {
+    @apply border border-white/10 bg-white/[0.04] backdrop-blur-xl;
+  }
+  .glass-strong {
+    @apply border border-white/10 bg-white/[0.07] backdrop-blur-2xl;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-medium transition-all duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-aurora/60 disabled:opacity-50;
+  }
+  .btn-primary {
+    @apply bg-aurora text-white shadow-glow hover:bg-aurora-600 hover:shadow-[0_0_50px_-8px_rgba(109,124,255,0.7)];
+  }
+  .btn-ghost {
+    @apply glass text-white/90 hover:bg-white/10;
+  }
+
+  .gradient-text {
+    @apply bg-gradient-to-r from-aurora-400 via-white to-teal-glow bg-clip-text text-transparent;
+  }
+
+  /* Animated gradient border card */
+  .card-glow {
+    @apply glass rounded-3xl;
+    position: relative;
+  }
+  .card-glow::before {
+    content: "";
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(
+      135deg,
+      rgba(109, 124, 255, 0.5),
+      transparent 40%,
+      rgba(45, 212, 191, 0.4)
+    );
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    opacity: 0;
+    transition: opacity 0.4s ease;
+    pointer-events: none;
+  }
+  .card-glow:hover::before {
+    opacity: 1;
+  }
+}
+
+/* Shimmering skeleton */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.04) 25%,
+    rgba(255, 255, 255, 0.12) 50%,
+    rgba(255, 255, 255, 0.04) 75%
+  );
+  background-size: 200% 100%;
+  @apply animate-shimmer rounded-lg;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Leaflet dark theming tweaks */
+.leaflet-container {
+  background: #0a0c14 !important;
+  font-family: inherit;
+}
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+  background: #11141f;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.leaflet-control-attribution {
+  background: rgba(0, 0, 0, 0.5) !important;
+  color: rgba(255, 255, 255, 0.5) !important;
+}
+.leaflet-control-attribution a {
+  color: rgba(255, 255, 255, 0.7) !important;
+}
