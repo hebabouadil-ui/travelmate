@@ -11,6 +11,22 @@ providers (OpenAI, Claude, Google Maps, Stripe) **without rewriting core logic**
 
 ---
 
+## 📱 Now mobile-first — native Android & iOS app
+
+The product's primary target is a **native mobile app**, built with **Expo +
+React Native** in [`mobile/`](./mobile). It reuses this project's AI provider,
+itinerary engine, route optimizer, weather, discovery and Supabase layers —
+now running **on-device** with offline caching, native maps, GPS, push
+notifications and mobile gestures. Android is the highest priority.
+
+➡️ **See [`mobile/README.md`](./mobile/README.md)** for run / APK / Play Store
+instructions.
+
+The Next.js code below remains as the web companion and the original home of the
+shared logic.
+
+---
+
 ## ✨ What's built
 
 | Area | Status | Notes |
