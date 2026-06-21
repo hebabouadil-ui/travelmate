@@ -1,12 +1,12 @@
 import "react-native-gesture-handler";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { Stack, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
 import * as Notifications from "expo-notifications";
-import { useFonts } from "expo-font";
+import * as Font from "expo-font";
 import { Ionicons } from "@expo/vector-icons";
 import { colors } from "@/theme";
 import { useProfile } from "@/store/useProfile";
@@ -17,10 +17,25 @@ SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
 export default function RootLayout() {
   const hydrated = useProfile((s) => s._hydrated);
-  const [fontsLoaded] = useFonts(Ionicons.font);
+  const [fontsDone, setFontsDone] = useState(false);
   const router = useRouter();
 
-  const ready = hydrated && fontsLoaded;
+  // Preload the icon font so glyphs don't render blank — but NEVER block the
+  // app on it: proceed after at most 2.5s even if loading fails/hangs.
+  useEffect(() => {
+    let mounted = true;
+    Promise.race([
+      Font.loadAsync(Ionicons.font),
+      new Promise((res) => setTimeout(res, 2500)),
+    ])
+      .catch(() => undefined)
+      .finally(() => mounted && setFontsDone(true));
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const ready = hydrated && fontsDone;
 
   useEffect(() => {
     if (ready) SplashScreen.hideAsync().catch(() => undefined);
