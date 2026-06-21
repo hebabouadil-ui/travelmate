@@ -103,6 +103,10 @@ export interface Itinerary {
   id: string;
   destination: string;
   center: GeoPoint;
+  /** A short, evocative paragraph on why this destination is worth visiting. */
+  overview: string;
+  /** 3–5 punchy reasons / highlights for the destination. */
+  highlights: string[];
   days: ItineraryDay[];
   profile: Partial<TravelProfile>;
   totalEstimatedCost: number;

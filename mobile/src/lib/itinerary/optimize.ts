@@ -40,52 +40,86 @@ export function optimizeRoute<T extends GeoPoint>(
 }
 
 /**
- * Group sights into geographically-tight day clusters, each anchored on a
- * high-interest sight, so each day stays in one area of the city.
+ * Decide how many sights each day should get. Spreads the available sights
+ * evenly across all days (so later days are never starved) while capping each
+ * day at `maxPerDay` for a comfortable pace. A 1-day trip therefore gets the
+ * fullest possible day (up to the cap).
  */
-export function clusterIntoDays(
-  sights: Place[],
-  days: number,
-  perDay: number
-): Place[][] {
+export function planPerDay(total: number, days: number, maxPerDay: number): number[] {
+  if (days <= 0) return [];
+  const counts = new Array(days).fill(0);
+  let remaining = Math.min(total, days * maxPerDay);
+  let i = 0;
+  let guard = 0;
+  while (remaining > 0 && guard < days * maxPerDay + days) {
+    if (counts[i] < maxPerDay) {
+      counts[i]++;
+      remaining--;
+    }
+    i = (i + 1) % days;
+    guard++;
+  }
+  return counts;
+}
+
+/**
+ * Group sights into geographically-tight day clusters, each anchored on a
+ * high-interest sight, so each day stays in one area of the city. `counts`
+ * controls how many sights land on each day (see `planPerDay`).
+ */
+export function clusterIntoDays(sights: Place[], counts: number[]): Place[][] {
   const remaining = [...sights].sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
   const result: Place[][] = [];
 
-  for (let d = 0; d < days; d++) {
-    if (remaining.length === 0) break;
-    const seed = remaining.shift()!;
-    const group = [seed];
-    remaining.sort((a, b) => haversineKm(seed, a) - haversineKm(seed, b));
-    while (group.length < perDay && remaining.length) {
-      group.push(remaining.shift()!);
+  for (let d = 0; d < counts.length; d++) {
+    const want = counts[d];
+    const group: Place[] = [];
+    if (remaining.length && want > 0) {
+      const seed = remaining.shift()!;
+      group.push(seed);
+      remaining.sort((a, b) => haversineKm(seed, a) - haversineKm(seed, b));
+      while (group.length < want && remaining.length) {
+        group.push(remaining.shift()!);
+      }
     }
     result.push(group);
-  }
-
-  while (result.length < days && result.length > 0) {
-    result.push([]);
   }
   return result;
 }
 
-/** Nearest place of a predicate to an anchor, optionally excluding ids. */
+/**
+ * Nearest place matching a predicate to an anchor, preferring ones not already
+ * used. When every match has been used and `allowReuse` is true, it returns the
+ * nearest match anyway — so days never go without a meal just because the pool
+ * is small (important for offline/seed-only plans).
+ */
 export function nearestWhere(
   anchor: GeoPoint,
   pool: Place[],
   predicate: (p: Place) => boolean,
-  exclude: Set<string>
+  exclude: Set<string>,
+  allowReuse = false
 ): Place | undefined {
   let best: Place | undefined;
   let bestDist = Infinity;
+  let fallback: Place | undefined;
+  let fallbackDist = Infinity;
   for (const p of pool) {
-    if (exclude.has(p.id) || !predicate(p)) continue;
+    if (!predicate(p)) continue;
     const d = haversineKm(anchor, p);
+    if (exclude.has(p.id)) {
+      if (d < fallbackDist) {
+        fallbackDist = d;
+        fallback = p;
+      }
+      continue;
+    }
     if (d < bestDist) {
       bestDist = d;
       best = p;
     }
   }
-  return best;
+  return best ?? (allowReuse ? fallback : undefined);
 }
 
 function avg(nums: number[]): number {

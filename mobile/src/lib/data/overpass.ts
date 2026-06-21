@@ -63,8 +63,9 @@ function buildQuery(c: GeoPoint, r: number): string {
   nwr["leisure"~"park|garden"]${around};
   nwr["natural"="beach"]${around};
   nwr["amenity"~"bar|pub|nightclub"]${around};
+  nwr["shop"~"mall|department_store"]${around};
 );
-out center 220;`;
+out center 350;`;
 }
 
 function toPlace(el: OverpassElement): Place | null {
@@ -118,6 +119,7 @@ function classify(tags: Record<string, string>): PlaceCategory | null {
   if (["bar", "pub", "nightclub"].includes(tags.amenity || "")) return "nightlife";
   if (tags.leisure === "park" || tags.leisure === "garden") return "park";
   if (tags.natural === "beach") return "beach";
+  if (tags.shop === "mall" || tags.shop === "department_store") return "shopping";
   return null;
 }
 

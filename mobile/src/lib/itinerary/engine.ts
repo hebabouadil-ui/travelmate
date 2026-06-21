@@ -12,7 +12,8 @@ import { addDays, haversineKm, makeId, walkingMinutes } from "../utils";
 import { geocode } from "../data/geocode";
 import { discoverPlaces } from "../data/places";
 import { getWeather } from "../data/weather";
-import { clusterIntoDays, nearestWhere, optimizeRoute } from "./optimize";
+import { buildOverview } from "../data/overviews";
+import { clusterIntoDays, nearestWhere, optimizeRoute, planPerDay } from "./optimize";
 import { dailyTransport, stopCost } from "./budget";
 import { getProvider, extractJson } from "../ai/provider";
 import { CONCIERGE_SYSTEM, buildEnrichmentPrompt } from "../ai/prompts";
@@ -45,10 +46,14 @@ const DURATION: Record<PlaceCategory, number> = {
   shopping: 60,
 };
 
-function sightsPerDay(activity?: string): number {
-  if (activity === "relaxed") return 2;
-  if (activity === "intensive") return 4;
-  return 3;
+/**
+ * Max sights to schedule per day by pace. Higher than before so days feel full;
+ * a 1-day trip is packed up to this cap (the "give me the maximum" case).
+ */
+function maxSightsPerDay(activity?: string): number {
+  if (activity === "relaxed") return 4;
+  if (activity === "intensive") return 6;
+  return 5;
 }
 
 /** Main entry point: produce a complete, optimized, narrated itinerary. */
@@ -69,14 +74,21 @@ export async function generateItinerary(req: TripRequest): Promise<Itinerary> {
   const sights = scored.filter((p) => !isFood(p) && p.category !== "nightlife");
   const food = scored.filter((p) => isFood(p));
 
-  const perDay = sightsPerDay(req.profile?.activityLevel);
+  // Spread sights evenly so every day — early or late — stays rich.
+  const counts = planPerDay(
+    sights.length,
+    req.days,
+    maxSightsPerDay(req.profile?.activityLevel)
+  );
   const wantsEvening =
     req.profile?.activityLevel === "intensive" ||
     req.interests.includes("nightlife") ||
-    req.profile?.travelerType === "couple";
+    req.profile?.travelerType === "couple" ||
+    req.days === 1; // a single day should make the most of the evening too
 
-  const clusters = clusterIntoDays(sights, req.days, perDay);
+  const clusters = clusterIntoDays(sights, counts);
   const usedFood = new Set<string>();
+  const usedExtra = new Set<string>();
 
   const days: ItineraryDay[] = clusters.map((group, idx) => {
     const day = idx + 1;
@@ -87,6 +99,7 @@ export async function generateItinerary(req: TripRequest): Promise<Itinerary> {
       scored,
       center,
       usedFood,
+      usedExtra,
       req,
       wantsEvening
     );
@@ -104,7 +117,8 @@ export async function generateItinerary(req: TripRequest): Promise<Itinerary> {
     };
   });
 
-  await narrate(req, days);
+  const fallbackOverview = buildOverview(req);
+  await narrate(req, days, fallbackOverview);
 
   const totalEstimatedCost = days.reduce((s, d) => s + d.estimatedCost, 0);
   const provider = getProvider();
@@ -113,6 +127,8 @@ export async function generateItinerary(req: TripRequest): Promise<Itinerary> {
     id: makeId("trip"),
     destination: geo.name,
     center,
+    overview: fallbackOverview.overview,
+    highlights: fallbackOverview.highlights,
     days,
     profile: req.profile ?? {},
     totalEstimatedCost,
@@ -159,6 +175,7 @@ function buildStops(
   pool: Place[],
   center: { lat: number; lng: number },
   usedFood: Set<string>,
+  usedExtra: Set<string>,
   req: TripRequest,
   wantsEvening: boolean
 ): ItineraryStop[] {
@@ -184,33 +201,47 @@ function buildStops(
     });
   };
 
-  // Morning sight
+  // Optional morning coffee at a nearby café — a small touch that makes the
+  // day feel curated rather than a bare list of monuments.
+  const coffee = nearestWhere(anchor, pool, (p) => p.category === "cafe", usedExtra, true);
+  if (coffee) {
+    usedExtra.add(coffee.id);
+    push(coffee, "morning");
+  }
+
+  // Morning headline sight
   if (ordered[0]) push(ordered[0], "morning");
 
-  // Lunch near the morning area
-  const lunch = nearestWhere(
-    anchor,
-    food,
-    (p) => p.category === "restaurant",
-    usedFood
-  );
+  // Second sight before lunch, if the day has one
+  if (ordered[1]) push(ordered[1], "morning");
+
+  // Lunch near the morning area (reuse a great spot if the pool is small)
+  const lunch = nearestWhere(anchor, food, (p) => p.category === "restaurant", usedFood, true);
   if (lunch) {
     usedFood.add(lunch.id);
     push(lunch, "lunch");
   }
 
   // Afternoon sights (the rest of the cluster)
-  ordered.slice(1).forEach((s) => push(s, "afternoon"));
+  ordered.slice(2).forEach((s) => push(s, "afternoon"));
 
   const last = ordered[ordered.length - 1] ?? anchor;
 
-  // Dinner near the last sight
-  const dinner = nearestWhere(
+  // Golden-hour viewpoint / park to break up the sightseeing
+  const goldenHour = nearestWhere(
     last,
-    food,
-    (p) => p.category === "restaurant",
-    usedFood
+    pool,
+    (p) => p.category === "viewpoint" || p.category === "park",
+    usedExtra,
+    false
   );
+  if (goldenHour && !ordered.includes(goldenHour)) {
+    usedExtra.add(goldenHour.id);
+    push(goldenHour, "afternoon");
+  }
+
+  // Dinner near the last sight
+  const dinner = nearestWhere(last, food, (p) => p.category === "restaurant", usedFood, true);
   if (dinner) {
     usedFood.add(dinner.id);
     push(dinner, "dinner");
@@ -222,10 +253,11 @@ function buildStops(
       last,
       pool,
       (p) => p.category === "nightlife" || p.category === "viewpoint",
-      usedFood
+      usedExtra,
+      true
     );
     if (evening) {
-      usedFood.add(evening.id);
+      usedExtra.add(evening.id);
       push(evening, "evening");
     }
   }
@@ -234,11 +266,16 @@ function buildStops(
 }
 
 /**
- * Enrich the structural plan with concierge narration. Uses the live AI
- * provider when available; otherwise falls back to grounded templates so the
- * output is always polished and free.
+ * Enrich the structural plan with concierge narration + a destination overview.
+ * Uses the live AI provider when available; otherwise falls back to grounded
+ * templates so the output is always polished and free. The `overview` object is
+ * mutated in place when the model returns better copy.
  */
-async function narrate(req: TripRequest, days: ItineraryDay[]): Promise<void> {
+async function narrate(
+  req: TripRequest,
+  days: ItineraryDay[],
+  overview: { overview: string; highlights: string[] }
+): Promise<void> {
   const provider = getProvider();
 
   if (provider.isLive) {
@@ -261,6 +298,8 @@ async function narrate(req: TripRequest, days: ItineraryDay[]): Promise<void> {
         { json: true, temperature: 0.85 }
       );
       const parsed = extractJson<{
+        overview?: string;
+        highlights?: string[];
         days: {
           day: number;
           title: string;
@@ -270,6 +309,10 @@ async function narrate(req: TripRequest, days: ItineraryDay[]): Promise<void> {
       }>(raw);
       if (parsed.days?.length) {
         applyNarration(days, parsed.days);
+        if (parsed.overview && parsed.overview.length > 40) overview.overview = parsed.overview;
+        if (parsed.highlights?.length) overview.highlights = parsed.highlights.slice(0, 5);
+        // Still backfill any notes the model skipped.
+        backfillNotes(req, days);
         return;
       }
     } catch {
@@ -278,6 +321,16 @@ async function narrate(req: TripRequest, days: ItineraryDay[]): Promise<void> {
   }
 
   templateNarration(req, days);
+}
+
+/** Ensure every stop has a note even if the model missed some. */
+function backfillNotes(req: TripRequest, days: ItineraryDay[]): void {
+  for (const d of days) {
+    if (!d.title) d.title = `Day ${d.day}`;
+    for (const stop of d.stops) {
+      if (!stop.note) stop.note = noteFor(stop);
+    }
+  }
 }
 
 function applyNarration(
@@ -310,15 +363,20 @@ const TITLES = [
   "Neighborhoods & authentic bites",
   "Views, markets & slow mornings",
   "Coast, calm & city lights",
+  "Backstreets & local secrets",
 ];
 
 function templateNarration(req: TripRequest, days: ItineraryDay[]): void {
   days.forEach((d, i) => {
-    d.title = TITLES[i % TITLES.length];
-    const headline = d.stops[0]?.place.name;
+    const headlineStop = d.stops.find((s) => !isFood(s.place)) ?? d.stops[0];
+    const headline = headlineStop?.place.name;
+    const sightCount = d.stops.filter(
+      (s) => !isFood(s.place) && s.place.category !== "viewpoint"
+    ).length;
+    d.title = headline ? `${TITLES[i % TITLES.length]}` : `Day ${d.day}`;
     d.summary = headline
-      ? `Explore ${req.destination} around ${headline}, with stops grouped to keep walking short.`
-      : `A relaxed day discovering ${req.destination}.`;
+      ? `A ${pace(sightCount)} day around ${headline} and nearby spots — everything's grouped close together so you spend the day exploring, not commuting. Expect ${sightCount} key ${sightCount === 1 ? "sight" : "sights"}, a couple of great meals and time to wander.`
+      : `A relaxed day soaking up ${req.destination} at your own pace.`;
     for (const stop of d.stops) {
       if (stop.note) continue;
       stop.note = noteFor(stop);
@@ -326,29 +384,45 @@ function templateNarration(req: TripRequest, days: ItineraryDay[]): void {
   });
 }
 
+function pace(sightCount: number): string {
+  if (sightCount >= 4) return "full, high-energy";
+  if (sightCount <= 1) return "relaxed, unhurried";
+  return "well-balanced";
+}
+
+/** Richer, more specific concierge note per stop (used offline / as backfill). */
 function noteFor(stop: ItineraryStop): string {
   const p = stop.place;
+  const gem = p.hiddenGem ? " A local favourite that most visitors miss." : "";
   switch (p.category) {
     case "restaurant":
-      return p.cuisine
-        ? `Local ${p.cuisine} — book ahead at peak times.`
-        : "A well-loved local table.";
+      return (
+        (p.cuisine
+          ? `Sit down for standout ${p.cuisine}. Go a little before peak hours or book ahead — locals do.`
+          : "A well-loved local table — come hungry and order what the regulars are having.") + gem
+      );
     case "cafe":
-      return "A great spot to recharge with good coffee.";
+      return `Recharge with proper coffee and a pastry before the next stretch.${gem}`;
     case "museum":
-      return "Allow time for the highlights; mornings are quieter.";
+      return "Give yourself 60–90 minutes for the highlights; mornings and late afternoons are quietest and queues are shortest.";
     case "monument":
-      return "Iconic landmark — arrive early to beat the crowds.";
+      return "An unmissable landmark — arrive early or near closing for softer light and thinner crowds, and look up: the details are the point.";
+    case "landmark":
+      return `Soak in the atmosphere and wander the streets right around it — this is where the city's character shows.${gem}`;
     case "viewpoint":
-      return "Best near golden hour for photos.";
+      return "Time this for golden hour: the light is unreal and it's the photo you'll actually keep.";
     case "park":
-      return "Easy green break between sights.";
+      return "A green breather between sights — grab a bench, people-watch, and reset for the afternoon.";
     case "beach":
-      return "Bring sunscreen and water; lovely at sunset.";
+      return "Bring water, sunscreen and a towel; it's loveliest in the late afternoon as the heat eases.";
+    case "shopping":
+      return `Browse for local finds and souvenirs — half the fun is the side stalls.${gem}`;
     case "nightlife":
-      return "Wind down the day with the local night scene.";
+      return "Cap the day with the local night scene — go later than you think; things warm up after dark.";
+    case "attraction":
+      return `A genuine highlight worth building the day around.${gem}`;
     default:
-      return p.hiddenGem ? "A local favorite, off the usual trail." : "Worth a wander.";
+      return p.hiddenGem ? "A local favourite, off the usual trail." : "Worth a wander.";
   }
 }
 

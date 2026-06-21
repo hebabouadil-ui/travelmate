@@ -91,9 +91,25 @@ Or use **Expo's cloud builds** (no local Android SDK required) — see below.
 
 ---
 
-## 📦 Build an APK / publish to Google Play
+## 📦 Build an APK on GitHub (no local setup)
 
-This project is configured for [EAS Build](https://docs.expo.dev/build/introduction/).
+A GitHub Actions workflow ([`.github/workflows/android-apk.yml`](../.github/workflows/android-apk.yml))
+builds an installable APK on every push to `mobile/**` (and on manual
+**Run workflow**), then attaches it to a **GitHub Release** for direct download.
+
+1. Open the repo's **Actions** tab → **Build Android APK** → wait for the green check.
+2. Grab the APK from the auto-created **Release** (`android-v1.0.N`) or from the
+   run's **Artifacts** (`voyage-ai-apk`).
+3. On your Android phone, open the `.apk`, allow "install from unknown sources", launch.
+
+The release build is signed with the Expo debug keystore, so it installs with no
+secrets. Add an `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY` (and optionally
+`EXPO_PUBLIC_GEMINI_API_KEY`) **repository secret** and re-run to bake in the live
+native map / AI narration.
+
+## 📦 Build via EAS / publish to Google Play
+
+This project is also configured for [EAS Build](https://docs.expo.dev/build/introduction/).
 
 ```bash
 npm i -g eas-cli

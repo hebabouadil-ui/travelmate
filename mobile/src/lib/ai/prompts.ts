@@ -29,7 +29,7 @@ export function buildEnrichmentPrompt(
   days: PlannedDayInput[]
 ): string {
   const profile = req.profile ?? {};
-  return `Create concierge narration for a ${req.days}-day trip to ${req.destination}.
+  return `Create concierge content for a ${req.days}-day trip to ${req.destination}.
 
 Traveller profile:
 - Type: ${profile.travelerType ?? "explorer"}
@@ -43,18 +43,20 @@ ${JSON.stringify(days, null, 2)}
 
 Return STRICT JSON with this exact shape:
 {
+  "overview": "<an inviting 2-3 sentence paragraph on WHY this destination is worth visiting — vivid, specific, makes the reader want to book>",
+  "highlights": ["<3-5 punchy 2-4 word reasons to go>"],
   "days": [
     {
       "day": 1,
       "title": "<evocative 3-6 word day title>",
-      "summary": "<one inviting sentence about the day's theme>",
+      "summary": "<1-2 inviting sentences about the day's theme and flow>",
       "stops": [
-        { "name": "<exact name from input>", "note": "<one helpful insider sentence: what to do, a tip, or why it's special>" }
+        { "name": "<exact name from input>", "note": "<one genuinely useful insider sentence: what to do, best timing, a local tip, or why it's special>" }
       ]
     }
   ]
 }
-Keep notes under 22 words. Match every stop name exactly. Output only JSON.`;
+Make notes specific and practical (not generic). Keep each note under 26 words. Match every stop name exactly. Output only JSON.`;
 }
 
 /** A compact catalog string used when asking the model to surface hidden gems. */

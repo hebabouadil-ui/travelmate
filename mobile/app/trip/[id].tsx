@@ -140,6 +140,31 @@ export default function TripDetail() {
           </View>
         </View>
 
+        {/* Why visit */}
+        {trip.overview ? (
+          <View style={styles.section}>
+            <View style={styles.overviewCard}>
+              <View style={styles.overviewHeader}>
+                <View style={styles.overviewIcon}>
+                  <Ionicons name="sparkles" size={16} color={colors.white} />
+                </View>
+                <Text style={styles.overviewTitle}>Why visit {trip.destination}</Text>
+              </View>
+              <Text style={styles.overviewText}>{trip.overview}</Text>
+              {trip.highlights?.length ? (
+                <View style={styles.highlightWrap}>
+                  {trip.highlights.map((h) => (
+                    <View key={h} style={styles.highlightChip}>
+                      <Ionicons name="checkmark-circle" size={12} color={colors.accent} />
+                      <Text style={styles.highlightText}>{h}</Text>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+            </View>
+          </View>
+        ) : null}
+
         {/* Map */}
         <View style={styles.section}>
           <TripMap center={trip.center} places={dayPlaces} route height={220} onMarkerPress={(p) => openDirections(p, p.name)} />
@@ -234,6 +259,14 @@ const styles = StyleSheet.create({
   heroTitle: { color: colors.white, fontSize: 38, fontWeight: "900", letterSpacing: -0.5 },
   heroMeta: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.md, flexWrap: "wrap" },
   section: { paddingHorizontal: spacing.lg, marginTop: spacing.lg },
+  overviewCard: { backgroundColor: colors.card, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: spacing.lg },
+  overviewHeader: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginBottom: spacing.sm },
+  overviewIcon: { width: 28, height: 28, borderRadius: 9, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
+  overviewTitle: { color: colors.text, fontSize: font.h3, fontWeight: "800", flex: 1 },
+  overviewText: { color: colors.textMuted, fontSize: font.body, lineHeight: 23 },
+  highlightWrap: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginTop: spacing.md },
+  highlightChip: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: colors.accent + "14", borderColor: colors.accent + "44", borderWidth: 1, borderRadius: radius.pill, paddingHorizontal: spacing.sm, paddingVertical: 5 },
+  highlightText: { color: colors.accent, fontSize: font.tiny, fontWeight: "700" },
   dayTabs: { paddingHorizontal: spacing.lg, gap: spacing.sm, marginTop: spacing.lg },
   dayTab: { paddingHorizontal: spacing.lg, paddingVertical: spacing.md, borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, alignItems: "center", minWidth: 80 },
   dayTabActive: { backgroundColor: colors.primary, borderColor: colors.primary, ...shadow.float },
