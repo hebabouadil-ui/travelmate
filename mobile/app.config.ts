@@ -63,6 +63,16 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     "expo-router",
     "expo-font",
     [
+      // Pin Kotlin to satisfy expo-modules-core's Compose Compiler (1.5.15),
+      // which requires Kotlin 1.9.25 (the SDK 52 default of 1.9.24 fails CI).
+      "expo-build-properties",
+      {
+        android: {
+          kotlinVersion: "1.9.25",
+        },
+      },
+    ],
+    [
       "expo-location",
       {
         locationAlwaysAndWhenInUsePermission:
