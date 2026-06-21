@@ -1,5 +1,6 @@
 import type {
   Daypart,
+  GeoPoint,
   Interest,
   Itinerary,
   ItineraryDay,
@@ -9,14 +10,17 @@ import type {
   TripRequest,
 } from "../types";
 import { addDays, haversineKm, makeId, walkingMinutes } from "../utils";
-import { geocode } from "../data/geocode";
+import { geocode, type GeocodeResult } from "../data/geocode";
 import { discoverPlaces } from "../data/places";
 import { getWeather } from "../data/weather";
 import { buildOverview } from "../data/overviews";
+import { categoryImage } from "../data/wikipedia";
+import { dayRoute } from "../data/routing";
 import { clusterIntoDays, nearestWhere, optimizeRoute, planPerDay } from "./optimize";
 import { dailyTransport, stopCost } from "./budget";
 import { getProvider, extractJson } from "../ai/provider";
 import { CONCIERGE_SYSTEM, buildEnrichmentPrompt } from "../ai/prompts";
+import { aiPlanItinerary, type AIPlan, type AIStop } from "../ai/itineraryAI";
 
 const FOOD_CATEGORIES: PlaceCategory[] = ["restaurant", "cafe"];
 
@@ -56,25 +60,161 @@ function maxSightsPerDay(activity?: string): number {
   return 5;
 }
 
-/** Main entry point: produce a complete, optimized, narrated itinerary. */
+/**
+ * Main entry point. AI-first: when Gemini is configured it designs a real,
+ * varied, category-aware itinerary for ANY city worldwide; we then add accurate
+ * street routing (OSRM) + photos. Without a key it falls back to the on-device
+ * engine (free, offline). Either way the result is routed and image-rich.
+ */
 export async function generateItinerary(req: TripRequest): Promise<Itinerary> {
   const geo = await geocode(req.destination);
-  const center = geo.center;
 
-  const [allPlaces, weather] = await Promise.all([
-    discoverPlaces(req.destination, center),
-    getWeather(center, req.startDate, req.days),
+  const [aiPlan, weather] = await Promise.all([
+    aiPlanItinerary(req, geo.name).catch(() => null),
+    getWeather(geo.center, req.startDate, req.days),
   ]);
 
-  const scored = scorePlaces(
-    allPlaces,
-    req.interests,
-    req.profile?.foodPreference
+  let days: ItineraryDay[];
+  let overview: string;
+  let highlights: string[];
+  let country: string | undefined;
+  let engine: Itinerary["engine"];
+
+  if (aiPlan) {
+    days = await buildDaysFromAI(aiPlan, geo, req, weather);
+    overview = aiPlan.overview || buildOverview(req).overview;
+    highlights = aiPlan.highlights?.length ? aiPlan.highlights : buildOverview(req).highlights;
+    country = aiPlan.country;
+    engine = "gemini";
+  } else {
+    days = await buildDeterministicDays(req, geo, weather);
+    const ov = buildOverview(req);
+    overview = ov.overview;
+    highlights = ov.highlights;
+    engine = getProvider().isLive ? "gemini" : "mock";
+  }
+
+  const totalEstimatedCost = days.reduce((s, d) => s + d.estimatedCost, 0);
+
+  return {
+    id: makeId("trip"),
+    destination: geo.name,
+    country,
+    center: geo.center,
+    overview,
+    highlights,
+    days,
+    profile: req.profile ?? {},
+    mode: req.mode ?? "personalized",
+    totalEstimatedCost,
+    currency: "EUR",
+    createdAt: new Date().toISOString(),
+    engine,
+  };
+}
+
+/** Is a coordinate plausible (near the destination, not a hallucination)? */
+function validCoord(lat: unknown, lng: unknown, center: GeoPoint): boolean {
+  if (typeof lat !== "number" || typeof lng !== "number") return false;
+  if (Number.isNaN(lat) || Number.isNaN(lng)) return false;
+  if (Math.abs(lat) > 90 || Math.abs(lng) > 180) return false;
+  return haversineKm(center, { lat, lng }) <= 150; // within ~150km of the city
+}
+
+function placeFromAIStop(s: AIStop, geo: GeocodeResult, seed: number): Place {
+  const center = geo.center;
+  const coord = validCoord(s.lat, s.lng, center)
+    ? { lat: s.lat as number, lng: s.lng as number }
+    : {
+        // keep it on-map near the centre with a small deterministic jitter
+        lat: center.lat + ((seed % 7) - 3) * 0.004,
+        lng: center.lng + (((seed * 3) % 7) - 3) * 0.004,
+      };
+  const gem =
+    /hidden|local favou?rite|off the beaten|secret|tucked/i.test(
+      `${s.whyVisit ?? ""} ${s.description ?? ""}`
+    );
+  return {
+    id: makeId("ai"),
+    name: s.name,
+    category: s.category,
+    lat: coord.lat,
+    lng: coord.lng,
+    description: s.description,
+    whyVisit: s.whyVisit,
+    neighborhood: s.neighborhood,
+    bestTime: s.bestTime,
+    cuisine: s.cuisine,
+    hiddenGem: gem,
+    tags: s.cuisine ? [s.cuisine] : [],
+    score: 0.9,
+    source: "ai",
+    imageUrl: categoryImage(s.category),
+  };
+}
+
+/** Build itinerary days from the AI plan, adding real routing per day. */
+async function buildDaysFromAI(
+  plan: AIPlan,
+  geo: GeocodeResult,
+  req: TripRequest,
+  weather: ItineraryDay["weather"][]
+): Promise<ItineraryDay[]> {
+  return Promise.all(
+    plan.days.map(async (aiDay, idx) => {
+      const stops: ItineraryStop[] = aiDay.stops.map((s, j) => {
+        const place = placeFromAIStop(s, geo, idx * 13 + j);
+        return {
+          daypart: s.daypart,
+          place,
+          durationMin: s.durationMin ?? DURATION[place.category] ?? 60,
+          note: s.whyVisit || s.description,
+          estimatedCost: stopCost(place.category, req.budget),
+        };
+      });
+
+      const route = await dayRoute(stops.map((st) => st.place));
+      stops.forEach((st, i) => {
+        if (i === 0) return;
+        const leg = route.legs[i - 1];
+        if (leg) {
+          st.travelFromPrevMin = leg.durationMin;
+          st.travelDistanceKm = leg.distanceKm;
+          st.travelMode = leg.mode;
+        }
+      });
+
+      const estimatedCost =
+        stops.reduce((s, st) => s + (st.estimatedCost ?? 0), 0) +
+        dailyTransport(req.budget);
+
+      return {
+        day: idx + 1,
+        date: addDays(req.startDate, idx),
+        title: aiDay.title || `Day ${idx + 1}`,
+        summary: aiDay.summary || "",
+        area: aiDay.area,
+        stops,
+        estimatedCost,
+        weather: weather[idx],
+        routeGeometry: route.geometry,
+      };
+    })
   );
+}
+
+/** On-device fallback (no AI key): discovery + clustering + routing + images. */
+async function buildDeterministicDays(
+  req: TripRequest,
+  geo: GeocodeResult,
+  weather: ItineraryDay["weather"][]
+): Promise<ItineraryDay[]> {
+  const center = geo.center;
+  const allPlaces = await discoverPlaces(req.destination, center);
+  const scored = scorePlaces(allPlaces, req.interests, req.profile?.foodPreference);
   const sights = scored.filter((p) => !isFood(p) && p.category !== "nightlife");
   const food = scored.filter((p) => isFood(p));
 
-  // Spread sights evenly so every day — early or late — stays rich.
   const counts = planPerDay(
     sights.length,
     req.days,
@@ -84,58 +224,47 @@ export async function generateItinerary(req: TripRequest): Promise<Itinerary> {
     req.profile?.activityLevel === "intensive" ||
     req.interests.includes("nightlife") ||
     req.profile?.travelerType === "couple" ||
-    req.days === 1; // a single day should make the most of the evening too
+    req.days === 1;
 
   const clusters = clusterIntoDays(sights, counts);
   const usedFood = new Set<string>();
   const usedExtra = new Set<string>();
 
-  const days: ItineraryDay[] = clusters.map((group, idx) => {
-    const day = idx + 1;
-    const ordered = optimizeRoute(group, center);
-    const stops = buildStops(
-      ordered,
-      food,
-      scored,
-      center,
-      usedFood,
-      usedExtra,
-      req,
-      wantsEvening
-    );
-    const estimatedCost =
-      stops.reduce((s, st) => s + (st.estimatedCost ?? 0), 0) +
-      dailyTransport(req.budget);
-    return {
-      day,
-      date: addDays(req.startDate, idx),
-      title: `Day ${day}`,
-      summary: "",
-      stops,
-      estimatedCost,
-      weather: weather[idx],
-    };
-  });
+  const days: ItineraryDay[] = await Promise.all(
+    clusters.map(async (group, idx) => {
+      const ordered = optimizeRoute(group, center);
+      const stops = buildStops(ordered, food, scored, center, usedFood, usedExtra, req, wantsEvening);
+      stops.forEach((st) => {
+        if (!st.place.imageUrl) st.place.imageUrl = categoryImage(st.place.category);
+      });
+      const route = await dayRoute(stops.map((st) => st.place));
+      stops.forEach((st, i) => {
+        if (i === 0) return;
+        const leg = route.legs[i - 1];
+        if (leg) {
+          st.travelFromPrevMin = leg.durationMin;
+          st.travelDistanceKm = leg.distanceKm;
+          st.travelMode = leg.mode;
+        }
+      });
+      const estimatedCost =
+        stops.reduce((s, st) => s + (st.estimatedCost ?? 0), 0) + dailyTransport(req.budget);
+      return {
+        day: idx + 1,
+        date: addDays(req.startDate, idx),
+        title: `Day ${idx + 1}`,
+        summary: "",
+        stops,
+        estimatedCost,
+        weather: weather[idx],
+        routeGeometry: route.geometry,
+      };
+    })
+  );
 
   const fallbackOverview = buildOverview(req);
   await narrate(req, days, fallbackOverview);
-
-  const totalEstimatedCost = days.reduce((s, d) => s + d.estimatedCost, 0);
-  const provider = getProvider();
-
-  return {
-    id: makeId("trip"),
-    destination: geo.name,
-    center,
-    overview: fallbackOverview.overview,
-    highlights: fallbackOverview.highlights,
-    days,
-    profile: req.profile ?? {},
-    totalEstimatedCost,
-    currency: "EUR",
-    createdAt: new Date().toISOString(),
-    engine: provider.isLive ? "gemini" : "mock",
-  };
+  return days;
 }
 
 function isFood(p: Place): boolean {

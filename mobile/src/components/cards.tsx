@@ -106,90 +106,106 @@ export function StopCard({
   index,
   onRemove,
   onNavigate,
+  onPress,
 }: {
   stop: ItineraryStop;
   index: number;
   onRemove?: () => void;
   onNavigate?: () => void;
+  onPress?: () => void;
 }) {
   const meta = CATEGORY_META[stop.place.category];
   const daypart = DAYPART_META[stop.daypart];
+  const transport = TRANSPORT_META[stop.travelMode ?? "walk"];
   return (
-    <View style={styles.stop}>
-      <View style={styles.timeline}>
-        <View style={[styles.stopDot, { backgroundColor: meta.color }]}>
-          <Text style={styles.stopDotNum}>{index + 1}</Text>
+    <View>
+      {stop.travelFromPrevMin ? (
+        <View style={styles.travelConnector}>
+          <Ionicons name={transport.icon as any} size={12} color={colors.textMuted} />
+          <Text style={styles.travelText}>
+            {transport.label} · {stop.travelFromPrevMin} min
+            {stop.travelDistanceKm ? ` · ${stop.travelDistanceKm} km` : ""}
+          </Text>
         </View>
-        <View style={styles.timelineLine} />
-      </View>
+      ) : null}
 
-      <View style={styles.stopCard}>
-        <View style={styles.stopHeader}>
-          <View style={[styles.daypartPill, { backgroundColor: daypart.color + "22" }]}>
-            <Ionicons name={daypart.icon as any} size={11} color={daypart.color} />
-            <Text style={[styles.daypartText, { color: daypart.color }]}>{daypart.label}</Text>
+      <View style={styles.stop}>
+        <View style={styles.timeline}>
+          <View style={[styles.stopDot, { backgroundColor: meta.color }]}>
+            <Text style={styles.stopDotNum}>{index + 1}</Text>
           </View>
-          {stop.place.hiddenGem && (
-            <View style={styles.gem}>
-              <Ionicons name="diamond" size={10} color={colors.accent} />
-              <Text style={styles.gemText}>Hidden gem</Text>
-            </View>
-          )}
+          <View style={styles.timelineLine} />
         </View>
 
-        <Text style={styles.stopName}>{stop.place.name}</Text>
-        <View style={styles.stopMetaRow}>
-          <Text style={styles.stopMeta}>{meta.emoji} {meta.label}</Text>
-          <Text style={styles.stopDot2}>·</Text>
-          <Ionicons name="time-outline" size={12} color={colors.textFaint} />
-          <Text style={styles.stopMeta}>{stop.durationMin}m</Text>
-          {stop.estimatedCost ? (
-            <>
-              <Text style={styles.stopDot2}>·</Text>
-              <Text style={styles.stopMeta}>€{stop.estimatedCost}</Text>
-            </>
+        <Pressable
+          onPress={onPress}
+          style={({ pressed }) => [styles.stopCard, { transform: [{ scale: pressed ? 0.99 : 1 }] }]}
+        >
+          {stop.place.imageUrl ? (
+            <Image source={{ uri: stop.place.imageUrl }} style={styles.stopImage} />
           ) : null}
-        </View>
 
-        {stop.note ? <Text style={styles.stopNote}>{stop.note}</Text> : null}
+          <View style={styles.stopBody}>
+            <View style={styles.stopHeader}>
+              <View style={[styles.daypartPill, { backgroundColor: daypart.color + "22" }]}>
+                <Ionicons name={daypart.icon as any} size={11} color={daypart.color} />
+                <Text style={[styles.daypartText, { color: daypart.color }]}>{daypart.label}</Text>
+              </View>
+              {stop.place.hiddenGem && (
+                <View style={styles.gem}>
+                  <Ionicons name="diamond" size={10} color={colors.accent} />
+                  <Text style={styles.gemText}>Hidden gem</Text>
+                </View>
+              )}
+            </View>
 
-        {stop.travelFromPrevMin ? (
-          <View style={styles.travelRow}>
-            <Ionicons
-              name={
-                stop.travelMode === "walk"
-                  ? "walk"
-                  : stop.travelMode === "transit"
-                  ? "bus"
-                  : "car"
-              }
-              size={12}
-              color={colors.textFaint}
-            />
-            <Text style={styles.travelText}>
-              {stop.travelFromPrevMin} min {stop.travelMode} from previous stop
-            </Text>
+            <Text style={styles.stopName}>{stop.place.name}</Text>
+            <View style={styles.stopMetaRow}>
+              <Text style={styles.stopMeta}>{meta.emoji} {meta.label}</Text>
+              <Text style={styles.stopDot2}>·</Text>
+              <Ionicons name="time-outline" size={12} color={colors.textFaint} />
+              <Text style={styles.stopMeta}>{stop.durationMin}m</Text>
+              {stop.estimatedCost ? (
+                <>
+                  <Text style={styles.stopDot2}>·</Text>
+                  <Text style={styles.stopMeta}>€{stop.estimatedCost}</Text>
+                </>
+              ) : null}
+            </View>
+
+            {stop.note ? <Text style={styles.stopNote} numberOfLines={2}>{stop.note}</Text> : null}
+
+            <View style={styles.stopActions}>
+              <View style={styles.stopAction}>
+                <Ionicons name="information-circle-outline" size={14} color={colors.primary} />
+                <Text style={[styles.stopActionText, { color: colors.primary }]}>Details</Text>
+              </View>
+              {onNavigate && (
+                <Pressable onPress={onNavigate} style={styles.stopAction} hitSlop={6}>
+                  <Ionicons name="navigate" size={14} color={colors.accent} />
+                  <Text style={[styles.stopActionText, { color: colors.accent }]}>Go</Text>
+                </Pressable>
+              )}
+              {onRemove && (
+                <Pressable onPress={onRemove} style={styles.stopAction} hitSlop={6}>
+                  <Ionicons name="trash-outline" size={14} color={colors.danger} />
+                  <Text style={[styles.stopActionText, { color: colors.danger }]}>Remove</Text>
+                </Pressable>
+              )}
+            </View>
           </View>
-        ) : null}
-
-        <View style={styles.stopActions}>
-          {onNavigate && (
-            <Pressable onPress={onNavigate} style={styles.stopAction} hitSlop={6}>
-              <Ionicons name="navigate" size={14} color={colors.accent} />
-              <Text style={[styles.stopActionText, { color: colors.accent }]}>Navigate</Text>
-            </Pressable>
-          )}
-          {onRemove && (
-            <Pressable onPress={onRemove} style={styles.stopAction} hitSlop={6}>
-              <Ionicons name="trash-outline" size={14} color={colors.danger} />
-              <Text style={[styles.stopActionText, { color: colors.danger }]}>Remove</Text>
-            </Pressable>
-          )}
-        </View>
+        </Pressable>
       </View>
     </View>
   );
 }
+
+const TRANSPORT_META: Record<string, { icon: string; label: string }> = {
+  walk: { icon: "walk", label: "Walk" },
+  transit: { icon: "bus", label: "Transit" },
+  taxi: { icon: "car-sport", label: "Taxi" },
+  car: { icon: "car", label: "Drive" },
+};
 
 /** Nearby place list row (distance-sorted). */
 export function PlaceRow({
@@ -297,8 +313,18 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     borderWidth: 1,
     borderColor: colors.border,
-    padding: spacing.lg,
+    overflow: "hidden",
     marginBottom: spacing.md,
+  },
+  stopImage: { width: "100%", height: 116, backgroundColor: colors.surfaceAlt },
+  stopBody: { padding: spacing.lg },
+  travelConnector: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginLeft: 40,
+    marginBottom: spacing.sm,
+    marginTop: -spacing.xs,
   },
   stopHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: spacing.sm },
   daypartPill: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: spacing.sm, paddingVertical: 3, borderRadius: radius.pill },

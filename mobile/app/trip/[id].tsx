@@ -18,6 +18,7 @@ import * as Haptics from "expo-haptics";
 import { colors, font, radius, spacing, shadow } from "@/theme";
 import { TripMap } from "@/components/TripMap";
 import { StopCard } from "@/components/cards";
+import { PlaceSheet } from "@/components/PlaceSheet";
 import { GradientButton, EmptyState, Pill } from "@/components/ui";
 import { useProfile } from "@/store/useProfile";
 import { recomputeDay } from "@/lib/itinerary/engine";
@@ -26,7 +27,7 @@ import { openDirections } from "@/lib/navigation";
 import { scheduleTripReminder, notifyNow } from "@/lib/notifications";
 import { SEED_CITIES } from "@/lib/data/seed";
 import { formatCurrency, humanDate } from "@/lib/utils";
-import type { Budget } from "@/lib/types";
+import type { Budget, ItineraryStop } from "@/lib/types";
 
 function cityImage(name: string): string | undefined {
   return Object.values(SEED_CITIES).find(
@@ -44,6 +45,7 @@ export default function TripDetail() {
   const toggleFavorite = useProfile((s) => s.toggleFavorite);
 
   const [activeDay, setActiveDay] = useState(0);
+  const [sheetStop, setSheetStop] = useState<ItineraryStop | null>(null);
 
   const day = trip?.days[activeDay];
   const dayPlaces = useMemo(() => day?.stops.map((s) => s.place) ?? [], [day]);
@@ -61,7 +63,9 @@ export default function TripDetail() {
     );
   }
 
-  const img = cityImage(trip.destination);
+  const img =
+    cityImage(trip.destination) ||
+    trip.days.flatMap((d) => d.stops).find((s) => s.place.imageUrl)?.place.imageUrl;
   const fav = favorites.includes(trip.id);
   const budget: Budget = (trip.profile.budget as Budget) ?? "medium";
 
@@ -167,7 +171,17 @@ export default function TripDetail() {
 
         {/* Map */}
         <View style={styles.section}>
-          <TripMap center={trip.center} places={dayPlaces} route height={220} onMarkerPress={(p) => openDirections(p, p.name)} />
+          <TripMap
+            center={trip.center}
+            places={dayPlaces}
+            route
+            routeGeometry={day?.routeGeometry}
+            height={220}
+            onMarkerPress={(p) => {
+              const s = day?.stops.find((st) => st.place.id === p.id);
+              if (s) setSheetStop(s);
+            }}
+          />
         </View>
 
         {/* Day selector */}
@@ -227,6 +241,7 @@ export default function TripDetail() {
                     <StopCard
                       stop={stop}
                       index={i}
+                      onPress={() => setSheetStop(stop)}
                       onRemove={() => removeStop(i)}
                       onNavigate={() => openDirections(stop.place, stop.place.name)}
                     />
@@ -246,6 +261,13 @@ export default function TripDetail() {
           </Pressable>
         </View>
       </ScrollView>
+
+      <PlaceSheet
+        stop={sheetStop}
+        city={trip.destination}
+        visible={!!sheetStop}
+        onClose={() => setSheetStop(null)}
+      />
     </View>
   );
 }

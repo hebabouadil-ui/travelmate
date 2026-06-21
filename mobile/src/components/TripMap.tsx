@@ -24,6 +24,8 @@ export interface TripMapProps {
   places: Place[];
   /** When true, draw the route polyline between places in order. */
   route?: boolean;
+  /** Street-following polyline (lat/lng) to draw instead of straight segments. */
+  routeGeometry?: GeoPoint[];
   showUser?: boolean;
   height?: number;
   onMarkerPress?: (place: Place) => void;
@@ -48,6 +50,7 @@ export function TripMap({
   center,
   places,
   route,
+  routeGeometry,
   showUser,
   height = 240,
   onMarkerPress,
@@ -55,18 +58,18 @@ export function TripMap({
 }: TripMapProps) {
   const bounds = useMemo(() => boundsFor(center, places), [center, places]);
 
-  const routeGeoJSON = useMemo(
-    () =>
-      ({
-        type: "Feature" as const,
-        properties: {},
-        geometry: {
-          type: "LineString" as const,
-          coordinates: places.map((p) => [p.lng, p.lat]),
-        },
-      }),
-    [places]
-  );
+  const routeGeoJSON = useMemo(() => {
+    const line =
+      routeGeometry && routeGeometry.length > 1 ? routeGeometry : places;
+    return {
+      type: "Feature" as const,
+      properties: {},
+      geometry: {
+        type: "LineString" as const,
+        coordinates: line.map((p) => [p.lng, p.lat]),
+      },
+    };
+  }, [places, routeGeometry]);
 
   const single = places.length <= 1;
 

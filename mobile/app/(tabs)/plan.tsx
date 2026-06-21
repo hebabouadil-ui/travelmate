@@ -16,10 +16,11 @@ import * as Haptics from "expo-haptics";
 import { colors, font, radius, spacing } from "@/theme";
 import { Chip, GradientButton } from "@/components/ui";
 import { INTERESTS, BUDGETS } from "@/lib/onboarding-config";
-import type { Budget, Interest, TripRequest } from "@/lib/types";
+import type { Budget, Interest, ItineraryMode, TripRequest } from "@/lib/types";
 import { generateItinerary } from "@/lib/itinerary/engine";
 import { useProfile } from "@/store/useProfile";
 import { SEED_CITIES } from "@/lib/data/seed";
+import { searchCities, type CitySuggestion } from "@/lib/data/search";
 
 const POPULAR = Object.values(SEED_CITIES).map((c) => c.name);
 
@@ -41,12 +42,35 @@ export default function Plan() {
   const [budget, setBudget] = useState<Budget>(profile.budget ?? "medium");
   const [interests, setInterests] = useState<Interest[]>(profile.interests ?? []);
   const [when, setWhen] = useState("none");
+  const [mode, setMode] = useState<ItineraryMode>("personalized");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [suggestions, setSuggestions] = useState<CitySuggestion[]>([]);
+  const [picked, setPicked] = useState(false);
+
   useEffect(() => {
-    if (params.destination) setDestination(params.destination);
+    if (params.destination) {
+      setDestination(params.destination);
+      setPicked(true);
+    }
   }, [params.destination]);
+
+  // Debounced global city search (any city worldwide).
+  useEffect(() => {
+    if (picked || destination.trim().length < 2) {
+      setSuggestions([]);
+      return;
+    }
+    const q = destination;
+    const t = setTimeout(() => {
+      searchCities(q).then((r) => {
+        // ignore if the field changed meanwhile
+        if (q === destination) setSuggestions(r);
+      });
+    }, 350);
+    return () => clearTimeout(t);
+  }, [destination, picked]);
 
   const toggleInterest = (i: Interest) =>
     setInterests((prev) =>
@@ -81,6 +105,7 @@ export default function Plan() {
         days,
         budget,
         interests,
+        mode,
         startDate: computeStartDate(),
         profile: { ...profile, budget, interests },
       };
@@ -107,27 +132,67 @@ export default function Plan() {
           {/* Destination */}
           <Text style={styles.label}>Destination</Text>
           <View style={styles.inputWrap}>
-            <Ionicons name="location" size={18} color={colors.primary} />
+            <Ionicons name="search" size={18} color={colors.primary} />
             <TextInput
               value={destination}
-              onChangeText={setDestination}
-              placeholder="e.g. Barcelona, Tokyo, Rome…"
+              onChangeText={(t) => { setDestination(t); setPicked(false); }}
+              placeholder="Search any city worldwide…"
               placeholderTextColor={colors.textFaint}
               style={styles.input}
-              returnKeyType="done"
+              returnKeyType="search"
+              autoCorrect={false}
             />
             {destination.length > 0 && (
-              <Pressable onPress={() => setDestination("")} hitSlop={8}>
+              <Pressable onPress={() => { setDestination(""); setSuggestions([]); setPicked(false); }} hitSlop={8}>
                 <Ionicons name="close-circle" size={18} color={colors.textFaint} />
               </Pressable>
             )}
           </View>
 
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: spacing.sm }} contentContainerStyle={{ gap: spacing.sm, paddingRight: spacing.lg }}>
-            {POPULAR.map((c) => (
-              <Chip key={c} label={c} selected={destination === c} onPress={() => setDestination(c)} />
+          {suggestions.length > 0 && !picked ? (
+            <View style={styles.suggestions}>
+              {suggestions.map((s) => (
+                <Pressable
+                  key={s.label}
+                  style={styles.suggestion}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setDestination(s.value);
+                    setPicked(true);
+                    setSuggestions([]);
+                  }}
+                >
+                  <Ionicons name="location-outline" size={16} color={colors.textMuted} />
+                  <Text style={styles.suggestionText} numberOfLines={1}>{s.label}</Text>
+                </Pressable>
+              ))}
+            </View>
+          ) : (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: spacing.sm }} contentContainerStyle={{ gap: spacing.sm, paddingRight: spacing.lg }}>
+              {POPULAR.map((c) => (
+                <Chip key={c} label={c} selected={destination === c} onPress={() => { setDestination(c); setPicked(true); setSuggestions([]); }} />
+              ))}
+            </ScrollView>
+          )}
+
+          {/* Itinerary mode */}
+          <Text style={styles.label}>Itinerary type</Text>
+          <View style={styles.modeRow}>
+            {([
+              { key: "personalized", label: "Personalized", hint: "Based on your interests", icon: "person" },
+              { key: "recommended", label: "Recommended", hint: "Best of the city", icon: "star" },
+            ] as const).map((m) => (
+              <Pressable
+                key={m.key}
+                onPress={() => { Haptics.selectionAsync(); setMode(m.key); }}
+                style={[styles.modeCard, mode === m.key && styles.modeCardSelected]}
+              >
+                <Ionicons name={m.icon as any} size={18} color={mode === m.key ? colors.primary : colors.textFaint} />
+                <Text style={[styles.modeLabel, mode === m.key && { color: colors.text }]}>{m.label}</Text>
+                <Text style={styles.modeHint}>{m.hint}</Text>
+              </Pressable>
             ))}
-          </ScrollView>
+          </View>
 
           {/* Days */}
           <Text style={styles.label}>How many days?</Text>
@@ -210,6 +275,14 @@ const styles = StyleSheet.create({
   label: { color: colors.text, fontSize: font.body, fontWeight: "700", marginTop: spacing.xl, marginBottom: spacing.md },
   inputWrap: { flexDirection: "row", alignItems: "center", gap: spacing.sm, backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, paddingHorizontal: spacing.lg, height: 54 },
   input: { flex: 1, color: colors.text, fontSize: font.body },
+  suggestions: { marginTop: spacing.sm, backgroundColor: colors.card, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, overflow: "hidden" },
+  suggestion: { flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingVertical: spacing.md, paddingHorizontal: spacing.lg, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+  suggestionText: { color: colors.text, fontSize: font.body, flex: 1 },
+  modeRow: { flexDirection: "row", gap: spacing.sm },
+  modeCard: { flex: 1, backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: spacing.lg },
+  modeCardSelected: { borderColor: colors.primary, backgroundColor: colors.primary + "12" },
+  modeLabel: { color: colors.textMuted, fontWeight: "800", fontSize: font.body, marginTop: spacing.sm },
+  modeHint: { color: colors.textFaint, fontSize: font.tiny, marginTop: 2 },
   stepper: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: spacing.sm },
   stepBtn: { width: 48, height: 48, borderRadius: radius.md, backgroundColor: colors.surfaceAlt, alignItems: "center", justifyContent: "center" },
   stepValue: { alignItems: "center", flexDirection: "row", gap: 6 },

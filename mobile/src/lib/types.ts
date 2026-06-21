@@ -49,6 +49,8 @@ export interface Place extends GeoPoint {
   name: string;
   category: PlaceCategory;
   description?: string;
+  /** One inviting line on why this place is worth visiting. */
+  whyVisit?: string;
   tags?: string[];
   /** 0..1 popularity / interest heuristic. */
   score?: number;
@@ -58,6 +60,12 @@ export interface Place extends GeoPoint {
   source: "overpass" | "opentripmap" | "wikipedia" | "ai" | "mock";
   wikipediaUrl?: string;
   imageUrl?: string;
+  /** Human opening hours if known (OSM). */
+  openingHours?: string;
+  /** Suggested neighborhood/area label. */
+  neighborhood?: string;
+  /** Best time of day to visit, e.g. "Golden hour". */
+  bestTime?: string;
   /** Populated by the nearby (GPS) flow. */
   distanceKm?: number;
 }
@@ -77,6 +85,8 @@ export type PlaceCategory =
 
 export type Daypart = "morning" | "lunch" | "afternoon" | "dinner" | "evening";
 
+export type TravelMode = "walk" | "transit" | "taxi" | "car";
+
 export interface ItineraryStop {
   daypart: Daypart;
   place: Place;
@@ -84,7 +94,9 @@ export interface ItineraryStop {
   durationMin: number;
   /** Travel from the previous stop. */
   travelFromPrevMin?: number;
-  travelMode?: "walk" | "transit" | "taxi";
+  /** Real road distance (km) from the previous stop, when known (OSRM). */
+  travelDistanceKm?: number;
+  travelMode?: TravelMode;
   note?: string;
   estimatedCost?: number;
 }
@@ -94,14 +106,19 @@ export interface ItineraryDay {
   date?: string;
   title: string;
   summary: string;
+  /** Main neighborhood/area for the day. */
+  area?: string;
   stops: ItineraryStop[];
   estimatedCost: number;
   weather?: DayWeather;
+  /** Street-following polyline (lat/lng) for the day's route, if computed. */
+  routeGeometry?: GeoPoint[];
 }
 
 export interface Itinerary {
   id: string;
   destination: string;
+  country?: string;
   center: GeoPoint;
   /** A short, evocative paragraph on why this destination is worth visiting. */
   overview: string;
@@ -109,12 +126,16 @@ export interface Itinerary {
   highlights: string[];
   days: ItineraryDay[];
   profile: Partial<TravelProfile>;
+  /** Planning mode used. */
+  mode?: ItineraryMode;
   totalEstimatedCost: number;
   currency: string;
   createdAt: string;
   /** Which engine produced this plan. */
   engine: "gemini" | "mock" | "openai" | "claude";
 }
+
+export type ItineraryMode = "personalized" | "recommended";
 
 export interface DayWeather {
   date: string;
@@ -134,6 +155,8 @@ export interface TripRequest {
   budget: Budget;
   interests: Interest[];
   profile?: Partial<TravelProfile>;
+  /** "personalized" (interest-driven) or "recommended" (best-of). */
+  mode?: ItineraryMode;
 }
 
 export interface DestinationMatch {
