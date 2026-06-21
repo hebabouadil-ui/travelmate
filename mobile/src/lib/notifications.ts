@@ -1,5 +1,4 @@
 import * as Notifications from "expo-notifications";
-import * as Device from "expo-device";
 import { Platform } from "react-native";
 import type { Itinerary } from "./types";
 import { humanDate } from "./utils";
@@ -11,40 +10,39 @@ import { humanDate } from "./utils";
  * returns an Expo push token so a backend can later send remote pushes.
  */
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
-});
+try {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldShowBanner: true,
+      shouldShowList: true,
+      shouldPlaySound: true,
+      shouldSetBadge: false,
+    }),
+  });
+} catch {
+  // never let notification setup break app startup
+}
 
-export async function registerForPushNotifications(): Promise<string | null> {
-  if (Platform.OS === "android") {
-    await Notifications.setNotificationChannelAsync("default", {
-      name: "Voyage AI",
-      importance: Notifications.AndroidImportance.HIGH,
-      vibrationPattern: [0, 250, 250, 250],
-      lightColor: "#6C5CE7",
-    });
-  }
-
-  if (!Device.isDevice) return null; // push tokens require a physical device
-
-  const { status: existing } = await Notifications.getPermissionsAsync();
-  let status = existing;
-  if (existing !== "granted") {
-    status = (await Notifications.requestPermissionsAsync()).status;
-  }
-  if (status !== "granted") return null;
-
+/**
+ * Lightweight, crash-safe startup setup: only create the Android channel used
+ * for LOCAL reminders. We intentionally do NOT request permissions or fetch a
+ * push token at launch — fetching an Expo push token on Android without
+ * Firebase can crash a release build, and we don't need remote push (all
+ * reminders are scheduled locally, on-device).
+ */
+export async function ensureAndroidChannel(): Promise<void> {
   try {
-    const token = await Notifications.getExpoPushTokenAsync();
-    return token.data;
+    if (Platform.OS === "android") {
+      await Notifications.setNotificationChannelAsync("default", {
+        name: "Voyage AI",
+        importance: Notifications.AndroidImportance.HIGH,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: "#6C5CE7",
+      });
+    }
   } catch {
-    return null;
+    // best-effort; ignore
   }
 }
 

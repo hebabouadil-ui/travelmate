@@ -8,7 +8,8 @@ import * as SplashScreen from "expo-splash-screen";
 import * as Notifications from "expo-notifications";
 import { colors } from "@/theme";
 import { useProfile } from "@/store/useProfile";
-import { registerForPushNotifications } from "@/lib/notifications";
+import { ensureAndroidChannel } from "@/lib/notifications";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
@@ -20,9 +21,9 @@ export default function RootLayout() {
     if (hydrated) SplashScreen.hideAsync().catch(() => undefined);
   }, [hydrated]);
 
-  // Register notification channel / permissions early (non-blocking).
+  // Create the Android notification channel (crash-safe, no token / no prompt).
   useEffect(() => {
-    registerForPushNotifications().catch(() => undefined);
+    ensureAndroidChannel().catch(() => undefined);
   }, []);
 
   // Tapping a trip-reminder notification deep-links into that trip.
@@ -38,6 +39,7 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.bg }}>
       <SafeAreaProvider>
         <StatusBar style="light" />
+        <ErrorBoundary>
         <Stack
           screenOptions={{
             headerShown: false,
@@ -53,6 +55,7 @@ export default function RootLayout() {
             options={{ animation: "slide_from_bottom", presentation: "card" }}
           />
         </Stack>
+        </ErrorBoundary>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
