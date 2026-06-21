@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
   Image,
   Pressable,
@@ -10,6 +10,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import type { DestinationMatch, ItineraryStop, Place } from "@/lib/types";
+import { enrichPlace } from "@/lib/data/wikipedia";
 import {
   colors,
   radius,
@@ -104,12 +105,14 @@ export function DestinationMini({
 export function StopCard({
   stop,
   index,
+  city,
   onRemove,
   onNavigate,
   onPress,
 }: {
   stop: ItineraryStop;
   index: number;
+  city?: string;
   onRemove?: () => void;
   onNavigate?: () => void;
   onPress?: () => void;
@@ -117,6 +120,23 @@ export function StopCard({
   const meta = CATEGORY_META[stop.place.category];
   const daypart = DAYPART_META[stop.daypart];
   const transport = TRANSPORT_META[stop.travelMode ?? "walk"];
+
+  // Lazily upgrade to this place's own real photo (cached) — keeps each card
+  // distinct instead of reusing one category image.
+  const [image, setImage] = useState(stop.place.imageUrl);
+  useEffect(() => {
+    let active = true;
+    if (city) {
+      enrichPlace(stop.place.name, city, stop.place.category)
+        .then((e) => {
+          if (active && e.imageUrl) setImage(e.imageUrl);
+        })
+        .catch(() => undefined);
+    }
+    return () => {
+      active = false;
+    };
+  }, [city, stop.place.name, stop.place.category]);
   return (
     <View>
       {stop.travelFromPrevMin ? (
@@ -141,8 +161,8 @@ export function StopCard({
           onPress={onPress}
           style={({ pressed }) => [styles.stopCard, { transform: [{ scale: pressed ? 0.99 : 1 }] }]}
         >
-          {stop.place.imageUrl ? (
-            <Image source={{ uri: stop.place.imageUrl }} style={styles.stopImage} />
+          {image ? (
+            <Image source={{ uri: image }} style={styles.stopImage} />
           ) : null}
 
           <View style={styles.stopBody}>

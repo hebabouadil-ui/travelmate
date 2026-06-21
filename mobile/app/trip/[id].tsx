@@ -242,6 +242,7 @@ export default function TripDetail() {
                     <StopCard
                       stop={stop}
                       index={i}
+                      city={trip.destination}
                       onPress={() => setSheetStop(stop)}
                       onRemove={() => removeStop(i)}
                       onNavigate={() => openDirections(stop.place, stop.place.name)}

@@ -77,10 +77,11 @@ export async function generateItinerary(req: TripRequest): Promise<Itinerary> {
       }
     : await geocode(req.destination);
 
-  const [aiPlan, weather, heroImage] = await Promise.all([
+  const [aiPlan, weather, heroImage, pool] = await Promise.all([
     aiPlanItinerary(req, req.destination).catch(() => null),
     getWeather(geo.center, req.startDate, req.days),
     cityImageFor(geo.name).catch(() => undefined),
+    discoverPlaces(req.destination, geo.center).catch(() => [] as Place[]),
   ]);
 
   let days: ItineraryDay[];
@@ -90,19 +91,23 @@ export async function generateItinerary(req: TripRequest): Promise<Itinerary> {
   let engine: Itinerary["engine"];
 
   if (aiPlan) {
-    days = await buildDaysFromAI(aiPlan, geo, req, weather);
+    days = buildDaysFromAI(aiPlan, geo, req, weather);
     overview = aiPlan.overview || buildOverview(req).overview;
     highlights = aiPlan.highlights?.length ? aiPlan.highlights : buildOverview(req).highlights;
     country = aiPlan.country;
     engine = "gemini";
   } else {
-    days = await buildDeterministicDays(req, geo, weather);
+    days = await buildDeterministicDays(req, geo, weather, pool);
     const ov = buildOverview(req);
     overview = ov.overview;
     highlights = ov.highlights;
     // Honest label: this came from the on-device engine, not the AI.
     engine = "mock";
   }
+
+  // Guarantee every day is full (backfill from the OSM pool) + accurate routing.
+  // Per-stop real photos load lazily in the cards (keeps generation fast).
+  await finalizeDays(days, pool, geo.center, req);
 
   const totalEstimatedCost = days.reduce((s, d) => s + d.estimatedCost, 0);
 
@@ -164,28 +169,82 @@ function placeFromAIStop(s: AIStop, geo: GeocodeResult, seed: number): Place {
   };
 }
 
-/** Build itinerary days from the AI plan, adding real routing per day. */
-async function buildDaysFromAI(
+/** Build itinerary days from the AI plan (routing/images added in finalize). */
+function buildDaysFromAI(
   plan: AIPlan,
   geo: GeocodeResult,
   req: TripRequest,
   weather: ItineraryDay["weather"][]
-): Promise<ItineraryDay[]> {
-  return Promise.all(
-    plan.days.map(async (aiDay, idx) => {
-      const stops: ItineraryStop[] = aiDay.stops.map((s, j) => {
-        const place = placeFromAIStop(s, geo, idx * 13 + j);
-        return {
-          daypart: s.daypart,
-          place,
-          durationMin: s.durationMin ?? DURATION[place.category] ?? 60,
-          note: s.whyVisit || s.description,
-          estimatedCost: stopCost(place.category, req.budget),
-        };
-      });
+): ItineraryDay[] {
+  return plan.days.map((aiDay, idx) => {
+    const stops: ItineraryStop[] = aiDay.stops.map((s, j) => {
+      const place = placeFromAIStop(s, geo, idx * 13 + j);
+      return {
+        daypart: s.daypart,
+        place,
+        durationMin: s.durationMin ?? DURATION[place.category] ?? 60,
+        note: s.whyVisit || s.description,
+        estimatedCost: stopCost(place.category, req.budget),
+      };
+    });
+    return {
+      day: idx + 1,
+      date: addDays(req.startDate, idx),
+      title: aiDay.title || `Day ${idx + 1}`,
+      summary: aiDay.summary || "",
+      area: aiDay.area,
+      stops,
+      estimatedCost: 0,
+      weather: weather[idx],
+    };
+  });
+}
 
-      const route = await dayRoute(stops.map((st) => st.place));
-      stops.forEach((st, i) => {
+const MIN_STOPS_PER_DAY = 4;
+
+/**
+ * Post-process: make sure no day is thin (backfill from the OSM pool by
+ * proximity, never repeating a place), then compute accurate OSRM routing and
+ * per-day cost. Runs per day in parallel.
+ */
+async function finalizeDays(
+  days: ItineraryDay[],
+  pool: Place[],
+  center: GeoPoint,
+  req: TripRequest
+): Promise<void> {
+  const used = new Set<string>();
+  days.forEach((d) => d.stops.forEach((s) => used.add(norm(s.place.name))));
+
+  for (const day of days) {
+    const anchor = day.stops[0]?.place ?? center;
+    if (day.stops.length < MIN_STOPS_PER_DAY && pool.length) {
+      const candidates = pool
+        .filter((p) => !used.has(norm(p.name)))
+        .sort((a, b) => haversineKm(anchor, a) - haversineKm(anchor, b));
+      for (const p of candidates) {
+        if (day.stops.length >= MIN_STOPS_PER_DAY) break;
+        used.add(norm(p.name));
+        if (!p.imageUrl) p.imageUrl = categoryImage(p.category);
+        day.stops.push({
+          daypart: pickDaypart(day.stops.length),
+          place: p,
+          durationMin: DURATION[p.category] ?? 60,
+          note: p.whyVisit ?? noteFor({ place: p } as ItineraryStop),
+          estimatedCost: stopCost(p.category, req.budget),
+        });
+      }
+    }
+  }
+
+  await Promise.all(
+    days.map(async (day) => {
+      if (day.stops.length === 0) {
+        day.estimatedCost = dailyTransport(req.budget);
+        return;
+      }
+      const route = await dayRoute(day.stops.map((st) => st.place));
+      day.stops.forEach((st, i) => {
         if (i === 0) return;
         const leg = route.legs[i - 1];
         if (leg) {
@@ -194,34 +253,32 @@ async function buildDaysFromAI(
           st.travelMode = leg.mode;
         }
       });
-
-      const estimatedCost =
-        stops.reduce((s, st) => s + (st.estimatedCost ?? 0), 0) +
+      day.routeGeometry = route.geometry;
+      day.estimatedCost =
+        day.stops.reduce((s, st) => s + (st.estimatedCost ?? 0), 0) +
         dailyTransport(req.budget);
-
-      return {
-        day: idx + 1,
-        date: addDays(req.startDate, idx),
-        title: aiDay.title || `Day ${idx + 1}`,
-        summary: aiDay.summary || "",
-        area: aiDay.area,
-        stops,
-        estimatedCost,
-        weather: weather[idx],
-        routeGeometry: route.geometry,
-      };
     })
   );
 }
 
-/** On-device fallback (no AI key): discovery + clustering + routing + images. */
+function pickDaypart(index: number): ItineraryStop["daypart"] {
+  const order: ItineraryStop["daypart"][] = ["morning", "lunch", "afternoon", "dinner", "evening"];
+  return order[Math.min(index, order.length - 1)];
+}
+
+function norm(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+/** On-device fallback (no AI key): discovery + clustering. */
 async function buildDeterministicDays(
   req: TripRequest,
   geo: GeocodeResult,
-  weather: ItineraryDay["weather"][]
+  weather: ItineraryDay["weather"][],
+  pool: Place[]
 ): Promise<ItineraryDay[]> {
   const center = geo.center;
-  const allPlaces = await discoverPlaces(req.destination, center);
+  const allPlaces = pool.length ? pool : await discoverPlaces(req.destination, center);
   const scored = scorePlaces(allPlaces, req.interests, req.profile?.foodPreference);
   const sights = scored.filter((p) => !isFood(p) && p.category !== "nightlife");
   const food = scored.filter((p) => isFood(p));
@@ -241,37 +298,22 @@ async function buildDeterministicDays(
   const usedFood = new Set<string>();
   const usedExtra = new Set<string>();
 
-  const days: ItineraryDay[] = await Promise.all(
-    clusters.map(async (group, idx) => {
-      const ordered = optimizeRoute(group, center);
-      const stops = buildStops(ordered, food, scored, center, usedFood, usedExtra, req, wantsEvening);
-      stops.forEach((st) => {
-        if (!st.place.imageUrl) st.place.imageUrl = categoryImage(st.place.category);
-      });
-      const route = await dayRoute(stops.map((st) => st.place));
-      stops.forEach((st, i) => {
-        if (i === 0) return;
-        const leg = route.legs[i - 1];
-        if (leg) {
-          st.travelFromPrevMin = leg.durationMin;
-          st.travelDistanceKm = leg.distanceKm;
-          st.travelMode = leg.mode;
-        }
-      });
-      const estimatedCost =
-        stops.reduce((s, st) => s + (st.estimatedCost ?? 0), 0) + dailyTransport(req.budget);
-      return {
-        day: idx + 1,
-        date: addDays(req.startDate, idx),
-        title: `Day ${idx + 1}`,
-        summary: "",
-        stops,
-        estimatedCost,
-        weather: weather[idx],
-        routeGeometry: route.geometry,
-      };
-    })
-  );
+  const days: ItineraryDay[] = clusters.map((group, idx) => {
+    const ordered = optimizeRoute(group, center);
+    const stops = buildStops(ordered, food, scored, center, usedFood, usedExtra, req, wantsEvening);
+    stops.forEach((st) => {
+      if (!st.place.imageUrl) st.place.imageUrl = categoryImage(st.place.category);
+    });
+    return {
+      day: idx + 1,
+      date: addDays(req.startDate, idx),
+      title: `Day ${idx + 1}`,
+      summary: "",
+      stops,
+      estimatedCost: 0,
+      weather: weather[idx],
+    };
+  });
 
   const fallbackOverview = buildOverview(req);
   await narrate(req, days, fallbackOverview);

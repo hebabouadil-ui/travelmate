@@ -6,6 +6,8 @@ import { Stack, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
 import * as Notifications from "expo-notifications";
+import { useFonts } from "expo-font";
+import { Ionicons } from "@expo/vector-icons";
 import { colors } from "@/theme";
 import { useProfile } from "@/store/useProfile";
 import { ensureAndroidChannel } from "@/lib/notifications";
@@ -15,11 +17,14 @@ SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
 export default function RootLayout() {
   const hydrated = useProfile((s) => s._hydrated);
+  const [fontsLoaded] = useFonts(Ionicons.font);
   const router = useRouter();
 
+  const ready = hydrated && fontsLoaded;
+
   useEffect(() => {
-    if (hydrated) SplashScreen.hideAsync().catch(() => undefined);
-  }, [hydrated]);
+    if (ready) SplashScreen.hideAsync().catch(() => undefined);
+  }, [ready]);
 
   // Create the Android notification channel (crash-safe, no token / no prompt).
   useEffect(() => {
@@ -34,6 +39,9 @@ export default function RootLayout() {
     });
     return () => sub.remove();
   }, [router]);
+
+  // Keep the splash up until the icon font is ready so glyphs never render blank.
+  if (!ready) return null;
 
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.bg }}>

@@ -17,6 +17,8 @@ export class GeminiProvider implements AIProvider {
    *  app resilient to model availability (e.g. new keys can't use 1.5 models). */
   private candidates: string[];
   private working: string | null = null;
+  /** Set when the key itself is invalid/over-quota — stop retrying immediately. */
+  private dead = false;
 
   constructor() {
     const key = ENV.geminiApiKey;
@@ -52,6 +54,8 @@ export class GeminiProvider implements AIProvider {
       ? [this.working, ...this.candidates.filter((m) => m !== this.working)]
       : this.candidates;
 
+    if (this.dead) throw new Error("Gemini key unavailable");
+
     let lastErr: unknown;
     for (const name of order) {
       try {
@@ -66,11 +70,34 @@ export class GeminiProvider implements AIProvider {
         return text;
       } catch (err) {
         lastErr = err;
-        // try the next candidate (model not found / not available for this key)
+        if (isFatal(err)) {
+          // Bad API key / permission / quota: every model will fail the same
+          // way, so stop now (and for the rest of the session) instead of
+          // burning time trying each candidate on every request.
+          this.dead = true;
+          throw err;
+        }
+        // Otherwise it's likely "model not found" — try the next candidate.
       }
     }
     throw lastErr ?? new Error("Gemini: no available model");
   }
+}
+
+/** True for errors where retrying other models is pointless (key/quota/auth). */
+function isFatal(err: unknown): boolean {
+  const msg = String((err as { message?: string })?.message ?? err ?? "").toLowerCase();
+  return (
+    msg.includes("api key not valid") ||
+    msg.includes("api_key_invalid") ||
+    msg.includes("permission") ||
+    msg.includes("401") ||
+    msg.includes("403") ||
+    msg.includes("quota") ||
+    msg.includes("resource_exhausted") ||
+    msg.includes("429") ||
+    msg.includes("billing")
+  );
 }
 
 function dedupe(arr: (string | undefined)[]): string[] {
