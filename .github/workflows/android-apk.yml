@@ -32,7 +32,9 @@ jobs:
       run:
         working-directory: mobile
     env:
-      EXPO_PUBLIC_GOOGLE_MAPS_API_KEY: ${{ secrets.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY }}
+      # Map needs no key (MapLibre + OpenStreetMap). Optional style override:
+      EXPO_PUBLIC_MAP_STYLE_URL: ${{ secrets.EXPO_PUBLIC_MAP_STYLE_URL }}
+      # Optional free Gemini key → auto-enables AI-written itineraries.
       EXPO_PUBLIC_GEMINI_API_KEY: ${{ secrets.EXPO_PUBLIC_GEMINI_API_KEY }}
       EXPO_PUBLIC_AI_PROVIDER: ${{ secrets.EXPO_PUBLIC_GEMINI_API_KEY != '' && 'gemini' || 'mock' }}
 
@@ -106,8 +108,9 @@ jobs:
             2. Open it — allow "install from unknown sources" if prompted.
             3. Launch **Voyage AI**.
 
-            Runs key-free. Add an `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY` repo secret and
-            re-run to enable the live native Google map.
+            Runs key-free with a real native map (MapLibre + OpenStreetMap).
+            Add an optional `EXPO_PUBLIC_GEMINI_API_KEY` repo secret and re-run to
+            enable AI-written itineraries.
 
             _Built from `${{ github.sha }}`._
           files: ${{ steps.apk.outputs.path }}

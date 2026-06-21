@@ -15,7 +15,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   orientation: "portrait",
   icon: "./assets/icon.png",
   userInterfaceStyle: "automatic",
-  newArchEnabled: true,
+  // Old architecture: maximizes native-module compatibility (MapLibre, maps,
+  // reanimated, gesture-handler) for reliable CI APK builds on SDK 52.
+  newArchEnabled: false,
   splash: {
     image: "./assets/splash.png",
     resizeMode: "cover",
@@ -47,12 +49,6 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       "POST_NOTIFICATIONS",
       "INTERNET",
     ],
-    config: {
-      googleMaps: {
-        // Optional. Without a key the app shows a styled map placeholder + list.
-        apiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ?? "",
-      },
-    },
   },
   web: {
     bundler: "metro",
@@ -62,6 +58,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   plugins: [
     "expo-router",
     "expo-font",
+    "@maplibre/maplibre-react-native",
     [
       // Pin Kotlin to satisfy expo-modules-core's Compose Compiler (1.5.15),
       // which requires Kotlin 1.9.25 (the SDK 52 default of 1.9.24 fails CI).

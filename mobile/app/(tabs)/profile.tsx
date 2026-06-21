@@ -17,7 +17,6 @@ import { Card, Pill } from "@/components/ui";
 import { useProfile } from "@/store/useProfile";
 import { TRAVELER_TYPES, INTERESTS } from "@/lib/onboarding-config";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
-import { hasGoogleMaps } from "@/lib/env";
 import { getProvider } from "@/lib/ai/provider";
 import { requestNotificationPermission, notifyNow } from "@/lib/notifications";
 
@@ -109,7 +108,7 @@ export default function Profile() {
         <Card style={{ marginTop: spacing.lg }}>
           <Text style={styles.cardTitle}>Engine status</Text>
           <StatusRow label="AI narration" ok={aiLive} okText="Gemini live" offText="Smart templates (free)" />
-          <StatusRow label="Native maps" ok={hasGoogleMaps()} okText="Google Maps key set" offText="Preview mode" />
+          <StatusRow label="Native maps" ok okText="MapLibre · key-free" offText="" />
           <StatusRow label="Cloud sync" ok={isSupabaseConfigured()} okText="Supabase connected" offText="Guest mode" />
           <Text style={styles.note}>
             All features work for free. Add optional keys to unlock live AI, native maps and cloud sync.

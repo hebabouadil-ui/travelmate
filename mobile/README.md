@@ -14,7 +14,7 @@ Android is the highest priority; iOS works as a bonus from the same codebase.
 | Feature | How |
 |---|---|
 | 🧠 On-device AI itinerary engine | Ported `lib/itinerary` runs locally — no backend needed |
-| 🗺️ Native maps | `react-native-maps` (Google on Android / Apple on iOS) with categorized markers + route polyline |
+| 🗺️ Native maps | **MapLibre + free OpenStreetMap tiles** — real interactive native map, **no key / no billing** — with categorized markers + route polyline |
 | 🧭 Native GPS | `expo-location` powers the **Nearby** tab + "center on me" |
 | 🚗 Native navigation | Deep-links into Google/Apple Maps for turn-by-turn directions |
 | 🔔 Push / local notifications | `expo-notifications` — trip reminders, deep-link back into a trip |
@@ -103,9 +103,8 @@ builds an installable APK on every push to `mobile/**` (and on manual
 3. On your Android phone, open the `.apk`, allow "install from unknown sources", launch.
 
 The release build is signed with the Expo debug keystore, so it installs with no
-secrets. Add an `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY` (and optionally
-`EXPO_PUBLIC_GEMINI_API_KEY`) **repository secret** and re-run to bake in the live
-native map / AI narration.
+secrets — and the map works key-free. Add an optional `EXPO_PUBLIC_GEMINI_API_KEY`
+**repository secret** and re-run to bake in AI-written itineraries.
 
 ## 📦 Build via EAS / publish to Google Play
 
@@ -139,13 +138,14 @@ folder in Android Studio and build/run as a standard Gradle project.
 
 | Key | Unlocks | Free? |
 |---|---|---|
-| `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY` | Live native Google map on Android | Free tier |
-| `EXPO_PUBLIC_GEMINI_API_KEY` + `EXPO_PUBLIC_AI_PROVIDER=gemini` | AI-written concierge notes | Free tier |
+| _(none — map works out of the box)_ | Real native MapLibre + OpenStreetMap map | **Always free, no key** |
+| `EXPO_PUBLIC_GEMINI_API_KEY` (+ `EXPO_PUBLIC_AI_PROVIDER=gemini`) | AI-written concierge notes & overview | Free tier |
+| `EXPO_PUBLIC_MAP_STYLE_URL` | Alternate map style (e.g. MapTiler) | Optional |
 | `EXPO_PUBLIC_SUPABASE_URL` / `_ANON_KEY` | Cloud accounts & trip sync | Free tier |
 
 Without any keys the app still: generates real, route-optimized itineraries from
-free OpenStreetMap/Open-Meteo data, shows a styled map preview, writes polished
-templated narration, works offline, and tracks GPS for nearby discovery.
+free OpenStreetMap/Open-Meteo data, shows a **real interactive native map**, writes
+polished templated narration, works offline, and tracks GPS for nearby discovery.
 
 ---
 
