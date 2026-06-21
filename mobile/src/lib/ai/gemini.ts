@@ -13,13 +13,22 @@ export class GeminiProvider implements AIProvider {
   readonly isLive = true;
 
   private client: GoogleGenerativeAI;
-  private model: string;
+  /** Candidate models tried in order; the first that works is cached. Makes the
+   *  app resilient to model availability (e.g. new keys can't use 1.5 models). */
+  private candidates: string[];
+  private working: string | null = null;
 
   constructor() {
     const key = ENV.geminiApiKey;
     if (!key) throw new Error("EXPO_PUBLIC_GEMINI_API_KEY is not set");
     this.client = new GoogleGenerativeAI(key);
-    this.model = ENV.geminiModel;
+    this.candidates = dedupe([
+      ENV.geminiModel,
+      "gemini-2.5-flash",
+      "gemini-2.0-flash",
+      "gemini-flash-latest",
+      "gemini-1.5-flash",
+    ]);
   }
 
   async complete(
@@ -32,17 +41,42 @@ export class GeminiProvider implements AIProvider {
       .map((m) => m.content)
       .join("\n\n");
 
-    const model = this.client.getGenerativeModel({
-      model: this.model,
-      systemInstruction: system,
-      generationConfig: {
-        temperature: opts.temperature ?? 0.8,
-        maxOutputTokens: opts.maxOutputTokens ?? 4096,
-        responseMimeType: opts.json ? "application/json" : "text/plain",
-      },
-    });
+    const gen = {
+      temperature: opts.temperature ?? 0.8,
+      maxOutputTokens: opts.maxOutputTokens ?? 4096,
+      responseMimeType: opts.json ? "application/json" : "text/plain",
+    } as const;
 
-    const result = await model.generateContent(userParts);
-    return result.response.text();
+    // Try the cached working model first, then fall back through candidates.
+    const order = this.working
+      ? [this.working, ...this.candidates.filter((m) => m !== this.working)]
+      : this.candidates;
+
+    let lastErr: unknown;
+    for (const name of order) {
+      try {
+        const model = this.client.getGenerativeModel({
+          model: name,
+          systemInstruction: system,
+          generationConfig: gen,
+        });
+        const result = await model.generateContent(userParts);
+        const text = result.response.text();
+        this.working = name; // remember the one that worked
+        return text;
+      } catch (err) {
+        lastErr = err;
+        // try the next candidate (model not found / not available for this key)
+      }
+    }
+    throw lastErr ?? new Error("Gemini: no available model");
   }
+}
+
+function dedupe(arr: (string | undefined)[]): string[] {
+  const out: string[] = [];
+  for (const v of arr) {
+    if (v && !out.includes(v)) out.push(v);
+  }
+  return out;
 }
