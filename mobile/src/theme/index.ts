@@ -1,39 +1,39 @@
 import type { PlaceCategory } from "@/lib/types";
 
 /**
- * Voyage AI design system — a premium, Airbnb-meets-Apple-Maps aesthetic:
- * deep midnight canvas, soft glass surfaces, a violet→cyan brand gradient and
- * generous spacing. Used app-wide so screens stay visually consistent.
+ * Voyage AI design system — a premium, Airbnb-style light aesthetic: clean warm
+ * canvas, photo-forward cards, soft elevation shadows, a vibrant violet→cyan
+ * brand gradient and generous spacing. Used app-wide so screens stay consistent.
  */
 export const colors = {
   // Canvas
-  bg: "#0B0F1A",
-  bgElevated: "#121826",
-  surface: "#161D2E",
-  surfaceAlt: "#1C2436",
-  card: "#19212F",
-  border: "rgba(255,255,255,0.08)",
-  borderStrong: "rgba(255,255,255,0.14)",
+  bg: "#FFFFFF",
+  bgElevated: "#FFFFFF",
+  surface: "#F4F5F8",
+  surfaceAlt: "#EDEFF4",
+  card: "#FFFFFF",
+  border: "rgba(17,24,39,0.08)",
+  borderStrong: "rgba(17,24,39,0.14)",
 
   // Text
-  text: "#F4F6FB",
-  textMuted: "#A4ADC2",
-  textFaint: "#6B7488",
+  text: "#14161F",
+  textMuted: "#5B6173",
+  textFaint: "#9AA1B2",
 
   // Brand
   primary: "#6C5CE7",
   primaryDark: "#5A4BD1",
-  accent: "#22D3EE",
-  gradient: ["#7C6CF0", "#6C5CE7", "#22D3EE"] as const,
-  heroGradient: ["#1A1340", "#0B0F1A"] as const,
+  accent: "#0FB5C4",
+  gradient: ["#7C5CFF", "#6C5CE7", "#22D3EE"] as const,
+  heroGradient: ["#7C5CFF", "#5B4DE0", "#3B2FB5"] as const,
 
   // Semantic
-  success: "#34D399",
-  warning: "#FBBF24",
-  danger: "#F87171",
-  rain: "#60A5FA",
+  success: "#10B981",
+  warning: "#F59E0B",
+  danger: "#EF4444",
+  rain: "#3B82F6",
 
-  star: "#FBBF24",
+  star: "#F59E0B",
   overlay: "rgba(5,8,16,0.55)",
   black: "#000000",
   white: "#FFFFFF",
@@ -69,18 +69,25 @@ export const font = {
 
 export const shadow = {
   card: {
-    shadowColor: "#000",
-    shadowOpacity: 0.35,
-    shadowRadius: 16,
+    shadowColor: "#1A1F36",
+    shadowOpacity: 0.1,
+    shadowRadius: 18,
     shadowOffset: { width: 0, height: 8 },
-    elevation: 8,
+    elevation: 5,
+  },
+  soft: {
+    shadowColor: "#1A1F36",
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
   },
   float: {
     shadowColor: colors.primary,
-    shadowOpacity: 0.45,
+    shadowOpacity: 0.4,
     shadowRadius: 20,
     shadowOffset: { width: 0, height: 10 },
-    elevation: 12,
+    elevation: 10,
   },
 };
 

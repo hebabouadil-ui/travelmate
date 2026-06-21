@@ -232,6 +232,7 @@ const styles = StyleSheet.create({
   },
   ghostText: { color: colors.text, fontSize: font.body, fontWeight: "600" },
   card: {
+    ...shadow.soft,
     backgroundColor: colors.card,
     borderRadius: radius.lg,
     borderWidth: 1,

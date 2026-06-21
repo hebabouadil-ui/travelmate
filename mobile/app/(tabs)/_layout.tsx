@@ -16,7 +16,7 @@ export default function TabsLayout() {
         tabBarStyle: styles.tabBar,
         tabBarBackground: () =>
           Platform.OS === "ios" ? (
-            <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} />
+            <BlurView intensity={60} tint="light" style={StyleSheet.absoluteFill} />
           ) : (
             <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.bgElevated }]} />
           ),
@@ -67,9 +67,13 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.border,
     backgroundColor: Platform.OS === "ios" ? "transparent" : colors.bgElevated,
-    height: Platform.OS === "ios" ? 86 : 64,
+    height: Platform.OS === "ios" ? 88 : 66,
     paddingTop: spacing.sm,
     paddingBottom: Platform.OS === "ios" ? spacing.xl : spacing.sm,
-    elevation: 0,
+    shadowColor: "#1A1F36",
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: -4 },
+    elevation: 12,
   },
 });

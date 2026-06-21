@@ -264,6 +264,7 @@ const styles = StyleSheet.create({
   destReason: { color: "rgba(255,255,255,0.82)", fontSize: font.small, marginTop: spacing.xs, lineHeight: 18 },
 
   mini: {
+    ...shadow.card,
     width: 150,
     height: 190,
     borderRadius: radius.lg,
@@ -290,6 +291,7 @@ const styles = StyleSheet.create({
   stopDotNum: { color: colors.white, fontWeight: "800", fontSize: 12 },
   timelineLine: { flex: 1, width: 2, backgroundColor: colors.border, marginVertical: 2 },
   stopCard: {
+    ...shadow.soft,
     flex: 1,
     backgroundColor: colors.card,
     borderRadius: radius.lg,
@@ -315,6 +317,7 @@ const styles = StyleSheet.create({
   stopActionText: { fontSize: font.small, fontWeight: "600" },
 
   row: {
+    ...shadow.soft,
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.md,
