@@ -45,7 +45,7 @@ export default function Nearby() {
     setCoords(location);
     setLoading(true);
     try {
-      const found = await nearbyPlaces(location, 1500);
+      const found = await nearbyPlaces(location, 2500);
       setPlaces(found);
       if (found.length === 0) setError("No places found nearby. Try again later.");
     } catch {

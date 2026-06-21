@@ -33,10 +33,9 @@ export interface AIPlan {
 const SYSTEM = `You are Voyage AI, an elite local travel concierge with deep, accurate knowledge of cities worldwide.
 You design realistic, high-quality day-by-day itineraries using REAL, named places that actually exist in the destination.
 You never invent fake places. You balance world-famous highlights with authentic hidden gems locals love.
-You understand pacing, neighborhoods, opening hours and how travellers actually move through a city.`;
+You always return STRICT, COMPLETE, valid JSON and nothing else.`;
 
 const DAYPARTS: Daypart[] = ["morning", "lunch", "afternoon", "dinner", "evening"];
-
 const CATEGORIES: PlaceCategory[] = [
   "monument", "museum", "attraction", "landmark", "restaurant",
   "cafe", "beach", "park", "viewpoint", "nightlife", "shopping",
@@ -44,80 +43,74 @@ const CATEGORIES: PlaceCategory[] = [
 
 function stopsPerDay(activity?: string): number {
   if (activity === "relaxed") return 5;
-  if (activity === "intensive") return 8;
+  if (activity === "intensive") return 7;
   return 6;
 }
 
-function buildPrompt(req: TripRequest, place: string): string {
+/** How many days to request per API call (keeps responses well under token limits). */
+const CHUNK = 3;
+
+function chunkPrompt(
+  req: TripRequest,
+  place: string,
+  fromDay: number,
+  toDay: number,
+  avoid: string[],
+  wantMeta: boolean
+): string {
   const p = req.profile ?? {};
   const personalized = req.mode !== "recommended";
   const interests = req.interests?.length ? req.interests.join(", ") : "general sightseeing";
   const per = stopsPerDay(p.activityLevel);
-
-  return `Plan a ${req.days}-day trip to ${place}.
-
-TRAVELLER
-- Group / style: ${p.travelerType ?? "explorer"}
-- Budget: ${req.budget}
-- Food preference: ${p.foodPreference ?? "none"}
-- Pace: ${p.activityLevel ?? "moderate"} (~${per} stops/day including meals)
-- Mode: ${personalized ? `PERSONALIZED — heavily weight these interests: ${interests}` : "RECOMMENDED — the best, most iconic experiences for any first-time visitor"}
-
-HARD REQUIREMENTS
-1. Use ONLY real, specific, named places in ${place} (exact names as a local/Google would know them). No generic names like "a local cafe".
-2. ${personalized
-    ? `Make the plan clearly reflect the interests (${interests}). If "food": food-forward with great restaurants/markets/cafes. If "monuments"/"architecture": landmark-heavy. If "nature": parks/gardens/viewpoints/beaches. If "shopping": markets/boutiques. If "nightlife": bars/live venues in the evening. Categories MUST change the selection.`
-    : `Pick the highest-rated, must-see attractions and signature experiences.`}
-3. VARIETY & DURATION: A ${req.days}-day plan must explore widely. Each day covers a DIFFERENT neighborhood/area with DIFFERENT places — never repeat a place. More days = broader coverage (further neighborhoods, day-trips, diverse categories). A 7-day plan must be substantially richer and more spread out than a 3-day or 1-day plan.
-4. Each day: ~${per} stops ordered morning→evening, geographically clustered to minimise travel, with at least one lunch and one dinner (real restaurants). Add cafe/viewpoint/park where it fits.
-5. Mix iconic highlights with 1-2 authentic hidden gems per day.
-6. For EVERY stop provide approximate coordinates (lat, lng) to your best knowledge.
-
-Return STRICT JSON only:
-{
-  "overview": "<2-3 vivid sentences on why ${place} is worth visiting>",
+  const meta = wantMeta
+    ? `"overview": "<2-3 vivid sentences on why ${place} is worth visiting>",
   "highlights": ["<3-5 short reasons to go>"],
-  "country": "<country name>",
-  "days": [
+  "country": "<country>",
+  `
+    : "";
+
+  return `Design days ${fromDay}-${toDay} of a ${req.days}-day trip to ${place}.
+
+TRAVELLER: group/style ${p.travelerType ?? "explorer"}, budget ${req.budget}, food ${p.foodPreference ?? "none"}, pace ${p.activityLevel ?? "moderate"} (~${per} stops/day incl. meals).
+MODE: ${personalized ? `PERSONALIZED — strongly weight these interests: ${interests}. The chosen categories MUST change which places appear.` : "RECOMMENDED — the most iconic, must-see experiences."}
+
+RULES
+- Use ONLY real, specific, named places in ${place} (as Google/locals know them). No generic names.
+- DO NOT use any of these already-planned places: ${avoid.length ? avoid.join("; ") : "(none yet)"}.
+- Each day explores a DIFFERENT neighborhood/area with DIFFERENT places. More days = wider exploration (further areas, day-trips, variety).
+- ~${per} stops/day ordered morning→evening, clustered to minimise travel, with a real lunch AND dinner restaurant; add cafe/viewpoint/park where natural; include 1-2 authentic hidden gems.
+- Provide approximate lat & lng for EVERY stop.
+- Keep "description" and "whyVisit" to ONE short sentence each (<14 words).
+
+Return STRICT JSON ONLY:
+{
+  ${meta}"days": [
     {
-      "day": 1,
-      "title": "<evocative 3-6 word theme>",
-      "summary": "<1-2 sentences on the day>",
-      "area": "<main neighborhood/area>",
+      "day": ${fromDay},
+      "title": "<3-6 word theme>",
+      "summary": "<1 sentence>",
+      "area": "<neighborhood>",
       "stops": [
-        {
-          "name": "<exact real place name>",
-          "category": "<one of: ${CATEGORIES.join(" | ")}>",
-          "daypart": "<one of: ${DAYPARTS.join(" | ")}>",
-          "description": "<one factual sentence about the place>",
-          "whyVisit": "<one inviting sentence on why it's special / what to do>",
-          "durationMin": <integer minutes to spend>,
-          "bestTime": "<short, e.g. 'Early morning'>",
-          "neighborhood": "<area>",
-          "cuisine": "<for restaurants/cafes only>",
-          "lat": <number>,
-          "lng": <number>
-        }
+        {"name":"<real place>","category":"<${CATEGORIES.join("|")}>","daypart":"<${DAYPARTS.join("|")}>","description":"<short>","whyVisit":"<short>","durationMin":<int>,"bestTime":"<short>","neighborhood":"<area>","cuisine":"<for food only>","lat":<num>,"lng":<num>}
       ]
     }
   ]
-}
-Output ONLY the JSON.`;
+}`;
 }
 
 function normCategory(c: string): PlaceCategory {
   const v = (c || "").toLowerCase().trim();
   if (CATEGORIES.includes(v as PlaceCategory)) return v as PlaceCategory;
-  if (v.includes("museum") || v.includes("gallery")) return "museum";
-  if (v.includes("monument") || v.includes("temple") || v.includes("church") || v.includes("mosque")) return "monument";
-  if (v.includes("restaurant") || v.includes("food") || v.includes("eat")) return "restaurant";
-  if (v.includes("cafe") || v.includes("coffee")) return "cafe";
-  if (v.includes("beach")) return "beach";
-  if (v.includes("park") || v.includes("garden") || v.includes("nature")) return "park";
-  if (v.includes("view") || v.includes("lookout")) return "viewpoint";
-  if (v.includes("bar") || v.includes("club") || v.includes("night")) return "nightlife";
-  if (v.includes("shop") || v.includes("market") || v.includes("mall")) return "shopping";
-  if (v.includes("landmark") || v.includes("square") || v.includes("bridge")) return "landmark";
+  if (/museum|gallery/.test(v)) return "museum";
+  if (/monument|temple|church|mosque|cathedral|palace/.test(v)) return "monument";
+  if (/restaurant|food|eat|dining/.test(v)) return "restaurant";
+  if (/cafe|coffee|bakery/.test(v)) return "cafe";
+  if (/beach/.test(v)) return "beach";
+  if (/park|garden|nature/.test(v)) return "park";
+  if (/view|lookout|panoram/.test(v)) return "viewpoint";
+  if (/bar|club|night|pub/.test(v)) return "nightlife";
+  if (/shop|market|mall|souk|bazaar/.test(v)) return "shopping";
+  if (/landmark|square|bridge|plaza/.test(v)) return "landmark";
   return "attraction";
 }
 
@@ -126,10 +119,37 @@ function normDaypart(d: string): Daypart {
   return (DAYPARTS.includes(v as Daypart) ? v : "afternoon") as Daypart;
 }
 
+function clampInt(n: unknown, min: number, max: number, def: number): number {
+  const v = typeof n === "number" ? n : parseInt(String(n ?? ""), 10);
+  if (Number.isNaN(v)) return def;
+  return Math.min(max, Math.max(min, Math.round(v)));
+}
+
+function cleanDays(rawDays: AIDay[] | undefined, startDay: number): AIDay[] {
+  if (!Array.isArray(rawDays)) return [];
+  return rawDays
+    .map((d, i) => ({
+      day: startDay + i,
+      title: d.title || `Day ${startDay + i}`,
+      summary: d.summary || "",
+      area: d.area,
+      stops: (d.stops || [])
+        .filter((s) => s?.name)
+        .map((s) => ({
+          ...s,
+          category: normCategory(s.category as string),
+          daypart: normDaypart(s.daypart as string),
+          durationMin: clampInt(s.durationMin, 20, 240, 60),
+        })),
+    }))
+    .filter((d) => d.stops.length > 0);
+}
+
 /**
- * Ask Gemini to design the full itinerary. Returns null if the AI provider is
- * not live or the response can't be parsed (caller falls back to the local
- * engine). Coordinates here are approximate and refined later via geocoding.
+ * Ask Gemini to design the itinerary, in chunks of a few days per request so
+ * long trips never hit the output-token limit (the cause of empty 7-day plans).
+ * Chunks share an "avoid" list so days don't repeat places. Returns null if the
+ * provider isn't live or nothing usable came back (caller falls back locally).
  */
 export async function aiPlanItinerary(
   req: TripRequest,
@@ -138,46 +158,43 @@ export async function aiPlanItinerary(
   const provider = getProvider();
   if (!provider.isLive) return null;
 
+  const allDays: AIDay[] = [];
+  const avoid: string[] = [];
+  let overview = "";
+  let highlights: string[] = [];
+  let country: string | undefined;
+
   try {
-    const raw = await provider.complete(
-      [
-        { role: "system", content: SYSTEM },
-        { role: "user", content: buildPrompt(req, place) },
-      ],
-      { json: true, temperature: 0.9, maxOutputTokens: 8192 }
-    );
-    const parsed = extractJson<AIPlan>(raw);
-    if (!parsed?.days?.length) return null;
-
-    // Normalise & clamp
-    parsed.days = parsed.days
-      .slice(0, req.days)
-      .map((d, i) => ({
-        day: i + 1,
-        title: d.title || `Day ${i + 1}`,
-        summary: d.summary || "",
-        area: d.area,
-        stops: (d.stops || [])
-          .filter((s) => s?.name)
-          .map((s) => ({
-            ...s,
-            category: normCategory(s.category as string),
-            daypart: normDaypart(s.daypart as string),
-            durationMin: clampInt(s.durationMin, 20, 240, 60),
-          })),
-      }))
-      .filter((d) => d.stops.length > 0);
-
-    if (!parsed.days.length) return null;
-    parsed.highlights = Array.isArray(parsed.highlights) ? parsed.highlights.slice(0, 5) : [];
-    return parsed;
+    for (let from = 1; from <= req.days; from += CHUNK) {
+      const to = Math.min(from, req.days) + Math.min(CHUNK, req.days - from + 1) - 1;
+      const wantMeta = from === 1;
+      const raw = await provider.complete(
+        [
+          { role: "system", content: SYSTEM },
+          { role: "user", content: chunkPrompt(req, place, from, to, avoid, wantMeta) },
+        ],
+        { json: true, temperature: 0.9, maxOutputTokens: 8192 }
+      );
+      const parsed = extractJson<AIPlan>(raw);
+      const days = cleanDays(parsed.days, from);
+      if (wantMeta) {
+        overview = parsed.overview || "";
+        highlights = Array.isArray(parsed.highlights) ? parsed.highlights.slice(0, 5) : [];
+        country = parsed.country;
+      }
+      for (const d of days) {
+        allDays.push(d);
+        for (const s of d.stops) avoid.push(s.name);
+      }
+      // Stop early if the model returned nothing for a chunk.
+      if (days.length === 0 && from === 1) break;
+    }
   } catch {
-    return null;
+    // partial results are still useful
   }
-}
 
-function clampInt(n: unknown, min: number, max: number, def: number): number {
-  const v = typeof n === "number" ? n : parseInt(String(n ?? ""), 10);
-  if (Number.isNaN(v)) return def;
-  return Math.min(max, Math.max(min, Math.round(v)));
+  if (allDays.length === 0) return null;
+  // Renumber sequentially in case a chunk was skipped.
+  allDays.forEach((d, i) => (d.day = i + 1));
+  return { overview, highlights, country, days: allDays.slice(0, req.days) };
 }

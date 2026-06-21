@@ -17,12 +17,18 @@ export async function nearbyPlaces(
     3
   )}:${radius}`;
 
-  const places = await withCache<Place[]>(
+  let places = await withCache<Place[]>(
     cacheKey,
     1000 * 60 * 30, // 30 minutes
     () => overpassPlaces(center, radius),
     (v) => v.length === 0
   ).catch(() => [] as Place[]);
+
+  // Escalate the search radius if nothing turned up nearby.
+  if (places.length === 0) {
+    const wider = Math.min(radius * 3, 5000);
+    places = await overpassPlaces(center, wider).catch(() => [] as Place[]);
+  }
 
   return places
     .map((p) => ({

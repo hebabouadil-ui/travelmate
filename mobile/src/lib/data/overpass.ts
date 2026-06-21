@@ -4,6 +4,8 @@ import { makeId } from "../utils";
 const ENDPOINTS = [
   "https://overpass-api.de/api/interpreter",
   "https://overpass.kumi.systems/api/interpreter",
+  "https://overpass.osm.ch/api/interpreter",
+  "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
 ];
 
 interface OverpassElement {
@@ -32,7 +34,7 @@ export async function overpassPlaces(
   for (const endpoint of ENDPOINTS) {
     try {
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 16000);
+      const timer = setTimeout(() => controller.abort(), 25000);
       const res = await fetch(endpoint, {
         method: "POST",
         body: "data=" + encodeURIComponent(query),

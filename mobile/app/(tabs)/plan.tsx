@@ -16,11 +16,12 @@ import * as Haptics from "expo-haptics";
 import { colors, font, radius, spacing } from "@/theme";
 import { Chip, GradientButton } from "@/components/ui";
 import { INTERESTS, BUDGETS } from "@/lib/onboarding-config";
-import type { Budget, Interest, ItineraryMode, TripRequest } from "@/lib/types";
+import type { Budget, GeoPoint, Interest, ItineraryMode, TripRequest } from "@/lib/types";
 import { generateItinerary } from "@/lib/itinerary/engine";
 import { useProfile } from "@/store/useProfile";
 import { SEED_CITIES } from "@/lib/data/seed";
 import { searchCities, type CitySuggestion } from "@/lib/data/search";
+import { GeneratingOverlay } from "@/components/GeneratingOverlay";
 
 const POPULAR = Object.values(SEED_CITIES).map((c) => c.name);
 
@@ -48,6 +49,7 @@ export default function Plan() {
 
   const [suggestions, setSuggestions] = useState<CitySuggestion[]>([]);
   const [picked, setPicked] = useState(false);
+  const [pickedCenter, setPickedCenter] = useState<GeoPoint | null>(null);
 
   useEffect(() => {
     if (params.destination) {
@@ -102,6 +104,7 @@ export default function Plan() {
     try {
       const req: TripRequest = {
         destination: destination.trim(),
+        center: pickedCenter ?? undefined,
         days,
         budget,
         interests,
@@ -135,7 +138,7 @@ export default function Plan() {
             <Ionicons name="search" size={18} color={colors.primary} />
             <TextInput
               value={destination}
-              onChangeText={(t) => { setDestination(t); setPicked(false); }}
+              onChangeText={(t) => { setDestination(t); setPicked(false); setPickedCenter(null); }}
               placeholder="Search any city worldwide…"
               placeholderTextColor={colors.textFaint}
               style={styles.input}
@@ -158,6 +161,7 @@ export default function Plan() {
                   onPress={() => {
                     Haptics.selectionAsync();
                     setDestination(s.value);
+                    setPickedCenter(s.center);
                     setPicked(true);
                     setSuggestions([]);
                   }}
@@ -170,7 +174,13 @@ export default function Plan() {
           ) : (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: spacing.sm }} contentContainerStyle={{ gap: spacing.sm, paddingRight: spacing.lg }}>
               {POPULAR.map((c) => (
-                <Chip key={c} label={c} selected={destination === c} onPress={() => { setDestination(c); setPicked(true); setSuggestions([]); }} />
+                <Chip key={c} label={c} selected={destination === c} onPress={() => {
+                  setDestination(c);
+                  const seed = Object.values(SEED_CITIES).find((x) => x.name === c);
+                  setPickedCenter(seed ? seed.center : null);
+                  setPicked(true);
+                  setSuggestions([]);
+                }} />
               ))}
             </ScrollView>
           )}
@@ -263,6 +273,7 @@ export default function Plan() {
           />
         </View>
       </KeyboardAvoidingView>
+      <GeneratingOverlay visible={loading} destination={destination.trim() || "your trip"} />
     </SafeAreaView>
   );
 }

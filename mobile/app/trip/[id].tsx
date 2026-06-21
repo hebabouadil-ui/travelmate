@@ -64,6 +64,7 @@ export default function TripDetail() {
   }
 
   const img =
+    trip.imageUrl ||
     cityImage(trip.destination) ||
     trip.days.flatMap((d) => d.stops).find((s) => s.place.imageUrl)?.place.imageUrl;
   const fav = favorites.includes(trip.id);

@@ -124,6 +124,8 @@ export interface Itinerary {
   overview: string;
   /** 3–5 punchy reasons / highlights for the destination. */
   highlights: string[];
+  /** Hero photo of the destination city. */
+  imageUrl?: string;
   days: ItineraryDay[];
   profile: Partial<TravelProfile>;
   /** Planning mode used. */
@@ -150,6 +152,8 @@ export interface DayWeather {
 /** Inputs collected from the trip planner form. */
 export interface TripRequest {
   destination: string;
+  /** Exact coordinates of the picked city (skips ambiguous re-geocoding). */
+  center?: GeoPoint;
   startDate?: string;
   days: number;
   budget: Budget;

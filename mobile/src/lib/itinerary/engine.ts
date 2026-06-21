@@ -14,7 +14,7 @@ import { geocode, type GeocodeResult } from "../data/geocode";
 import { discoverPlaces } from "../data/places";
 import { getWeather } from "../data/weather";
 import { buildOverview } from "../data/overviews";
-import { categoryImage } from "../data/wikipedia";
+import { categoryImage, cityHeroImage as cityImageFor } from "../data/wikipedia";
 import { dayRoute } from "../data/routing";
 import { clusterIntoDays, nearestWhere, optimizeRoute, planPerDay } from "./optimize";
 import { dailyTransport, stopCost } from "./budget";
@@ -67,11 +67,20 @@ function maxSightsPerDay(activity?: string): number {
  * engine (free, offline). Either way the result is routed and image-rich.
  */
 export async function generateItinerary(req: TripRequest): Promise<Itinerary> {
-  const geo = await geocode(req.destination);
+  // Use the exact picked coordinates when available (avoids ambiguous
+  // re-geocoding that could land on the wrong "Málaga"); else geocode the text.
+  const geo: GeocodeResult = req.center
+    ? {
+        name: req.destination.split(",")[0].trim() || req.destination,
+        center: req.center,
+        displayName: req.destination,
+      }
+    : await geocode(req.destination);
 
-  const [aiPlan, weather] = await Promise.all([
-    aiPlanItinerary(req, geo.name).catch(() => null),
+  const [aiPlan, weather, heroImage] = await Promise.all([
+    aiPlanItinerary(req, req.destination).catch(() => null),
     getWeather(geo.center, req.startDate, req.days),
+    cityImageFor(geo.name).catch(() => undefined),
   ]);
 
   let days: ItineraryDay[];
@@ -91,7 +100,8 @@ export async function generateItinerary(req: TripRequest): Promise<Itinerary> {
     const ov = buildOverview(req);
     overview = ov.overview;
     highlights = ov.highlights;
-    engine = getProvider().isLive ? "gemini" : "mock";
+    // Honest label: this came from the on-device engine, not the AI.
+    engine = "mock";
   }
 
   const totalEstimatedCost = days.reduce((s, d) => s + d.estimatedCost, 0);
@@ -103,6 +113,7 @@ export async function generateItinerary(req: TripRequest): Promise<Itinerary> {
     center: geo.center,
     overview,
     highlights,
+    imageUrl: heroImage,
     days,
     profile: req.profile ?? {},
     mode: req.mode ?? "personalized",

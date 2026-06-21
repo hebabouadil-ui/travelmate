@@ -94,3 +94,41 @@ const CATEGORY_IMAGE: Record<PlaceCategory, string> = {
 export function categoryImage(category: PlaceCategory): string {
   return CATEGORY_IMAGE[category] ?? CATEGORY_IMAGE.attraction;
 }
+
+/** Real hero photo for a city (Wikipedia). Returns undefined if none found. */
+export async function cityHeroImage(city: string): Promise<string | undefined> {
+  const key = `cityimg:${slugify(city)}`;
+  return withCache<string | undefined>(
+    key,
+    1000 * 60 * 60 * 24 * 30,
+    async () => {
+      const params = new URLSearchParams({
+        action: "query",
+        format: "json",
+        prop: "pageimages",
+        piprop: "original|thumbnail",
+        pithumbsize: "1000",
+        generator: "search",
+        gsrsearch: city,
+        gsrlimit: "1",
+        redirects: "1",
+        origin: "*",
+      });
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 8000);
+      try {
+        const res = await fetch(`https://en.wikipedia.org/w/api.php?${params}`, {
+          signal: controller.signal,
+        });
+        if (!res.ok) return undefined;
+        const data = (await res.json()) as WikiResponse;
+        const pages = data.query?.pages;
+        if (!pages) return undefined;
+        const page = Object.values(pages)[0];
+        return page?.original?.source ?? page?.thumbnail?.source;
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+  ).catch(() => undefined);
+}
