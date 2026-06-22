@@ -10,7 +10,8 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import type { DestinationMatch, ItineraryStop, Place } from "@/lib/types";
-import { enrichPlace, categoryImage } from "@/lib/data/wikipedia";
+import { categoryImage } from "@/lib/data/wikipedia";
+import { resolveStopMedia } from "@/lib/data/media";
 import { currencySymbol } from "@/lib/currency";
 import { SmartImage } from "./SmartImage";
 import {
@@ -131,9 +132,9 @@ export function StopCard({
   useEffect(() => {
     let active = true;
     if (city) {
-      enrichPlace(stop.place.name, city, stop.place.category)
-        .then((e) => {
-          if (active && e.imageUrl) setImage(e.imageUrl);
+      resolveStopMedia(stop.place, city)
+        .then((m) => {
+          if (active && m.imageUrl) setImage(m.imageUrl);
         })
         .catch(() => undefined);
     }

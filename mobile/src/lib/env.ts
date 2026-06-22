@@ -9,6 +9,8 @@ export const ENV = {
   geminiModel: process.env.EXPO_PUBLIC_GEMINI_MODEL || "gemini-1.5-flash",
   supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL || "",
   supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || "",
+  /** Optional: enables real per-venue photos via Foursquare Places. */
+  foursquareApiKey: process.env.EXPO_PUBLIC_FOURSQUARE_API_KEY || "",
   osmContactEmail: process.env.EXPO_PUBLIC_OSM_CONTACT_EMAIL || "contact@voyage.ai",
   /**
    * Map tile style. Defaults to OpenFreeMap — a free, key-less, sign-up-free

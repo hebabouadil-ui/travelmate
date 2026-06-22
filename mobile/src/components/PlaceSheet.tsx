@@ -13,7 +13,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import type { ItineraryStop } from "@/lib/types";
 import { colors, font, radius, spacing, CATEGORY_META } from "@/theme";
-import { enrichPlace } from "@/lib/data/wikipedia";
+import { resolveStopMedia } from "@/lib/data/media";
 import { openDirections, openInMaps } from "@/lib/navigation";
 import { GradientButton, GhostButton } from "./ui";
 
@@ -45,11 +45,11 @@ export function PlaceSheet({
       setImage(place.imageUrl);
       setDesc(place.description);
       setLoading(true);
-      enrichPlace(place.name, city, place.category)
-        .then((e) => {
+      resolveStopMedia(place, city)
+        .then((m) => {
           if (!active) return;
-          if (e.imageUrl) setImage(e.imageUrl);
-          if (e.description) setDesc(e.description);
+          if (m.imageUrl) setImage(m.imageUrl);
+          if (m.description) setDesc(m.description);
         })
         .finally(() => active && setLoading(false));
     }
