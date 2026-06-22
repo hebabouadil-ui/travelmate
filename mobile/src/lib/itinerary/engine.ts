@@ -118,9 +118,11 @@ export async function generateItinerary(req: TripRequest): Promise<Itinerary> {
   // Guarantee every day is full (backfill from the OSM pool) + accurate routing.
   await finalizeDays(days, pool, geo.center, req);
 
-  // Resolve a real, distinct photo for every stop up-front (bounded) so cards
-  // render the correct image instantly instead of fetching lazily on scroll.
-  await enrichStopPhotos(days, geo.name);
+  // Resolve real photos for the FIRST day only, up-front (short cap) so the
+  // screen the user lands on looks great immediately. Remaining days keep their
+  // instant category image and upgrade lazily as their cards appear — this keeps
+  // generation fast and avoids the long waits/timeouts of enriching everything.
+  if (days[0]) await enrichStopPhotos(days[0].stops, geo.name);
 
   const totalEstimatedCost = days.reduce((s, d) => s + d.estimatedCost, 0);
   const resolvedCountry = country ?? lastSegment(geo.displayName);
@@ -288,8 +290,7 @@ async function finalizeDays(
  * trips keep their photos offline. Bounded by an overall deadline so a slow
  * network never stalls generation; unresolved stops keep their category image.
  */
-async function enrichStopPhotos(days: ItineraryDay[], city: string): Promise<void> {
-  const stops = days.flatMap((d) => d.stops);
+async function enrichStopPhotos(stops: ItineraryStop[], city: string): Promise<void> {
   const work = Promise.all(
     stops.map(async (st) => {
       if (st.place.photoResolved) return;
@@ -305,10 +306,10 @@ async function enrichStopPhotos(days: ItineraryDay[], city: string): Promise<voi
       }
     })
   );
-  // Don't let photo enrichment hold the whole generation hostage.
+  // Never let photo enrichment hold generation hostage on a slow connection.
   await Promise.race([
     work,
-    new Promise<void>((resolve) => setTimeout(resolve, 14000)),
+    new Promise<void>((resolve) => setTimeout(resolve, 6500)),
   ]);
 }
 

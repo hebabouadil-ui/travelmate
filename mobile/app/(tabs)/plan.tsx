@@ -115,7 +115,7 @@ export default function Plan() {
       const itinerary = await Promise.race([
         generateItinerary(req),
         new Promise<never>((_, rej) =>
-          setTimeout(() => rej(new Error("timeout")), 55000)
+          setTimeout(() => rej(new Error("timeout")), 75000)
         ),
       ]);
       const totalStops = itinerary.days.reduce((n, d) => n + d.stops.length, 0);
