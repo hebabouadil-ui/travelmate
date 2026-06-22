@@ -24,10 +24,15 @@ export class GeminiProvider implements AIProvider {
     const key = ENV.geminiApiKey;
     if (!key) throw new Error("EXPO_PUBLIC_GEMINI_API_KEY is not set");
     this.client = new GoogleGenerativeAI(key);
+    // Fastest-first: low-latency "flash-lite" models lead, then standard flash,
+    // then the user's configured model, then legacy. The first that works for
+    // this key is cached, so subsequent calls are fast.
     this.candidates = dedupe([
-      ENV.geminiModel,
-      "gemini-2.5-flash",
+      "gemini-2.5-flash-lite",
+      "gemini-2.0-flash-lite",
       "gemini-2.0-flash",
+      "gemini-2.5-flash",
+      ENV.geminiModel,
       "gemini-flash-latest",
       "gemini-1.5-flash",
     ]);

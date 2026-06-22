@@ -6,7 +6,7 @@
 export const ENV = {
   aiProvider: (process.env.EXPO_PUBLIC_AI_PROVIDER || "").toLowerCase(),
   geminiApiKey: process.env.EXPO_PUBLIC_GEMINI_API_KEY || "",
-  geminiModel: process.env.EXPO_PUBLIC_GEMINI_MODEL || "gemini-1.5-flash",
+  geminiModel: process.env.EXPO_PUBLIC_GEMINI_MODEL || "gemini-2.0-flash-lite",
   supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL || "",
   supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || "",
   /** Optional: enables real per-venue photos via Foursquare Places. */
