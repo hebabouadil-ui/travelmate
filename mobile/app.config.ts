@@ -57,7 +57,16 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   },
   plugins: [
     "expo-router",
-    "expo-font",
+    [
+      // Embed the icon font into the native app so glyphs are ALWAYS available
+      // (runtime font loading was rendering blank icons in release APKs).
+      "expo-font",
+      {
+        fonts: [
+          "./node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.ttf",
+        ],
+      },
+    ],
     "@maplibre/maplibre-react-native",
     [
       // Pin Kotlin to satisfy expo-modules-core's Compose Compiler (1.5.15),

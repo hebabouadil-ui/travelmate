@@ -54,7 +54,7 @@ export function GeneratingOverlay({
       -1,
       true
     );
-    const id = setInterval(() => setStep((s) => Math.min(s + 1, STEPS.length - 1)), 1800);
+    const id = setInterval(() => setStep((s) => Math.min(s + 1, STEPS.length - 1)), 2500);
     return () => clearInterval(id);
   }, [visible, scale, spin, orb]);
 

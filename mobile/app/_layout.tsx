@@ -1,5 +1,5 @@
 import "react-native-gesture-handler";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { Stack, useRouter } from "expo-router";
@@ -17,29 +17,18 @@ SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
 export default function RootLayout() {
   const hydrated = useProfile((s) => s._hydrated);
-  const [fontsDone, setFontsDone] = useState(false);
   const router = useRouter();
 
-  // Preload the icon font so glyphs don't render blank — but NEVER block the
-  // app on it: proceed after at most 2.5s even if loading fails/hangs.
+  // Icon font is embedded natively (see app.config expo-font plugin), so it's
+  // available immediately. This extra load is just a harmless belt-and-suspenders
+  // for dev and never blocks rendering.
   useEffect(() => {
-    let mounted = true;
-    Promise.race([
-      Font.loadAsync(Ionicons.font),
-      new Promise((res) => setTimeout(res, 2500)),
-    ])
-      .catch(() => undefined)
-      .finally(() => mounted && setFontsDone(true));
-    return () => {
-      mounted = false;
-    };
+    Font.loadAsync(Ionicons.font).catch(() => undefined);
   }, []);
 
-  const ready = hydrated && fontsDone;
-
   useEffect(() => {
-    if (ready) SplashScreen.hideAsync().catch(() => undefined);
-  }, [ready]);
+    if (hydrated) SplashScreen.hideAsync().catch(() => undefined);
+  }, [hydrated]);
 
   // Create the Android notification channel (crash-safe, no token / no prompt).
   useEffect(() => {
@@ -55,8 +44,8 @@ export default function RootLayout() {
     return () => sub.remove();
   }, [router]);
 
-  // Keep the splash up until the icon font is ready so glyphs never render blank.
-  if (!ready) return null;
+  // Wait only for persisted state to hydrate (fonts are embedded natively).
+  if (!hydrated) return null;
 
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.bg }}>

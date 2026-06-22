@@ -100,7 +100,7 @@ function haversineFallback(points: GeoPoint[]): DayRoute {
 
 async function fetchOSRM(url: string): Promise<OSRMResponse> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 12000);
+  const timer = setTimeout(() => controller.abort(), 6000);
   try {
     const res = await fetch(url, { signal: controller.signal });
     if (!res.ok) throw new Error(`OSRM ${res.status}`);
