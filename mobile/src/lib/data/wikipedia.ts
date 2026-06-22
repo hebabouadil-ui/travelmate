@@ -145,40 +145,44 @@ export function categoryImage(category: PlaceCategory, seed = ""): string {
   return arr[hash(category + seed) % arr.length];
 }
 
-/** Real hero photo for a city (Wikipedia). Returns undefined if none found. */
+interface WikiSummary {
+  type?: string;
+  title?: string;
+  originalimage?: { source: string };
+  thumbnail?: { source: string };
+}
+
+/** Real hero photo for a city (Wikipedia). Returns undefined if none found —
+ *  callers should fall back to a gradient, NOT a generic city stock photo. */
 export async function cityHeroImage(city: string): Promise<string | undefined> {
-  const key = `cityimg:${slugify(city)}`;
+  // Use just the city name (drop ", Country") for the Wikipedia title.
+  const name = city.split(",")[0].trim();
+  const key = `cityimg:${slugify(name)}`;
   return withCache<string | undefined>(
     key,
     1000 * 60 * 60 * 24 * 30,
     async () => {
-      const params = new URLSearchParams({
-        action: "query",
-        format: "json",
-        prop: "pageimages",
-        piprop: "original|thumbnail",
-        pithumbsize: "1000",
-        generator: "search",
-        gsrsearch: city,
-        gsrlimit: "1",
-        redirects: "1",
-        origin: "*",
-      });
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 8000);
       try {
-        const res = await fetch(`https://en.wikipedia.org/w/api.php?${params}`, {
-          signal: controller.signal,
-        });
-        if (!res.ok) return undefined;
-        const data = (await res.json()) as WikiResponse;
-        const pages = data.query?.pages;
-        if (!pages) return undefined;
-        const page = Object.values(pages)[0];
-        return page?.original?.source ?? page?.thumbnail?.source;
+        // REST summary resolves the exact article (with redirects) reliably.
+        const res = await fetch(
+          `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(name)}`,
+          { signal: controller.signal, headers: { Accept: "application/json" } }
+        );
+        if (res.ok) {
+          const s = (await res.json()) as WikiSummary;
+          if (s.type !== "disambiguation") {
+            const img = s.originalimage?.source ?? s.thumbnail?.source;
+            if (img) return img;
+          }
+        }
+      } catch {
+        // fall through
       } finally {
         clearTimeout(timer);
       }
+      return undefined;
     }
   ).catch(() => undefined);
 }

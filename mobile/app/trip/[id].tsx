@@ -67,10 +67,9 @@ export default function TripDetail() {
     );
   }
 
-  const img =
-    trip.imageUrl ||
-    cityImage(trip.destination) ||
-    trip.days.flatMap((d) => d.stops).find((s) => s.place.imageUrl)?.place.imageUrl;
+  // Only use a REAL city photo for the hero; otherwise fall back to the brand
+  // gradient (never a generic stock photo that could look like another city).
+  const img = trip.imageUrl || cityImage(trip.destination);
   const fav = favorites.includes(trip.id);
   const budget: Budget = (trip.profile.budget as Budget) ?? "medium";
 
