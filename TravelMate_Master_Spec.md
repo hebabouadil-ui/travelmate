@@ -32,8 +32,9 @@ optimized · supported by a real photo.**
 3. **Complete days, not lists.** Answer "what do I do from morning to night?"
 4. **Famous places dominate.** A world-famous attraction is never dropped
    because a smaller one is closer.
-5. **Honest confidence.** Every stop carries a 0–100% confidence score;
-   low-confidence attractions are hidden.
+5. **Honest confidence.** Every stop carries a 0–100% confidence score,
+   banded 90 Excellent / 70 Trusted / 50 Fallback (kept, clearly labeled) /
+   below 50 Reject (never displayed).
 
 ---
 
@@ -66,8 +67,9 @@ optimized · supported by a real photo.**
 5. **Guarantee must-sees:** missing Tier-1 sights replace the weakest anchors
    (verified against OSM, never invented), spread across days by
    `leastLoadedOrder` so injections never stack onto Day 1.
-6. **Confidence + gate:** score each stop; drop attractions below **70%** while
-   keeping the day complete.
+6. **Confidence + gate:** score each stop; drop only Reject-band attractions
+   (**< 50%**) while keeping the day complete — Fallback-band stops (50-69%)
+   are kept and honestly labeled, not silently discarded.
 7. **Weather-adapt:** swap flexible outdoor activities for indoor options on
    rainy/hot/cold/windy days (must-sees re-timed, not swapped).
 8. **Route + schedule:** `sortBySlot` → constrained **2-opt** day-flow → OSRM
@@ -142,7 +144,9 @@ trip — a measurement of the result, reported on `Itinerary.audit.interestCover
 | Destination-knowledge tier (1/2) | 0.25 / 0.15 |
 | Attraction importance (fame) | up to 0.20 |
 
-Attractions **< 70%** are removed (days stay complete via backfill).
+Bands: **90 Excellent / 70 Trusted / 50 Fallback / below 50 Reject.**
+Only Reject-band attractions are removed (days stay complete via backfill);
+Fallback stops are kept and clearly labeled, never hidden.
 
 ---
 
@@ -161,18 +165,25 @@ Principle: **100 excellent destinations over 10,000 generic ones.**
 ## 10. Output per stop
 
 Name · real photo · time · duration · **why it was selected** · travel time from
-previous · confidence score. Plan-level "Plan quality" panel shows verified vs.
-approximate counts, OSM/Wikidata provenance, average confidence, destination
-expertise % and Interest Coverage Score.
+previous · confidence score · **Verified badge** (real, mapped OSM object,
+inside the destination — never from coordinates alone). Plan-level "Plan
+quality" panel shows verified vs. approximate counts, OSM/Wikidata
+provenance, average confidence, destination expertise %, Interest Coverage
+Score, and the composite **Itinerary Quality Score** (0-100: Interest
+Coverage 20% / Landmark Coverage 20% / Route Efficiency 15% / Time Logic
+15% / Photo Quality 10% / Weather Adaptation 10% / Verification Quality
+10%), honestly labeled Premium Plan / Very Good / Good / Limited Verified
+Data — never presenting a low-quality plan as high quality.
 
 ---
 
 ## 11. Quality bar & validation
 
-`npm run validate` runs 35 assertions against the real algorithms offline
-(tiering, must-see matching, interest coverage, confidence, route flow,
-scheduling, opening-hours guard). See `VALIDATION.md` for the full report and
-the 10-point checklist.
+`npm run validate` runs 57 assertions against the real algorithms offline
+(tiering, must-see matching, interest coverage, confidence bands, candidate
+validation, Verified badge, Itinerary Quality Score, route flow, scheduling,
+opening-hours guard). See `VALIDATION.md` for the full report and the
+10-point checklist.
 
 Live, on-device spot-checks remain for photo correctness and day-trip travel
 legs (cannot be verified in the network-restricted CI).

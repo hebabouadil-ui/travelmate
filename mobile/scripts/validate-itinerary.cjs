@@ -15,6 +15,7 @@ const K = require(path.join(base, "data", "knowledge.js"));
 const S = require(path.join(base, "itinerary", "scoring.js"));
 const F = require(path.join(base, "itinerary", "dayflow.js"));
 const I = require(path.join(base, "itinerary", "interests.js"));
+const V = require(path.join(base, "itinerary", "validate.js"));
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { (c ? pass++ : fail++); console.log(`${c ? "PASS" : "FAIL"}  ${m}`); };
@@ -108,6 +109,49 @@ const partialCov = I.interestCoverageScore(tripStops, ["monuments", "food", "bea
 ok(Math.abs(partialCov - 2 / 3) < 1e-9, `beaches missing from real data -> honest ${partialCov.toFixed(2)} (want 0.67)`);
 const noInterests = I.interestCoverageScore(tripStops, []);
 ok(noInterests === 1, `no interests selected -> trivially ${noInterests} (want 1)`);
+
+console.log("\n=== 13. Candidate Validation: rejects with the right reason, never silently ===");
+const center0 = { lat: 0, lng: 0 };
+ok(V.validateCandidate(place({ name: "" })) === "unknown_location", "no name -> unknown_location");
+ok(V.validateCandidate(place({ lat: NaN })) === "missing_coordinates", "NaN coords -> missing_coordinates");
+ok(V.validateCandidate(place({ category: undefined })) === "unknown_category", "no category -> unknown_category");
+ok(V.validateCandidate(place({ openingHours: "closed" })) === "closed_permanently", `"closed" hours -> closed_permanently`);
+ok(V.validateCandidate(place({ lat: 5, lng: 5 }), center0) === "outside_destination", "5deg away (>60km) -> outside_destination");
+const seen = new Set([V.normName("Existing Place")]);
+ok(V.validateCandidate(place({ name: "Existing Place" }), undefined, seen) === "duplicate", "already-seen name -> duplicate");
+ok(V.validateCandidate(place({ name: "Real Spot", lat: 0.01, lng: 0.01 }), center0) === null, "a real, in-bounds candidate -> accepted (null)");
+
+console.log("\n=== 14. Verified Badge: never depends on coordinates alone ===");
+ok(V.isVerified(place({ source: "overpass", lat: 0.01, lng: 0.01 }), center0) === true, "real OSM object in destination -> Verified");
+ok(V.isVerified(place({ source: "mock", lat: 0.01, lng: 0.01 }), center0) === false, "curated/seed (not an OSM object) -> not Verified");
+ok(V.isVerified(place({ source: "overpass", lat: 5, lng: 5 }), center0) === false, "OSM object outside the destination -> not Verified");
+
+console.log("\n=== 15. Confidence bands: 90/70/50/Reject (not a flat 70% cutoff) ===");
+ok(V.confidenceBand(0.95) === "excellent", "95% -> excellent");
+ok(V.confidenceBand(0.75) === "trusted", "75% -> trusted");
+ok(V.confidenceBand(0.55) === "fallback", "55% -> fallback (kept, clearly labeled, not hidden)");
+ok(V.confidenceBand(0.3) === "reject", "30% -> reject (never displayed)");
+
+console.log("\n=== 16. Itinerary Quality Score: composite 7-factor, honest labeling ===");
+const fullMarks = {
+  interestCoverage: 1, landmarkCoverage: 1, routeEfficiency: 1, timeLogic: 1,
+  photoQuality: 1, weatherAdaptation: 1, verificationQuality: 1,
+};
+ok(V.qualityScore(fullMarks) === 100, `all factors perfect -> ${V.qualityScore(fullMarks)} (want 100)`);
+ok(V.qualityLabel(100) === "Premium Plan", "100 -> Premium Plan");
+const weakMarks = { ...fullMarks, interestCoverage: 0, landmarkCoverage: 0, routeEfficiency: 0, timeLogic: 0 };
+const weakScore = V.qualityScore(weakMarks); // 0.10+0.10+0.10 = 30
+ok(weakScore === 30, `four zeroed factors -> ${weakScore} (want 30)`);
+ok(V.qualityLabel(weakScore) === "Limited Verified Data", `a 30% plan is labeled "${V.qualityLabel(weakScore)}", never presented as high quality`);
+
+console.log("\n=== 17. Quality sub-scores: real measurements, not guesses ===");
+ok(V.landmarkCoverageScore(["Eiffel Tower"], ["Eiffel Tower", "Louvre"], (a, b) => a === b) === 0.5,
+  "1 of 2 must-sees present -> 0.5");
+ok(V.landmarkCoverageScore([], [], (a, b) => a === b) === 1, "no must-sees to grade against -> trivially 1");
+const photoStops = [{ place: { photoResolved: true } }, { place: { photoResolved: false } }];
+ok(V.photoQualityScore(photoStops) === 0.5, "1 of 2 stops has a real resolved photo -> 0.5");
+const verifStops = [{ place: { verified: true } }, { place: { verified: true } }, { place: { verified: false } }];
+ok(Math.abs(V.verificationQualityScore(verifStops) - 2 / 3) < 1e-9, "2 of 3 stops Verified -> 0.67");
 
 console.log(`\n========== ${pass} passed, ${fail} failed ==========`);
 process.exit(fail ? 1 : 0);

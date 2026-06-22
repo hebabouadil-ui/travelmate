@@ -23,6 +23,21 @@ import { dayRoute } from "../data/routing";
 import { clusterIntoDays, nearestWhere, optimizeRoute, planPerDay } from "./optimize";
 import { confidenceScore, isConfidentGem, selectionValue } from "./scoring";
 import { categoriesForInterests, INTEREST_CATEGORIES, interestCoverageScore } from "./interests";
+import {
+  confidenceBand,
+  isVerified,
+  landmarkCoverageScore,
+  normName,
+  photoQualityScore,
+  qualityLabel,
+  qualityScore,
+  routeEfficiencyScore,
+  timeLogicScore,
+  validateCandidate,
+  verificationQualityScore,
+  weatherAdaptationScore,
+  type QualityScoreInputs,
+} from "./validate";
 import { dailyTransport, stopCost } from "./budget";
 import { getProvider, extractJson } from "../ai/provider";
 import { CONCIERGE_SYSTEM, buildEnrichmentPrompt } from "../ai/prompts";
@@ -87,11 +102,18 @@ export async function generateItinerary(req: TripRequest): Promise<Itinerary> {
       return pl;
     })
     .catch(() => [] as Place[]);
-  const [weather, heroImage, pool] = await Promise.all([
+  const [weather, heroImage, rawPool] = await Promise.all([
     getWeather(geo.center, req.startDate, req.days),
     cityImageFor(geo.name).catch(() => undefined),
     poolPromise,
   ]);
+
+  // Candidate Validation: reject anything with missing coordinates, an
+  // unknown category, no real signal, a duplicate name, or that's outside
+  // the destination or marked permanently closed — never display an invalid
+  // candidate. Survivors get the (tightened) Verified badge: a real, mapped
+  // OSM object with a real name/category, actually located in the destination.
+  const pool = validatePool(rawPool, geo.center);
 
   if (pack) pool.forEach((p) => (p.tier = tierOf(p, pack)));
 
@@ -178,6 +200,19 @@ function buildAudit(
       allStops.push(stop);
     }
   }
+
+  const presentNames = allStops.map((s) => s.place.name);
+  const inputs: QualityScoreInputs = {
+    interestCoverage: interestCoverageScore(allStops.map((s) => s.place), interests),
+    landmarkCoverage: landmarkCoverageScore(presentNames, pack?.mustSee ?? [], looseMatch),
+    routeEfficiency: routeEfficiencyScore(days),
+    timeLogic: timeLogicScore(days),
+    photoQuality: photoQualityScore(allStops),
+    weatherAdaptation: weatherAdaptationScore(days, isOutdoor),
+    verificationQuality: verificationQualityScore(allStops),
+  };
+  const quality = qualityScore(inputs);
+
   return {
     totalStops: total,
     verified,
@@ -186,8 +221,30 @@ function buildAudit(
     fromWikidata,
     avgConfidence: total ? Math.round((confidenceSum / total) * 100) / 100 : 0,
     destinationConfidence: pack?.confidence,
-    interestCoverage: Math.round(interestCoverageScore(allStops.map((s) => s.place), interests) * 100),
+    interestCoverage: Math.round(inputs.interestCoverage * 100),
+    qualityScore: quality,
+    qualityLabel: qualityLabel(quality),
   };
+}
+
+/**
+ * Candidate Validation: drop anything with missing coordinates, an unknown
+ * category, no real signal, a duplicate name, or that's outside the
+ * destination or marked permanently closed (never display an invalid
+ * candidate); tighten the Verified badge on every survivor so it reflects a
+ * real, mapped OSM object actually located in the destination — not just
+ * "has coordinates".
+ */
+function validatePool(places: Place[], center: GeoPoint): Place[] {
+  const seen = new Set<string>();
+  const kept: Place[] = [];
+  for (const p of places) {
+    if (validateCandidate(p, center, seen)) continue;
+    p.verified = isVerified(p, center);
+    seen.add(norm(p.name));
+    kept.push(p);
+  }
+  return kept;
 }
 
 /** Last comma-separated segment of a display name (usually the country). */
@@ -346,16 +403,20 @@ function ensureInterestCoverage(days: ItineraryDay[], pool: Place[], interests: 
 }
 
 /**
- * Drop low-confidence ATTRACTION stops (<70%), per the spec, while keeping every
- * day complete (≥3 stops and a main attraction). Backfill then refills from the
- * tier-preferred pool. Meals/coffee/sunset/night are structural and never gated.
+ * Drop only REJECT-band ATTRACTION stops (<50% confidence, per the spec's
+ * confidence bands), while keeping every day complete (≥3 stops and a main
+ * attraction). 50-69% ("Fallback") stops are kept and shown, just honestly
+ * labeled as less certain — they're no longer treated as equally trustworthy
+ * as a 90%+ verified must-see, but they're not silently discarded either.
+ * Backfill then refills from the tier-preferred pool. Meals/coffee/sunset/
+ * night are structural and never gated.
  */
 function gateLowConfidence(days: ItineraryDay[]): void {
   for (const d of days) {
     d.stops.forEach((s) => (s.place.confidence = confidenceScore(s.place)));
     const kept = d.stops.filter((s) => {
       const isAttraction = ATTRACTION_SLOTS.has(s.slot as GuideSlot);
-      return !(isAttraction && (s.place.confidence ?? 0) < 0.7);
+      return !(isAttraction && confidenceBand(s.place.confidence ?? 0) === "reject");
     });
     const hadMain = d.stops.some((s) => s.slot === "main_attraction");
     const keepsMain = kept.some((s) => s.slot === "main_attraction");
@@ -545,9 +606,7 @@ async function enrichStopPhotos(stops: ItineraryStop[], city: string): Promise<v
   ]);
 }
 
-function norm(s: string): string {
-  return s.toLowerCase().replace(/[^a-z0-9]/g, "");
-}
+const norm = normName;
 
 /**
  * Build the real, data-first plan: discover + score + cluster + route real

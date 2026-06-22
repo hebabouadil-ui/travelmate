@@ -25,6 +25,14 @@ export type Interest =
 
 export type FoodPreference = "halal" | "vegetarian" | "vegan" | "none";
 
+/** Confidence rules: 90-100 Excellent, 70-89 Trusted, 50-69 Fallback (kept,
+ *  but clearly labeled), below 50 Reject (never displayed). */
+export type ConfidenceBand = "excellent" | "trusted" | "fallback" | "reject";
+
+/** Honest display label for the composite Itinerary Quality Score — never
+ *  presents a low-quality plan as high quality. */
+export type QualityLabel = "Premium Plan" | "Very Good" | "Good" | "Limited Verified Data";
+
 export type Budget = "economy" | "medium" | "luxury";
 
 export type ActivityLevel = "relaxed" | "moderate" | "intensive";
@@ -196,6 +204,15 @@ export interface ItineraryAudit {
    * when no interests were selected.
    */
   interestCoverage?: number;
+  /**
+   * 0..100 composite Itinerary Quality Score: Interest Coverage 20%,
+   * Landmark Coverage 20%, Route Efficiency 15%, Time Logic 15%, Photo
+   * Quality 10%, Weather Adaptation 10%, Verification Quality 10%. Replaces
+   * the flat per-stop confidence average as the headline quality measure.
+   */
+  qualityScore?: number;
+  /** Honest display label for `qualityScore`. */
+  qualityLabel?: QualityLabel;
 }
 
 export type ItineraryMode = "personalized" | "recommended";

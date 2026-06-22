@@ -40,7 +40,36 @@ engine, validation pipeline, photo engine, and Definition of Done._
 > uncovered only when the destination's real data has nothing in that
 > category (never invented). The score is now reported on
 > `Itinerary.audit.interestCoverage` (0-100). 35/35 offline assertions pass;
-> `npm run typecheck` is clean. Phases 4-12 remain open.
+> `npm run typecheck` is clean.
+
+> **Phase 4 status: shipped.** The §9/§10 "Validation pipeline" finding —
+> candidates were never rejected with a stated reason, the Verified badge
+> was set unconditionally in `overpass.ts`, confidence used a flat ~70%
+> cutoff instead of the spec's 90/70/50/Reject bands, and there was no
+> composite Quality Score — is fixed. New `itinerary/validate.ts` is the
+> single source of truth for all four: `validateCandidate()` rejects a
+> place with one of seven named reasons (`missing_coordinates`,
+> `unknown_category`, `outside_destination`, `duplicate`,
+> `closed_permanently`, `unknown_location`, `low_confidence`) before it can
+> ever be scored, tiered or scheduled — wired in via a new `validatePool()`
+> step in `engine.ts` that runs right after discovery; `isVerified()`
+> tightens the Verified badge to a real, mapped OSM object (source
+> `"overpass"`, real coords/name/category, inside the destination radius),
+> overwriting the old unconditional `verified: true`; `confidenceBand()`
+> implements the 90 Excellent / 70 Trusted / 50 Fallback / below Reject
+> bands, and `gateLowConfidence()` now drops only Reject-band attraction
+> stops while keeping 50-69% "Fallback" stops visible and honestly labeled
+> instead of silently discarding them at a flat 70% line; and
+> `qualityScore()`/`qualityLabel()` compute the spec's 7-factor composite
+> (Interest Coverage 20%, Landmark Coverage 20%, Route Efficiency 15%, Time
+> Logic 15%, Photo Quality 10%, Weather Adaptation 10%, Verification
+> Quality 10%) from real measurements (`landmarkCoverageScore`,
+> `routeEfficiencyScore`, `timeLogicScore`, `photoQualityScore`,
+> `weatherAdaptationScore`, `verificationQualityScore`), reported on
+> `Itinerary.audit.qualityScore`/`qualityLabel` (Premium Plan / Very Good /
+> Good / Limited Verified Data) — replacing the old flat per-stop
+> confidence average as the headline quality measure. 57/57 offline
+> assertions pass; `npm run typecheck` is clean. Phases 5-12 remain open.
 
 ---
 

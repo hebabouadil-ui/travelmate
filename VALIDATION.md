@@ -106,12 +106,15 @@ Rome, Tokyo, Kyoto, Bangkok.** All nine have curated knowledge packs (harness
   resolved up-front for day 1. **Fix:** verified places are credited the photo
   factor (they reliably resolve a Commons photo), keeping scores consistent
   across days.
+- **Bands (v2 Phase 4):** 90 Excellent / 70 Trusted / 50 Fallback (kept,
+  clearly labeled) / below 50 Reject (never displayed) — see Phase 4 below.
 
 ### 10. Would a real traveler actually follow it? ✅ by construction (pending live spot-check)
 - Structured guided day (breakfast→night) with clock times, reasons, durations,
-  travel legs, weather sense and confidence. Attractions under 70% confidence
-  are removed. The remaining risks (photo correctness, day-trip legs) are the
-  on-device spot-check items above.
+  travel legs, weather sense and confidence. Only Reject-band attractions
+  (< 50%) are removed; 50-69% Fallback stops are kept and honestly labeled,
+  not silently discarded. The remaining risks (photo correctness, day-trip
+  legs) are the on-device spot-check items above.
 
 ---
 
@@ -193,8 +196,66 @@ rounded up to "covered"); zero interests selected → trivially 1.0.
 
 35/35 assertions pass; `npm run typecheck` is clean.
 
+## v2 Phase 4 — shipped: Validation pipeline (Candidate Validation, Confidence bands, Verified badge, Quality Score)
+**Finding (v2 audit, §9/§10):** candidates were never rejected with a stated
+reason (silent filtering); the Verified badge was set unconditionally
+(`overpass.ts` hardcoded `verified: true` for every OSM result regardless of
+location); confidence used a flat ~70% cutoff instead of the spec's
+90/70/50/Reject bands, so a 69% stop and a 10% stop were treated identically;
+and there was no composite score measuring overall plan quality, only a flat
+per-stop confidence average.
+
+**Fix:** new `itinerary/validate.ts` is the single source of truth for all
+four:
+- `validateCandidate(place, center, seenNames)` rejects with one of seven
+  named reasons (`missing_coordinates`, `unknown_category`,
+  `outside_destination`, `duplicate`, `closed_permanently`,
+  `unknown_location`, `low_confidence`) before a place can ever be scored,
+  tiered or scheduled — wired in via a new `validatePool()` step in
+  `engine.ts` right after discovery. Never silent: rejected candidates are
+  simply excluded, with a stated reason available for debugging.
+- `isVerified(place, center)` tightens the Verified badge to a real, mapped
+  OSM object (`source === "overpass"`, real coords/name/category, inside the
+  destination radius) — overwriting the old unconditional `verified: true`
+  for every place that passes through `validatePool()`.
+- `confidenceBand(score)` implements 90 Excellent / 70 Trusted / 50 Fallback
+  / below 50 Reject. `gateLowConfidence()` (`engine.ts`) now drops only
+  Reject-band attraction stops while keeping Fallback (50-69%) stops visible
+  and honestly labeled, instead of silently discarding everything under a
+  flat 70% line.
+- `qualityScore()`/`qualityLabel()` compute the spec's 7-factor composite
+  (Interest Coverage 20%, Landmark Coverage 20%, Route Efficiency 15%, Time
+  Logic 15%, Photo Quality 10%, Weather Adaptation 10%, Verification Quality
+  10%) from real measurements (`landmarkCoverageScore`,
+  `routeEfficiencyScore`, `timeLogicScore`, `photoQualityScore`,
+  `weatherAdaptationScore`, `verificationQualityScore` — each a pure,
+  independently-testable function reusing existing helpers from `dayflow.ts`
+  and `knowledge.ts` rather than duplicating logic). Reported on
+  `Itinerary.audit.qualityScore`/`qualityLabel` (Premium Plan / Very Good /
+  Good / Limited Verified Data), replacing the old flat per-stop confidence
+  average as the headline quality measure.
+
+**Design note — Candidate Validation vs. Confidence Validation are separate
+stages, by spec:** `validateCandidate()` deliberately does **not** check
+confidence. At pool-ingestion time, tier/photo signals haven't been resolved
+yet, so the weighted confidence formula would unfairly reject legitimate
+hand-curated seed landmarks (`source: "mock"`) that simply haven't been
+scored yet — a regression against the "100 excellent destinations, never
+silently discarded" curated-data principle. The spec's own pipeline keeps
+these as separate, sequential stages (Candidate Validation → ... →
+Confidence Validation), so the real 50%-band reject correctly runs later, in
+`gateLowConfidence()`, once a place is an actual stop with tier/photo data.
+
+Harness §13 asserts all seven rejection reasons plus acceptance; §14 asserts
+the Verified badge depends on source + location, never coordinates alone;
+§15 asserts all four confidence bands; §16 asserts the composite score and
+honest labeling at both ends (100 → Premium Plan, 30 → Limited Verified
+Data); §17 asserts each sub-score measurement independently.
+
+57/57 assertions pass; `npm run typecheck` is clean.
+
 ## How to reproduce
 ```
-cd mobile && npm run validate   # 35/35 assertions on the real algorithms
+cd mobile && npm run validate   # 57/57 assertions on the real algorithms
 cd mobile && npm run typecheck  # clean compile
 ```
