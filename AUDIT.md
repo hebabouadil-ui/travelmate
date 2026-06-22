@@ -215,6 +215,11 @@ enrichment → persisted to store.
   real algorithms; fixed 4 bugs (must-see spelling matching, cross-day weather
   duplicate, day-2/3 confidence drop, out-of-order day). See VALIDATION.md.
 - ✅ Added TravelMate_Master_Spec.md (single source of truth).
+- ✅ Real astronomical sunset times: `weather.ts` now requests Open-Meteo's
+  `sunset` daily field (timezone-correct local clock time) and stores it as
+  `DayWeather.sunsetTime`; `scheduleDay` anchors the `sunset` slot to that real
+  time (overriding the generic 18:00 default) whenever it's known. Harness
+  extended to 30/30.
 
 ## 6. Ranking Methodology (how "best" is decided)
 

@@ -126,10 +126,19 @@ Rome, Tokyo, Kyoto, Bangkok.** All nine have curated knowledge packs (harness
 
 ## Remaining (tracked, not blocking)
 - Photo correctness + **Pexels fallback** (priority #2).
-- **Real astronomical sunset times** for the sunset slot (priority #1).
 - Day-trip leg isolation; richer opening-hours parsing.
+
+## Post-validation priority #1 — shipped
+**Real astronomical sunset times.** Open-Meteo's daily `sunset` field (ISO
+local time, `timezone=auto`) is now fetched alongside temperature/precip/wind
+and stored as `DayWeather.sunsetTime`. `scheduleDay()` anchors the `sunset`
+slot to that real clock time instead of the generic `18:00` default whenever
+it's known — so the golden-hour stop actually lands at golden hour, city- and
+date-correct (e.g. Marrakech in June ≈ 19:30 vs. Tokyo in December ≈ 16:30).
+Harness §1d asserts the override (`scheduleDay` given `sunsetTime: "21:34"` →
+sunset stop scheduled at `21:34`, not the default). 30/30 pass.
 
 ## How to reproduce
 ```
-cd mobile && npm run validate   # 29/29 assertions on the real algorithms
+cd mobile && npm run validate   # 30/30 assertions on the real algorithms
 ```

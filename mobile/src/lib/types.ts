@@ -204,6 +204,8 @@ export interface DayWeather {
   rainRisk: boolean;
   /** Peak wind speed (km/h), when available. */
   windKmh?: number;
+  /** Real local sunset clock time (HH:MM), from Open-Meteo astronomical data. */
+  sunsetTime?: string;
 }
 
 /** Inputs collected from the trip planner form. */

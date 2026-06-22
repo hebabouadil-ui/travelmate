@@ -155,7 +155,8 @@ legs (cannot be verified in the network-restricted CI).
 ## 11. Roadmap (post-validation priorities)
 
 1. **Real astronomical sunset times** for the sunset slot (Open-Meteo daily
-   sunrise/sunset).
+   `sunset`). ✅ **Shipped** — `scheduleDay` now anchors the sunset stop to
+   the real local sunset time for that city/date.
 2. **Pexels fallback photos** + name disambiguation.
 3. **Additional destination packs** (expand the priority countries; add new
    ones only when curated to the same quality).

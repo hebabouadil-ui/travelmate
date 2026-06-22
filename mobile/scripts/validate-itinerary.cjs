@@ -85,5 +85,13 @@ let inc = true; for (let i = 1; i < day.length; i++) if (F.parseHM(times[i]) <= 
 ok(inc, `times strictly increasing: ${times.join(" → ")}`);
 ok(times[1] === "10:00", `place opening 10:00 (desired 09:00) bumped to ${times[1]}`);
 
+console.log("\n=== 1d. Sunset slot anchors to the real local sunset time ===");
+const sunsetDay = [
+  stop({ slot: "breakfast", startTime: "08:00", durationMin: 30, place: { lat: 0, lng: 0 } }),
+  stop({ slot: "sunset", startTime: "18:00", durationMin: 45, travelFromPrevMin: 5, place: { lat: 0, lng: 0.01 } }),
+];
+F.scheduleDay(sunsetDay, "21:34");
+ok(sunsetDay[1].startTime === "21:34", `sunset slot uses real local sunset (21:34) over generic default, got ${sunsetDay[1].startTime}`);
+
 console.log(`\n========== ${pass} passed, ${fail} failed ==========`);
 process.exit(fail ? 1 : 0);

@@ -635,8 +635,9 @@ async function finalizeDays(
         }
       });
       day.routeGeometry = route.geometry;
-      // Now that real travel times are known, lay the day out on the clock.
-      scheduleDay(day.stops);
+      // Now that real travel times are known, lay the day out on the clock,
+      // anchoring the sunset slot to the real local sunset for this day.
+      scheduleDay(day.stops, day.weather?.sunsetTime);
       day.estimatedCost =
         day.stops.reduce((s, st) => s + (st.estimatedCost ?? 0), 0) +
         dailyTransport(req.budget);

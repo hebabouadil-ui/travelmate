@@ -89,13 +89,19 @@ export function optimizeDayFlow(stops: ItineraryStop[]): ItineraryStop[] {
 /**
  * Assign each stop a realistic clock time: anchor to the guide's canonical slot
  * time, push later as real travel + dwell accumulate, and never schedule a stop
- * before it opens (when OSM hours are known). Mutates startTime in place.
+ * before it opens (when OSM hours are known). The sunset slot is anchored to the
+ * real local astronomical sunset for that day/place, when known, overriding the
+ * generic default — golden hour only means something if the time is real.
+ * Mutates startTime in place.
  */
-export function scheduleDay(stops: ItineraryStop[]): void {
+export function scheduleDay(stops: ItineraryStop[], sunsetTime?: string): void {
   let clock = 8 * 60; // 08:00 default start
+  const realSunset = parseHM(sunsetTime);
   stops.forEach((st, i) => {
     const desired =
-      parseHM(st.startTime) ?? (st.slot ? parseHM(SLOT_DEFAULT_TIME[st.slot]) : null);
+      st.slot === "sunset" && realSunset != null
+        ? realSunset
+        : parseHM(st.startTime) ?? (st.slot ? parseHM(SLOT_DEFAULT_TIME[st.slot]) : null);
     if (i === 0) {
       clock = desired ?? clock;
     } else {
