@@ -36,7 +36,10 @@ jobs:
       EXPO_PUBLIC_MAP_STYLE_URL: ${{ secrets.EXPO_PUBLIC_MAP_STYLE_URL }}
       # Optional free Gemini key → auto-enables AI-written itineraries.
       EXPO_PUBLIC_GEMINI_API_KEY: ${{ secrets.EXPO_PUBLIC_GEMINI_API_KEY }}
+      EXPO_PUBLIC_GEMINI_MODEL: ${{ secrets.EXPO_PUBLIC_GEMINI_MODEL }}
       EXPO_PUBLIC_AI_PROVIDER: ${{ secrets.EXPO_PUBLIC_GEMINI_API_KEY != '' && 'gemini' || 'mock' }}
+      # Stamps the build number into the app so testers know which APK they run.
+      EXPO_PUBLIC_BUILD_NUMBER: ${{ github.run_number }}
 
     steps:
       - name: Checkout
@@ -116,3 +119,4 @@ jobs:
           files: ${{ steps.apk.outputs.path }}
           draft: false
           prerelease: false
+          make_latest: true

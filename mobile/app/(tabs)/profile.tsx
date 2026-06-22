@@ -18,6 +18,7 @@ import { useProfile } from "@/store/useProfile";
 import { TRAVELER_TYPES, INTERESTS } from "@/lib/onboarding-config";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 import { getProvider } from "@/lib/ai/provider";
+import { ENV } from "@/lib/env";
 import { requestNotificationPermission, notifyNow } from "@/lib/notifications";
 
 export default function Profile() {
@@ -115,7 +116,7 @@ export default function Profile() {
           </Text>
         </Card>
 
-        <Text style={styles.version}>Voyage AI · v0.1.0</Text>
+        <Text style={styles.version}>Voyage AI · v0.1.0 · build {ENV.buildNumber}</Text>
       </ScrollView>
     </SafeAreaView>
   );

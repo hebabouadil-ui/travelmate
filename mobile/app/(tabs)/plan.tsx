@@ -307,5 +307,5 @@ const styles = StyleSheet.create({
   budgetHint: { color: colors.textFaint, fontSize: font.tiny, marginTop: 2 },
   error: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: spacing.lg, backgroundColor: colors.danger + "1A", borderRadius: radius.md, padding: spacing.md },
   errorText: { color: colors.danger, fontSize: font.small, flex: 1 },
-  footer: { padding: spacing.lg, paddingBottom: spacing.xl, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, backgroundColor: colors.bg },
+  footer: { padding: spacing.lg, paddingBottom: 86, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, backgroundColor: colors.bg },
 });

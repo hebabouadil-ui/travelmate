@@ -18,6 +18,7 @@ export const ENV = {
   mapStyleUrl:
     process.env.EXPO_PUBLIC_MAP_STYLE_URL ||
     "https://tiles.openfreemap.org/styles/liberty",
+  buildNumber: process.env.EXPO_PUBLIC_BUILD_NUMBER || "dev",
 };
 
 export const isSupabaseConfigured = () =>

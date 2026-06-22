@@ -67,13 +67,13 @@ export default function Onboarding() {
   const canProceed = current !== "interests" || interests.length > 0;
 
   return (
-    <LinearGradient colors={colors.heroGradient} style={{ flex: 1 }}>
+    <View style={styles.page}>
       <SafeAreaView style={{ flex: 1 }}>
         {/* Progress */}
         <View style={styles.progressRow}>
           {step > 0 ? (
             <Pressable onPress={back} hitSlop={10} style={styles.backBtn}>
-              <Ionicons name="chevron-back" size={22} color={colors.white} />
+              <Ionicons name="chevron-back" size={22} color={colors.text} />
             </Pressable>
           ) : (
             <View style={styles.backBtn} />
@@ -92,9 +92,9 @@ export default function Onboarding() {
         >
           {current === "welcome" && (
             <Animated.View entering={FadeIn} exiting={FadeOut} style={styles.welcome}>
-              <View style={styles.logoBadge}>
+              <LinearGradient colors={colors.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.logoBadge}>
                 <Ionicons name="compass" size={42} color={colors.white} />
-              </View>
+              </LinearGradient>
               <Text style={styles.brand}>Voyage AI</Text>
               <Text style={styles.tagline}>
                 Your personal AI travel concierge. Smart, route-optimized trips
@@ -204,7 +204,7 @@ export default function Onboarding() {
           />
         </View>
       </SafeAreaView>
-    </LinearGradient>
+    </View>
   );
 }
 
@@ -263,7 +263,8 @@ const styles = StyleSheet.create({
   backBtn: { width: 32, height: 32, alignItems: "center", justifyContent: "center" },
   progressTrack: { flex: 1, height: 5, borderRadius: 3, backgroundColor: colors.surfaceAlt, overflow: "hidden" },
   progressFill: { height: 5, borderRadius: 3, backgroundColor: colors.primary },
-  progressLabel: { color: "rgba(255,255,255,0.85)", fontSize: font.tiny, fontWeight: "700", width: 32, textAlign: "right" },
+  page: { flex: 1, backgroundColor: colors.bg },
+  progressLabel: { color: colors.textMuted, fontSize: font.tiny, fontWeight: "700", width: 32, textAlign: "right" },
   scroll: { padding: spacing.xl, paddingBottom: spacing.xxxl, flexGrow: 1 },
   welcome: { alignItems: "center", paddingTop: spacing.xxl },
   logoBadge: {
@@ -275,13 +276,13 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginBottom: spacing.xl,
   },
-  brand: { color: colors.white, fontSize: 38, fontWeight: "900", letterSpacing: -0.5 },
-  tagline: { color: "rgba(255,255,255,0.88)", fontSize: font.body, textAlign: "center", lineHeight: 23, marginTop: spacing.md, paddingHorizontal: spacing.md },
+  brand: { color: colors.text, fontSize: 38, fontWeight: "900", letterSpacing: -0.5 },
+  tagline: { color: colors.textMuted, fontSize: font.body, textAlign: "center", lineHeight: 23, marginTop: spacing.md, paddingHorizontal: spacing.md },
   featureList: { marginTop: spacing.xxl, gap: spacing.md, alignSelf: "stretch" },
-  featureItem: { flexDirection: "row", alignItems: "center", gap: spacing.md, backgroundColor: "rgba(255,255,255,0.14)", borderRadius: radius.md, padding: spacing.md, borderWidth: 1, borderColor: "rgba(255,255,255,0.22)" },
-  featureText: { color: colors.white, fontSize: font.body, fontWeight: "600" },
-  stepTitle: { color: colors.white, fontSize: font.h1, fontWeight: "900", marginBottom: spacing.xs },
-  stepSubtitle: { color: "rgba(255,255,255,0.85)", fontSize: font.body, marginBottom: spacing.xl },
+  featureItem: { flexDirection: "row", alignItems: "center", gap: spacing.md, backgroundColor: colors.surface, borderRadius: radius.md, padding: spacing.md, borderWidth: 1, borderColor: colors.border },
+  featureText: { color: colors.text, fontSize: font.body, fontWeight: "600" },
+  stepTitle: { color: colors.text, fontSize: font.h1, fontWeight: "900", marginBottom: spacing.xs },
+  stepSubtitle: { color: colors.textMuted, fontSize: font.body, marginBottom: spacing.xl },
   wrap: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
   optionList: { gap: spacing.md },
   optionRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
