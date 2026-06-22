@@ -1,8 +1,17 @@
 import { Tabs } from "expo-router";
-import { Platform, StyleSheet, View } from "react-native";
+import { Platform, StyleSheet, View, Text } from "react-native";
 import { BlurView } from "expo-blur";
-import { Ionicons } from "@expo/vector-icons";
 import { colors, spacing } from "@/theme";
+
+/**
+ * Tab icons use emoji (system-rendered) so they ALWAYS show, independent of the
+ * icon-font loading that proved unreliable in release builds.
+ */
+function TabIcon({ char, focused }: { char: string; focused: boolean }) {
+  return (
+    <Text style={{ fontSize: 22, opacity: focused ? 1 : 0.55 }}>{char}</Text>
+  );
+}
 
 export default function TabsLayout() {
   return (
@@ -24,38 +33,23 @@ export default function TabsLayout() {
     >
       <Tabs.Screen
         name="index"
-        options={{
-          title: "Discover",
-          tabBarIcon: ({ color, size }) => <Ionicons name="compass" size={size} color={color} />,
-        }}
+        options={{ title: "Discover", tabBarIcon: ({ focused }) => <TabIcon char="🧭" focused={focused} /> }}
       />
       <Tabs.Screen
         name="plan"
-        options={{
-          title: "Plan",
-          tabBarIcon: ({ color, size }) => <Ionicons name="add-circle" size={size + 4} color={color} />,
-        }}
+        options={{ title: "Plan", tabBarIcon: ({ focused }) => <TabIcon char="✨" focused={focused} /> }}
       />
       <Tabs.Screen
         name="nearby"
-        options={{
-          title: "Nearby",
-          tabBarIcon: ({ color, size }) => <Ionicons name="navigate" size={size} color={color} />,
-        }}
+        options={{ title: "Nearby", tabBarIcon: ({ focused }) => <TabIcon char="📍" focused={focused} /> }}
       />
       <Tabs.Screen
         name="trips"
-        options={{
-          title: "Trips",
-          tabBarIcon: ({ color, size }) => <Ionicons name="briefcase" size={size} color={color} />,
-        }}
+        options={{ title: "Trips", tabBarIcon: ({ focused }) => <TabIcon char="🧳" focused={focused} /> }}
       />
       <Tabs.Screen
         name="profile"
-        options={{
-          title: "Profile",
-          tabBarIcon: ({ color, size }) => <Ionicons name="person-circle" size={size + 2} color={color} />,
-        }}
+        options={{ title: "Profile", tabBarIcon: ({ focused }) => <TabIcon char="👤" focused={focused} /> }}
       />
     </Tabs>
   );

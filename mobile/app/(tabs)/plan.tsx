@@ -112,11 +112,25 @@ export default function Plan() {
         startDate: computeStartDate(),
         profile: { ...profile, budget, interests },
       };
-      const itinerary = await generateItinerary(req);
+      const itinerary = await Promise.race([
+        generateItinerary(req),
+        new Promise<never>((_, rej) =>
+          setTimeout(() => rej(new Error("timeout")), 55000)
+        ),
+      ]);
+      const totalStops = itinerary.days.reduce((n, d) => n + d.stops.length, 0);
+      if (totalStops === 0) throw new Error("empty");
       saveTrip(itinerary);
       router.push(`/trip/${itinerary.id}`);
     } catch (e) {
-      setError("Couldn't build a plan for that destination. Try another city.");
+      const msg = (e as Error)?.message;
+      setError(
+        msg === "timeout"
+          ? "That took too long — check your connection and try again."
+          : msg === "empty"
+          ? "Couldn't find places for that spot. Try a nearby bigger city."
+          : "Couldn't build a plan right now. Please try again."
+      );
     } finally {
       setLoading(false);
     }
@@ -197,7 +211,7 @@ export default function Plan() {
                 onPress={() => { Haptics.selectionAsync(); setMode(m.key); }}
                 style={[styles.modeCard, mode === m.key && styles.modeCardSelected]}
               >
-                <Ionicons name={m.icon as any} size={18} color={mode === m.key ? colors.primary : colors.textFaint} />
+                <Text style={{ fontSize: 18 }}>{m.key === "personalized" ? "🎯" : "⭐"}</Text>
                 <Text style={[styles.modeLabel, mode === m.key && { color: colors.text }]}>{m.label}</Text>
                 <Text style={styles.modeHint}>{m.hint}</Text>
               </Pressable>
@@ -211,7 +225,7 @@ export default function Plan() {
               onPress={() => { Haptics.selectionAsync(); setDays((d) => Math.max(1, d - 1)); }}
               style={styles.stepBtn}
             >
-              <Ionicons name="remove" size={22} color={colors.text} />
+              <Text style={styles.stepGlyph}>−</Text>
             </Pressable>
             <View style={styles.stepValue}>
               <Text style={styles.stepNum}>{days}</Text>
@@ -221,7 +235,7 @@ export default function Plan() {
               onPress={() => { Haptics.selectionAsync(); setDays((d) => Math.min(10, d + 1)); }}
               style={styles.stepBtn}
             >
-              <Ionicons name="add" size={22} color={colors.text} />
+              <Text style={styles.stepGlyph}>+</Text>
             </Pressable>
           </View>
 
@@ -296,6 +310,7 @@ const styles = StyleSheet.create({
   modeHint: { color: colors.textFaint, fontSize: font.tiny, marginTop: 2 },
   stepper: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: spacing.sm },
   stepBtn: { width: 48, height: 48, borderRadius: radius.md, backgroundColor: colors.surfaceAlt, alignItems: "center", justifyContent: "center" },
+  stepGlyph: { fontSize: 26, fontWeight: "800", color: colors.text, lineHeight: 30 },
   stepValue: { alignItems: "center", flexDirection: "row", gap: 6 },
   stepNum: { color: colors.text, fontSize: font.h1, fontWeight: "900" },
   stepUnit: { color: colors.textMuted, fontSize: font.body },

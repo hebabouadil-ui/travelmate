@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Image, View, StyleSheet, ActivityIndicator, ViewStyle, StyleProp } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Image, View, Text, StyleSheet, ActivityIndicator, ViewStyle, StyleProp } from "react-native";
 import { colors } from "@/theme";
 
 /**
@@ -12,12 +11,13 @@ export function SmartImage({
   uri,
   fallback,
   style,
-  icon = "image",
+  emoji = "🏙️",
 }: {
   uri?: string;
   fallback?: string;
   style?: StyleProp<ViewStyle>;
-  icon?: keyof typeof Ionicons.glyphMap;
+  /** Emoji shown when there's no image (font-independent). */
+  emoji?: string;
 }) {
   const first = uri || fallback;
   const [src, setSrc] = useState<string | undefined>(first);
@@ -53,9 +53,7 @@ export function SmartImage({
           onLoadEnd={() => setLoading(false)}
         />
       ) : null}
-      {(!src || failed) && (
-        <Ionicons name={icon} size={28} color={colors.textFaint} />
-      )}
+      {(!src || failed) && <Text style={{ fontSize: 26, opacity: 0.5 }}>{emoji}</Text>}
       {loading && !failed ? (
         <ActivityIndicator color={colors.primary} style={StyleSheet.absoluteFill as any} />
       ) : null}

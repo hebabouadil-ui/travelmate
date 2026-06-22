@@ -23,7 +23,9 @@ permissions:
 
 concurrency:
   group: android-apk-${{ github.ref }}
-  cancel-in-progress: true
+  # Let in-progress builds finish (queue new ones) so a quick follow-up push
+  # never cancels a build that's about to produce an installable APK.
+  cancel-in-progress: false
 
 jobs:
   build-apk:

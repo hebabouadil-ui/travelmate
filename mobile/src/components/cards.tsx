@@ -170,7 +170,7 @@ export function StopCard({
             uri={image}
             fallback={categoryImage(stop.place.category, stop.place.name)}
             style={styles.stopImage}
-            icon={(meta.icon as any) ?? "image"}
+            emoji={meta.emoji}
           />
 
           <View style={styles.stopBody}>
