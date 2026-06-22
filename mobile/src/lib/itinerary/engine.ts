@@ -19,6 +19,7 @@ import { resolveStopMedia } from "../data/media";
 import { currencyForCountry } from "../currency";
 import { dayRoute } from "../data/routing";
 import { clusterIntoDays, nearestWhere, optimizeRoute, planPerDay } from "./optimize";
+import { attractionScore, isConfidentGem } from "./scoring";
 import { dailyTransport, stopCost } from "./budget";
 import { getProvider, extractJson } from "../ai/provider";
 import { CONCIERGE_SYSTEM, buildEnrichmentPrompt } from "../ai/prompts";
@@ -272,6 +273,9 @@ function groundDaysToPool(days: ItineraryDay[], pool: Place[]): void {
       } else {
         stop.place.verified = false;
       }
+      // Hidden-gem is now a confidence decision on real data, not a keyword
+      // guess — so the badge only appears on authentic, lower-traffic spots.
+      stop.place.hiddenGem = isConfidentGem(stop.place);
     }
   }
 }
@@ -326,13 +330,22 @@ async function finalizeDays(
   for (const day of days) {
     const anchor = day.stops[0]?.place ?? center;
     if (day.stops.length < MIN_STOPS_PER_DAY && pool.length) {
+      // Rank by real desirability (notability, tourist value, interest match)
+      // with a gentle distance penalty — so we backfill the BEST nearby places,
+      // not a random/nearest one.
       const candidates = pool
         .filter((p) => !used.has(norm(p.name)))
-        .sort((a, b) => haversineKm(anchor, a) - haversineKm(anchor, b));
+        .map((p) => ({
+          p,
+          v: attractionScore(p, req.interests) - haversineKm(anchor, p) * 0.04,
+        }))
+        .sort((a, b) => b.v - a.v)
+        .map((x) => x.p);
       for (const p of candidates) {
         if (day.stops.length >= MIN_STOPS_PER_DAY) break;
         used.add(norm(p.name));
         if (!p.imageUrl) p.imageUrl = categoryImage(p.category, p.name);
+        p.hiddenGem = isConfidentGem(p);
         day.stops.push({
           daypart: pickDaypart(day.stops.length),
           place: p,
