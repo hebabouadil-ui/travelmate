@@ -63,6 +63,9 @@ export interface Place extends GeoPoint {
   /** True once a real (Wikipedia/Foursquare) photo has been resolved for this
    *  place, so the UI knows it's not just a category placeholder. */
   photoResolved?: boolean;
+  /** True when the location is grounded to a real OSM POI (coords/name/hours
+   *  verified) rather than an AI-suggested approximation. */
+  verified?: boolean;
   /** Human opening hours if known (OSM). */
   openingHours?: string;
   /** Suggested neighborhood/area label. */

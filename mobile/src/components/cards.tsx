@@ -180,12 +180,20 @@ export function StopCard({
                 <Icon name={daypart.icon as any} size={11} color={daypart.color} />
                 <Text style={[styles.daypartText, { color: daypart.color }]}>{daypart.label}</Text>
               </View>
-              {stop.place.hiddenGem && (
-                <View style={styles.gem}>
-                  <Icon name="diamond" size={10} color={colors.accent} />
-                  <Text style={styles.gemText}>Hidden gem</Text>
-                </View>
-              )}
+              <View style={styles.badgeRow}>
+                {stop.place.hiddenGem && (
+                  <View style={styles.gem}>
+                    <Icon name="diamond" size={10} color={colors.accent} />
+                    <Text style={styles.gemText}>Hidden gem</Text>
+                  </View>
+                )}
+                {stop.place.verified && (
+                  <View style={styles.verified}>
+                    <Icon name="checkmark-circle" size={11} color={colors.success} />
+                    <Text style={styles.verifiedText}>Verified</Text>
+                  </View>
+                )}
+              </View>
             </View>
 
             <Text style={styles.stopName} numberOfLines={2} ellipsizeMode="tail">
@@ -364,8 +372,11 @@ const styles = StyleSheet.create({
   stopHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: spacing.sm },
   daypartPill: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: spacing.md, paddingVertical: 5, borderRadius: radius.pill },
   daypartText: { fontSize: font.tiny, fontWeight: "700", letterSpacing: 0.2 },
+  badgeRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   gem: { flexDirection: "row", alignItems: "center", gap: 3 },
   gemText: { color: colors.accent, fontSize: font.tiny, fontWeight: "700" },
+  verified: { flexDirection: "row", alignItems: "center", gap: 3 },
+  verifiedText: { color: colors.success, fontSize: font.tiny, fontWeight: "700" },
   stopName: { color: colors.text, fontSize: font.h3, fontWeight: "700" },
   stopMetaRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4, flexWrap: "wrap" },
   stopMeta: { color: colors.textMuted, fontSize: font.small },

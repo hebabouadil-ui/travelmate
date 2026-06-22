@@ -109,10 +109,23 @@ export function PlaceSheet({
 
               {desc ? <Text style={styles.desc}>{desc}</Text> : null}
 
+              <View style={styles.verifyRow}>
+                <Icon
+                  name={place.verified ? "checkmark-circle" : "alert-circle"}
+                  size={14}
+                  color={place.verified ? colors.success : colors.textFaint}
+                />
+                <Text style={[styles.verifyText, place.verified && { color: colors.success }]}>
+                  {place.verified
+                    ? "Verified location · OpenStreetMap"
+                    : "Location approximate — not independently verified"}
+                </Text>
+              </View>
+
               <View style={styles.infoGrid}>
                 <Info icon="time-outline" label="Suggested" value={`${stop?.durationMin ?? 60} min`} />
-                {place.bestTime ? <Info icon="sunny-outline" label="Best time" value={place.bestTime} /> : null}
-                {place.openingHours ? <Info icon="alarm-outline" label="Hours" value={place.openingHours} /> : null}
+                <Info icon="sunny-outline" label="Best time" value={place.bestTime || "Information unavailable"} />
+                <Info icon="alarm-outline" label="Hours" value={place.openingHours || "Information unavailable"} />
                 {place.cuisine ? <Info icon="restaurant-outline" label="Cuisine" value={place.cuisine} /> : null}
               </View>
 
@@ -168,6 +181,8 @@ const styles = StyleSheet.create({
   content: { padding: spacing.lg },
   whyBox: { flexDirection: "row", gap: spacing.sm, backgroundColor: colors.primary + "12", borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.md },
   whyText: { flex: 1, color: colors.text, fontSize: font.body, lineHeight: 21, fontWeight: "600" },
+  verifyRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: spacing.md },
+  verifyText: { color: colors.textMuted, fontSize: font.tiny, fontWeight: "600" },
   desc: { color: colors.textMuted, fontSize: font.body, lineHeight: 22, marginBottom: spacing.lg },
   infoGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.md, marginBottom: spacing.lg },
   info: { flexDirection: "row", alignItems: "center", gap: spacing.sm, minWidth: "44%", backgroundColor: colors.surface, borderRadius: radius.md, padding: spacing.md },

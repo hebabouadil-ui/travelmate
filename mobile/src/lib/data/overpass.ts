@@ -97,6 +97,9 @@ function toPlace(el: OverpassElement): Place | null {
     cuisine: tags.cuisine?.split(";")[0]?.replace(/_/g, " "),
     tags: collectDietTags(tags),
     hiddenGem,
+    openingHours: tags.opening_hours,
+    neighborhood: tags["addr:suburb"] || tags["addr:district"] || tags["addr:city"],
+    verified: true, // straight from OpenStreetMap — a real, mapped place
     score:
       isMajor ? 0.9 : category === "restaurant" || category === "cafe" ? 0.5 : 0.6,
     source: "overpass",

@@ -80,13 +80,14 @@ export async function generateItinerary(req: TripRequest): Promise<Itinerary> {
       }
     : await geocode(req.destination);
 
-  // Note: we deliberately DON'T fetch the (slow) Overpass pool up-front. When
-  // the AI returns full days we don't need it at all — fetching it lazily only
-  // when a day is thin removes ~10-20s from a normal AI generation.
-  const [aiPlan, weather, heroImage] = await Promise.all([
+  // Fetch the real OSM POI pool IN PARALLEL with the AI call (which is the long
+  // pole), so we can VERIFY the AI's places against real mapped locations
+  // without adding much wall-clock time. This is the core "real, not fake" step.
+  const [aiPlan, weather, heroImage, pool] = await Promise.all([
     aiPlanItinerary(req, req.destination).catch(() => null),
     getWeather(geo.center, req.startDate, req.days),
     cityImageFor(geo.name).catch(() => undefined),
+    discoverPlaces(req.destination, geo.center).catch(() => [] as Place[]),
   ]);
 
   let days: ItineraryDay[];
@@ -94,20 +95,17 @@ export async function generateItinerary(req: TripRequest): Promise<Itinerary> {
   let highlights: string[];
   let country: string | undefined;
   let engine: Itinerary["engine"];
-  let pool: Place[] = [];
 
   if (aiPlan) {
     days = buildDaysFromAI(aiPlan, geo, req, weather);
+    // Ground each AI stop to a real OSM POI (snap coords/name/hours) and flag
+    // any that can't be verified — so we never present invented data as fact.
+    groundDaysToPool(days, pool);
     overview = aiPlan.overview || buildOverview(req).overview;
     highlights = aiPlan.highlights?.length ? aiPlan.highlights : buildOverview(req).highlights;
     country = aiPlan.country;
     engine = "gemini";
-    // Only pay for Overpass if the AI left a day thin.
-    if (days.some((d) => d.stops.length < MIN_STOPS_PER_DAY)) {
-      pool = await discoverPlaces(req.destination, geo.center).catch(() => []);
-    }
   } else {
-    pool = await discoverPlaces(req.destination, geo.center).catch(() => []);
     days = await buildDeterministicDays(req, geo, weather, pool);
     const ov = buildOverview(req);
     overview = ov.overview;
@@ -194,6 +192,88 @@ function placeFromAIStop(s: AIStop, geo: GeocodeResult, seed: number): Place {
     source: "ai",
     imageUrl: categoryImage(s.category, s.name),
   };
+}
+
+const NAME_STOPWORDS = new Set([
+  "the", "a", "an", "of", "and", "de", "la", "le", "el", "du", "des", "da",
+  "di", "do", "las", "los", "al", "san", "santa", "st", "cafe", "restaurant",
+  "museum", "park", "bar",
+]);
+
+function nameTokens(s: string): string[] {
+  return (s.toLowerCase().match(/[a-z0-9]+/g) ?? []).filter(
+    (t) => t.length > 2 && !NAME_STOPWORDS.has(t)
+  );
+}
+
+/** 0..1 similarity between two place names (exact > substring > token overlap). */
+function nameSimilarity(a: string, b: string): number {
+  const na = norm(a);
+  const nb = norm(b);
+  if (!na || !nb) return 0;
+  if (na === nb) return 1;
+  if (na.length >= 4 && nb.length >= 4 && (na.includes(nb) || nb.includes(na))) return 0.85;
+  const ta = nameTokens(a);
+  const tb = nameTokens(b);
+  if (!ta.length || !tb.length) return 0;
+  const setB = new Set(tb);
+  let inter = 0;
+  for (const t of ta) if (setB.has(t)) inter++;
+  return inter / Math.max(ta.length, tb.length);
+}
+
+/** Find the best real OSM POI for an AI place (by name, guarded by distance). */
+function bestPoolMatch(place: Place, pool: Place[], used: Set<string>): Place | null {
+  if (norm(place.name).length < 3) return null;
+  const aiCoordValid = Number.isFinite(place.lat) && Number.isFinite(place.lng);
+  let best: Place | null = null;
+  let bestScore = 0;
+  for (const p of pool) {
+    if (used.has(p.id)) continue;
+    const sim = nameSimilarity(place.name, p.name);
+    if (sim < 0.55) continue;
+    // If the AI gave a usable coordinate, the real POI must be plausibly close.
+    if (aiCoordValid && haversineKm(place, p) > 5) continue;
+    const score = sim + (p.category === place.category ? 0.1 : 0);
+    if (score > bestScore) {
+      bestScore = score;
+      best = p;
+    }
+  }
+  return best;
+}
+
+/**
+ * Ground every AI-suggested stop against the real OSM pool: when a confident
+ * match exists, snap the coordinates/name to the real place and attach its real
+ * opening hours; otherwise mark the stop unverified so the UI never presents an
+ * AI approximation as a hard fact.
+ */
+function groundDaysToPool(days: ItineraryDay[], pool: Place[]): void {
+  if (!pool.length) {
+    days.forEach((d) => d.stops.forEach((s) => (s.place.verified = false)));
+    return;
+  }
+  const used = new Set<string>();
+  for (const day of days) {
+    for (const stop of day.stops) {
+      const match = bestPoolMatch(stop.place, pool, used);
+      if (match) {
+        used.add(match.id);
+        const p = stop.place;
+        p.name = match.name; // canonical, correctly-spelled OSM name
+        p.lat = match.lat;
+        p.lng = match.lng;
+        p.verified = true;
+        p.openingHours = p.openingHours ?? match.openingHours;
+        p.wikipediaUrl = p.wikipediaUrl ?? match.wikipediaUrl;
+        p.neighborhood = p.neighborhood ?? match.neighborhood;
+        if (match.cuisine && !p.cuisine) p.cuisine = match.cuisine;
+      } else {
+        stop.place.verified = false;
+      }
+    }
+  }
 }
 
 /** Build itinerary days from the AI plan (routing/images added in finalize). */
