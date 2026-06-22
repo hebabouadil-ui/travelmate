@@ -101,3 +101,16 @@ export function weatherEmoji(code: number): string {
   if ([95, 96, 99].includes(code)) return "⛈️";
   return "🌦️";
 }
+
+/** WMO weather code → Lucide icon name (premium, consistent with the rest). */
+export function weatherIcon(code: number): string {
+  if (code === 0) return "sun";
+  if ([1, 2].includes(code)) return "cloud-sun";
+  if (code === 3) return "cloud";
+  if ([45, 48].includes(code)) return "cloud-fog";
+  if ([51, 53, 55].includes(code)) return "cloud-drizzle";
+  if ([61, 63, 65, 80, 81, 82].includes(code)) return "cloud-rain";
+  if ([71, 73, 75, 77].includes(code)) return "snowflake";
+  if ([95, 96, 99].includes(code)) return "cloud-lightning";
+  return "cloud-rain";
+}

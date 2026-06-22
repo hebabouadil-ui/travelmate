@@ -18,13 +18,13 @@ import { nearbyPlaces } from "@/lib/nearby";
 import { openInMaps, openDirections } from "@/lib/navigation";
 import type { GeoPoint, Place, PlaceCategory } from "@/lib/types";
 
-const FILTERS: { key: PlaceCategory | "all"; label: string; emoji: string }[] = [
-  { key: "all", label: "All", emoji: "🌍" },
-  { key: "restaurant", label: "Food", emoji: "🍽️" },
-  { key: "cafe", label: "Cafés", emoji: "☕" },
-  { key: "attraction", label: "Sights", emoji: "✨" },
-  { key: "park", label: "Parks", emoji: "🌿" },
-  { key: "nightlife", label: "Nightlife", emoji: "🌃" },
+const FILTERS: { key: PlaceCategory | "all"; label: string; icon: string }[] = [
+  { key: "all", label: "All", icon: "compass" },
+  { key: "restaurant", label: "Food", icon: "utensils" },
+  { key: "cafe", label: "Cafés", icon: "coffee" },
+  { key: "attraction", label: "Sights", icon: "sparkles" },
+  { key: "park", label: "Parks", icon: "trees" },
+  { key: "nightlife", label: "Nightlife", icon: "wine" },
 ];
 
 export default function Nearby() {
@@ -95,7 +95,7 @@ export default function Nearby() {
 
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm, paddingBottom: spacing.md }}>
             {FILTERS.map((f) => (
-              <Chip key={f.key} label={f.label} emoji={f.emoji} selected={filter === f.key} onPress={() => setFilter(f.key)} />
+              <Chip key={f.key} label={f.label} icon={f.icon} selected={filter === f.key} onPress={() => setFilter(f.key)} />
             ))}
           </ScrollView>
 

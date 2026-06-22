@@ -211,8 +211,13 @@ export default function Plan() {
                 onPress={() => { Haptics.selectionAsync(); setMode(m.key); }}
                 style={[styles.modeCard, mode === m.key && styles.modeCardSelected]}
               >
-                <Text style={{ fontSize: 18 }}>{m.key === "personalized" ? "🎯" : "⭐"}</Text>
-                <Text style={[styles.modeLabel, mode === m.key && { color: colors.text }]}>{m.label}</Text>
+                <Icon
+                  name={m.icon}
+                  size={20}
+                  strokeWidth={2}
+                  color={mode === m.key ? colors.primary : colors.textMuted}
+                />
+                <Text style={[styles.modeLabel, mode === m.key && { color: colors.primary }]}>{m.label}</Text>
                 <Text style={styles.modeHint}>{m.hint}</Text>
               </Pressable>
             ))}
@@ -223,9 +228,10 @@ export default function Plan() {
           <View style={styles.stepper}>
             <Pressable
               onPress={() => { Haptics.selectionAsync(); setDays((d) => Math.max(1, d - 1)); }}
-              style={styles.stepBtn}
+              style={({ pressed }) => [styles.stepBtn, pressed && styles.stepBtnPressed]}
+              hitSlop={8}
             >
-              <Text style={styles.stepGlyph}>−</Text>
+              <Icon name="remove" size={18} color={colors.text} strokeWidth={2.25} />
             </Pressable>
             <View style={styles.stepValue}>
               <Text style={styles.stepNum}>{days}</Text>
@@ -233,9 +239,10 @@ export default function Plan() {
             </View>
             <Pressable
               onPress={() => { Haptics.selectionAsync(); setDays((d) => Math.min(10, d + 1)); }}
-              style={styles.stepBtn}
+              style={({ pressed }) => [styles.stepBtn, pressed && styles.stepBtnPressed]}
+              hitSlop={8}
             >
-              <Text style={styles.stepGlyph}>+</Text>
+              <Icon name="add" size={18} color={colors.text} strokeWidth={2.25} />
             </Pressable>
           </View>
 
@@ -308,9 +315,9 @@ const styles = StyleSheet.create({
   modeCardSelected: { borderColor: colors.primary, backgroundColor: colors.primary + "12" },
   modeLabel: { color: colors.textMuted, fontWeight: "800", fontSize: font.body, marginTop: spacing.sm },
   modeHint: { color: colors.textFaint, fontSize: font.tiny, marginTop: 2 },
-  stepper: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: spacing.sm },
-  stepBtn: { width: 48, height: 48, borderRadius: radius.md, backgroundColor: colors.surfaceAlt, alignItems: "center", justifyContent: "center" },
-  stepGlyph: { fontSize: 26, fontWeight: "800", color: colors.text, lineHeight: 30 },
+  stepper: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: colors.surface, borderRadius: radius.lg, paddingVertical: spacing.sm, paddingHorizontal: spacing.md },
+  stepBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
+  stepBtnPressed: { backgroundColor: colors.surfaceAlt },
   stepValue: { alignItems: "center", flexDirection: "row", gap: 6 },
   stepNum: { color: colors.text, fontSize: font.h1, fontWeight: "900" },
   stepUnit: { color: colors.textMuted, fontSize: font.body },

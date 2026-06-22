@@ -24,7 +24,7 @@ import { PlaceSheet } from "@/components/PlaceSheet";
 import { GradientButton, EmptyState, Pill } from "@/components/ui";
 import { useProfile } from "@/store/useProfile";
 import { recomputeDay } from "@/lib/itinerary/engine";
-import { weatherEmoji } from "@/lib/data/weather";
+import { weatherIcon } from "@/lib/data/weather";
 import { openDirections } from "@/lib/navigation";
 import { scheduleTripReminder, notifyNow } from "@/lib/notifications";
 import { SEED_CITIES } from "@/lib/data/seed";
@@ -100,7 +100,7 @@ export default function TripDetail() {
   const onReminder = async () => {
     try {
       await scheduleTripReminder(trip);
-      await notifyNow("Reminder set ✅", `We'll remind you about ${trip.destination}.`);
+      await notifyNow("Reminder set", `We'll remind you about ${trip.destination}.`);
       Alert.alert("Reminder set", `You'll get a notification for your ${trip.destination} trip.`);
     } catch {
       Alert.alert("Couldn't set reminder", "Enable notifications in settings and try again.");
@@ -212,7 +212,7 @@ export default function TripDetail() {
             <View style={styles.strip}>
               {day.weather && (
                 <View style={styles.stripItem}>
-                  <Text style={styles.stripEmoji}>{weatherEmoji(day.weather.weatherCode)}</Text>
+                  <Icon name={weatherIcon(day.weather.weatherCode)} size={24} color={colors.primary} strokeWidth={2} />
                   <View>
                     <Text style={styles.stripValue}>{day.weather.tempMaxC}° / {day.weather.tempMinC}°</Text>
                     <Text style={styles.stripLabel}>{day.weather.summary}</Text>

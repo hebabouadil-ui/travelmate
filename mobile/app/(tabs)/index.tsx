@@ -45,14 +45,12 @@ export default function Discover() {
         {/* Header */}
         <View style={styles.header}>
           <View>
-            <Text style={styles.greeting}>Welcome back 👋</Text>
+            <Text style={styles.greeting}>Welcome back</Text>
             <Text style={styles.title}>Where to next?</Text>
           </View>
-          <View style={styles.typeBadge}>
-            <Text style={styles.typeEmoji}>
-              {TRAVELER_TYPES.find((t) => t.value === profile.travelerType)?.emoji ?? "🧭"}
-            </Text>
-          </View>
+          <Pressable style={styles.typeBadge} onPress={() => router.push("/(tabs)/profile")}>
+            <Icon name="person" size={22} color={colors.primary} strokeWidth={2} />
+          </Pressable>
         </View>
 
         {!online && (
@@ -121,8 +119,7 @@ const styles = StyleSheet.create({
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: spacing.lg },
   greeting: { color: colors.textMuted, fontSize: font.small, fontWeight: "600" },
   title: { color: colors.text, fontSize: font.hero, fontWeight: "900", letterSpacing: -0.5 },
-  typeBadge: { width: 50, height: 50, borderRadius: 25, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
-  typeEmoji: { fontSize: 24 },
+  typeBadge: { width: 50, height: 50, borderRadius: 25, backgroundColor: colors.primary + "14", alignItems: "center", justifyContent: "center" },
   offline: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.warning + "1A", borderRadius: radius.md, padding: spacing.sm, marginBottom: spacing.md },
   offlineText: { color: colors.warning, fontSize: font.tiny, fontWeight: "600" },
   search: { flexDirection: "row", alignItems: "center", gap: spacing.sm, backgroundColor: colors.surface, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, paddingHorizontal: spacing.lg, height: 50, marginBottom: spacing.lg },

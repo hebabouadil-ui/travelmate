@@ -40,7 +40,7 @@ export default function Profile() {
     if (value) {
       const granted = await requestNotificationPermission();
       setNotifications(granted);
-      if (granted) await notifyNow("Notifications on 🔔", "We'll remind you before your trips.");
+      if (granted) await notifyNow("Notifications on", "We'll remind you before your trips.");
       else Alert.alert("Permission needed", "Enable notifications in system settings to get trip reminders.");
     } else {
       setNotifications(false);
@@ -60,7 +60,7 @@ export default function Profile() {
         {/* Profile hero */}
         <LinearGradient colors={colors.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.hero}>
           <View style={styles.avatar}>
-            <Text style={styles.avatarEmoji}>{type?.emoji ?? "🧭"}</Text>
+            <Icon name="person" size={34} color={colors.white} strokeWidth={2} />
           </View>
           <Text style={styles.heroName}>{type?.label ?? "Traveler"}</Text>
           <View style={styles.heroStats}>
@@ -162,7 +162,6 @@ const styles = StyleSheet.create({
   scroll: { padding: spacing.lg, paddingBottom: 110 },
   hero: { borderRadius: radius.xl, padding: spacing.xl, alignItems: "center" },
   avatar: { width: 80, height: 80, borderRadius: 40, backgroundColor: "rgba(255,255,255,0.18)", alignItems: "center", justifyContent: "center", marginBottom: spacing.md },
-  avatarEmoji: { fontSize: 38 },
   heroName: { color: colors.white, fontSize: font.h1, fontWeight: "900" },
   heroStats: { flexDirection: "row", alignItems: "center", marginTop: spacing.lg, gap: spacing.lg },
   stat: { alignItems: "center" },

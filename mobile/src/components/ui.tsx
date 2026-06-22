@@ -103,14 +103,18 @@ export function Card({
   return <View style={[styles.card, style]}>{children}</View>;
 }
 
-/** Selectable chip used throughout onboarding & filters. */
+/** Selectable chip used throughout onboarding & filters. Accepts an optional
+ *  Lucide icon (preferred). The legacy `emoji` prop is ignored for a clean,
+ *  premium, emoji-free look. */
 export function Chip({
   label,
-  emoji,
+  icon,
   selected,
   onPress,
 }: {
   label: string;
+  icon?: string;
+  /** @deprecated kept for call-site compatibility; no longer rendered. */
   emoji?: string;
   selected?: boolean;
   onPress: () => void;
@@ -127,7 +131,14 @@ export function Chip({
         { opacity: pressed ? 0.85 : 1 },
       ]}
     >
-      {emoji ? <Text style={styles.chipEmoji}>{emoji}</Text> : null}
+      {icon ? (
+        <Icon
+          name={icon}
+          size={15}
+          strokeWidth={2}
+          color={selected ? colors.primary : colors.textMuted}
+        />
+      ) : null}
       <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
         {label}
       </Text>
@@ -146,8 +157,8 @@ export function Pill({
   icon?: string;
 }) {
   return (
-    <View style={[styles.pill, { backgroundColor: color + "22", borderColor: color + "55" }]}>
-      {icon && <Icon name={icon} size={12} color={color} />}
+    <View style={[styles.pill, { backgroundColor: color + "1A" }]}>
+      {icon && <Icon name={icon} size={13} color={color} strokeWidth={2} />}
       <Text style={[styles.pillText, { color }]}>{label}</Text>
     </View>
   );
@@ -242,31 +253,27 @@ const styles = StyleSheet.create({
   chip: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.xs,
-    paddingVertical: spacing.sm + 2,
-    paddingHorizontal: spacing.lg,
+    gap: spacing.xs + 2,
+    paddingVertical: spacing.sm + 3,
+    paddingHorizontal: spacing.lg + 2,
     borderRadius: radius.pill,
     backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
   },
   chipSelected: {
-    backgroundColor: colors.primary + "26",
-    borderColor: colors.primary,
+    backgroundColor: colors.primary + "1A",
   },
   chipEmoji: { fontSize: 15 },
   chipText: { color: colors.textMuted, fontWeight: "600", fontSize: font.small },
-  chipTextSelected: { color: colors.text },
+  chipTextSelected: { color: colors.primary, fontWeight: "700" },
   pill: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-    paddingVertical: 4,
-    paddingHorizontal: spacing.sm,
+    gap: 5,
+    paddingVertical: 5,
+    paddingHorizontal: spacing.md,
     borderRadius: radius.pill,
-    borderWidth: 1,
   },
-  pillText: { fontSize: font.tiny, fontWeight: "700" },
+  pillText: { fontSize: font.tiny, fontWeight: "700", letterSpacing: 0.2 },
   ring: {
     width: 54,
     height: 54,

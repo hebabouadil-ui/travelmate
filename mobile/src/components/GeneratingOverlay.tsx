@@ -120,7 +120,7 @@ const styles = StyleSheet.create({
   fill: { flex: 1, alignItems: "center", justifyContent: "center", padding: spacing.xl, overflow: "hidden" },
   orb: { position: "absolute", borderRadius: 999, backgroundColor: "rgba(255,255,255,0.12)" },
   orbOne: { width: 220, height: 220, top: 120, left: -40 },
-  orbTwo: { width: 160, height: 160, bottom: 160, right: -30, backgroundColor: "rgba(34,211,238,0.18)" },
+  orbTwo: { width: 160, height: 160, bottom: 160, right: -30, backgroundColor: "rgba(15,118,110,0.22)" },
   badgeWrap: { width: 150, height: 150, alignItems: "center", justifyContent: "center", marginBottom: spacing.xl },
   ring: {
     position: "absolute",

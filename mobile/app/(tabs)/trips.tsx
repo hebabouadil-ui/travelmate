@@ -77,7 +77,7 @@ export default function Trips() {
                     style={styles.tripCard}
                     onPress={() => router.push(`/trip/${trip.id}`)}
                   >
-                    <SmartImage uri={img} emoji="🧳" style={styles.tripThumb} />
+                    <SmartImage uri={img} style={styles.tripThumb} />
                     <View style={{ flex: 1 }}>
                       <Text style={styles.tripName}>{trip.destination}</Text>
                       <Text style={styles.tripMeta}>

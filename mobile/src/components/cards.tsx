@@ -67,8 +67,9 @@ export function DestinationCard({
           />
         </Pressable>
       )}
-      <View style={[styles.scoreBadge, { borderColor: tone }]}>
-        <Text style={[styles.scoreBadgeText, { color: tone }]}>{match.score}%</Text>
+      <View style={styles.scoreBadge}>
+        <View style={[styles.scoreDot, { backgroundColor: tone }]} />
+        <Text style={styles.scoreBadgeText}>{match.score}% match</Text>
       </View>
       <View style={styles.destBody}>
         <Text style={styles.destName}>{match.name}</Text>
@@ -191,7 +192,8 @@ export function StopCard({
               {stop.place.name}
             </Text>
             <View style={styles.stopMetaRow}>
-              <Text style={styles.stopMeta}>{meta.emoji} {meta.label}</Text>
+              <Icon name={meta.icon} size={13} color={meta.color} strokeWidth={2} />
+              <Text style={styles.stopMeta}>{meta.label}</Text>
               <Text style={styles.stopDot2}>·</Text>
               <Icon name="time-outline" size={12} color={colors.textFaint} />
               <Text style={styles.stopMeta}>{stop.durationMin}m</Text>
@@ -256,7 +258,7 @@ export function PlaceRow({
         <Text style={styles.rowMeta}>
           {meta.label}
           {place.cuisine ? ` · ${place.cuisine}` : ""}
-          {place.hiddenGem ? " · 💎 gem" : ""}
+          {place.hiddenGem ? " · hidden gem" : ""}
         </Text>
       </View>
       {typeof place.distanceKm === "number" && (
@@ -296,13 +298,16 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: spacing.md,
     left: spacing.md,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 3,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
     borderRadius: radius.pill,
-    borderWidth: 1.5,
-    backgroundColor: "rgba(5,8,16,0.55)",
+    backgroundColor: "rgba(20,21,26,0.58)",
   },
-  scoreBadgeText: { fontWeight: "800", fontSize: font.small },
+  scoreDot: { width: 6, height: 6, borderRadius: 3 },
+  scoreBadgeText: { fontWeight: "700", fontSize: font.tiny, color: colors.white, letterSpacing: 0.2 },
   destBody: { position: "absolute", left: spacing.lg, right: spacing.lg, bottom: spacing.lg },
   destName: { color: colors.white, fontSize: font.h2, fontWeight: "800" },
   destMetaRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 },
@@ -357,8 +362,8 @@ const styles = StyleSheet.create({
     marginTop: -spacing.xs,
   },
   stopHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: spacing.sm },
-  daypartPill: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: spacing.sm, paddingVertical: 3, borderRadius: radius.pill },
-  daypartText: { fontSize: font.tiny, fontWeight: "700" },
+  daypartPill: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: spacing.md, paddingVertical: 5, borderRadius: radius.pill },
+  daypartText: { fontSize: font.tiny, fontWeight: "700", letterSpacing: 0.2 },
   gem: { flexDirection: "row", alignItems: "center", gap: 3 },
   gemText: { color: colors.accent, fontSize: font.tiny, fontWeight: "700" },
   stopName: { color: colors.text, fontSize: font.h3, fontWeight: "700" },

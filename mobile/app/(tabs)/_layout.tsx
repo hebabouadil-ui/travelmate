@@ -1,15 +1,18 @@
 import { Tabs } from "expo-router";
-import { Platform, StyleSheet, View, Text } from "react-native";
+import { Platform, StyleSheet, View } from "react-native";
 import { BlurView } from "expo-blur";
+import { Icon } from "@/components/Icon";
 import { colors, spacing } from "@/theme";
 
-/**
- * Tab icons use emoji (system-rendered) so they ALWAYS show, independent of the
- * icon-font loading that proved unreliable in release builds.
- */
-function TabIcon({ char, focused }: { char: string; focused: boolean }) {
+/** Crisp Lucide tab icons (SVG — render reliably in release builds). */
+function TabIcon({ name, focused }: { name: string; focused: boolean }) {
   return (
-    <Text style={{ fontSize: 22, opacity: focused ? 1 : 0.55 }}>{char}</Text>
+    <Icon
+      name={name}
+      size={23}
+      strokeWidth={focused ? 2.4 : 2}
+      color={focused ? colors.primary : colors.textFaint}
+    />
   );
 }
 
@@ -33,23 +36,23 @@ export default function TabsLayout() {
     >
       <Tabs.Screen
         name="index"
-        options={{ title: "Discover", tabBarIcon: ({ focused }) => <TabIcon char="🧭" focused={focused} /> }}
+        options={{ title: "Discover", tabBarIcon: ({ focused }) => <TabIcon name="compass" focused={focused} /> }}
       />
       <Tabs.Screen
         name="plan"
-        options={{ title: "Plan", tabBarIcon: ({ focused }) => <TabIcon char="✨" focused={focused} /> }}
+        options={{ title: "Plan", tabBarIcon: ({ focused }) => <TabIcon name="sparkles" focused={focused} /> }}
       />
       <Tabs.Screen
         name="nearby"
-        options={{ title: "Nearby", tabBarIcon: ({ focused }) => <TabIcon char="📍" focused={focused} /> }}
+        options={{ title: "Nearby", tabBarIcon: ({ focused }) => <TabIcon name="location" focused={focused} /> }}
       />
       <Tabs.Screen
         name="trips"
-        options={{ title: "Trips", tabBarIcon: ({ focused }) => <TabIcon char="🧳" focused={focused} /> }}
+        options={{ title: "Trips", tabBarIcon: ({ focused }) => <TabIcon name="briefcase" focused={focused} /> }}
       />
       <Tabs.Screen
         name="profile"
-        options={{ title: "Profile", tabBarIcon: ({ focused }) => <TabIcon char="👤" focused={focused} /> }}
+        options={{ title: "Profile", tabBarIcon: ({ focused }) => <TabIcon name="person" focused={focused} /> }}
       />
     </Tabs>
   );

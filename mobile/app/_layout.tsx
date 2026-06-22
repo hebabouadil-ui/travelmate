@@ -6,8 +6,6 @@ import { Stack, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
 import * as Notifications from "expo-notifications";
-import * as Font from "expo-font";
-import { Ionicons } from "@expo/vector-icons";
 import { colors } from "@/theme";
 import { useProfile } from "@/store/useProfile";
 import { ensureAndroidChannel } from "@/lib/notifications";
@@ -19,12 +17,8 @@ export default function RootLayout() {
   const hydrated = useProfile((s) => s._hydrated);
   const router = useRouter();
 
-  // Icon font is embedded natively (see app.config expo-font plugin), so it's
-  // available immediately. This extra load is just a harmless belt-and-suspenders
-  // for dev and never blocks rendering.
-  useEffect(() => {
-    Font.loadAsync(Ionicons.font).catch(() => undefined);
-  }, []);
+  // Icons are now Lucide SVGs (react-native-svg) — no glyph font to load, so
+  // nothing blocks first render.
 
   useEffect(() => {
     if (hydrated) SplashScreen.hideAsync().catch(() => undefined);
