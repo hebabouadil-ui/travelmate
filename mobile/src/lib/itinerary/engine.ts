@@ -13,7 +13,7 @@ import { addDays, haversineKm, makeId, walkingMinutes } from "../utils";
 import { geocode, type GeocodeResult } from "../data/geocode";
 import { discoverPlaces } from "../data/places";
 import { enrichPopularity } from "../data/popularity";
-import { getKnowledgePack, packNameTier, type KnowledgePack } from "../data/knowledge";
+import { getKnowledgePack, looseMatch, packNameTier, type KnowledgePack } from "../data/knowledge";
 import { getWeather } from "../data/weather";
 import { buildOverview } from "../data/overviews";
 import { categoryImage, cityHeroImage as cityImageFor } from "../data/wikipedia";
@@ -25,15 +25,10 @@ import { confidenceScore, isConfidentGem, selectionValue } from "./scoring";
 import { dailyTransport, stopCost } from "./budget";
 import { getProvider, extractJson } from "../ai/provider";
 import { CONCIERGE_SYSTEM, buildEnrichmentPrompt } from "../ai/prompts";
-import {
-  aiPlanItinerary,
-  SLOTS,
-  SLOT_DAYPART,
-  SLOT_DEFAULT_TIME,
-  type AIPlan,
-  type AIStop,
-} from "../ai/itineraryAI";
+import { aiPlanItinerary, type AIPlan, type AIStop } from "../ai/itineraryAI";
 import type { GuideSlot } from "../types";
+import { SLOTS, SLOT_DAYPART, SLOT_DEFAULT_TIME } from "./slots";
+import { optimizeDayFlow, scheduleDay, sortBySlot } from "./dayflow";
 
 const FOOD_CATEGORIES: PlaceCategory[] = ["restaurant", "cafe"];
 
@@ -270,13 +265,19 @@ function placeFromAIStop(s: AIStop, geo: GeocodeResult, seed: number): Place {
 const NAME_STOPWORDS = new Set([
   "the", "a", "an", "of", "and", "de", "la", "le", "el", "du", "des", "da",
   "di", "do", "las", "los", "al", "san", "santa", "st", "cafe", "restaurant",
-  "museum", "park", "bar",
+  "museum", "park", "bar", "place", "plaza",
 ]);
 
 function nameTokens(s: string): string[] {
   return (s.toLowerCase().match(/[a-z0-9]+/g) ?? []).filter(
     (t) => t.length > 2 && !NAME_STOPWORDS.has(t)
   );
+}
+
+/** Tokens match if equal or one is a ≥4-char prefix of the other. */
+function tokensClose(a: string, b: string): boolean {
+  if (a === b) return true;
+  return Math.min(a.length, b.length) >= 4 && (a.startsWith(b) || b.startsWith(a));
 }
 
 /** 0..1 similarity between two place names (exact > substring > token overlap). */
@@ -289,9 +290,8 @@ function nameSimilarity(a: string, b: string): number {
   const ta = nameTokens(a);
   const tb = nameTokens(b);
   if (!ta.length || !tb.length) return 0;
-  const setB = new Set(tb);
   let inter = 0;
-  for (const t of ta) if (setB.has(t)) inter++;
+  for (const t of ta) if (tb.some((u) => tokensClose(t, u))) inter++;
   return inter / Math.max(ta.length, tb.length);
 }
 
@@ -393,12 +393,8 @@ function bestPoolByName(name: string, pool: Place[], used: Set<string>): Place |
   return best;
 }
 
-function nameIsPresent(name: string, present: Set<string>): boolean {
-  const nx = norm(name);
-  for (const pn of present) {
-    if (pn === nx || (nx.length >= 5 && (pn.includes(nx) || nx.includes(pn)))) return true;
-  }
-  return false;
+function nameIsPresent(name: string, presentNames: string[]): boolean {
+  return presentNames.some((pn) => looseMatch(name, pn));
 }
 
 /**
@@ -413,12 +409,12 @@ function injectMustSees(
   pack: KnowledgePack,
   city: string
 ): void {
-  const present = new Set<string>();
-  days.forEach((d) => d.stops.forEach((s) => present.add(norm(s.place.name))));
+  const presentNames: string[] = [];
+  days.forEach((d) => d.stops.forEach((s) => presentNames.push(s.place.name)));
   const usedPool = new Set<string>();
 
   for (const name of pack.mustSee) {
-    if (nameIsPresent(name, present)) continue;
+    if (nameIsPresent(name, presentNames)) continue;
     const match = bestPoolByName(name, pool, usedPool);
     if (!match) continue; // can't verify it → never invent; skip
 
@@ -439,8 +435,7 @@ function injectMustSees(
     usedPool.add(match.id);
     const p: Place = { ...match, tier: 1, hiddenGem: false };
     if (!p.imageUrl) p.imageUrl = categoryImage(p.category, p.name);
-    present.delete(norm(target.place.name));
-    present.add(norm(p.name));
+    presentNames.push(p.name);
     target.place = p;
     target.note = `A must-see of ${city} — one of its defining sights; arrive early to beat the crowds.`;
   }
@@ -456,12 +451,7 @@ function gateLowConfidence(days: ItineraryDay[]): void {
     d.stops.forEach((s) => (s.place.confidence = confidenceScore(s.place)));
     const kept = d.stops.filter((s) => {
       const isAttraction = ATTRACTION_SLOTS.has(s.slot as GuideSlot);
-      // Photos resolve later; credit verified places now so a real Tier-2 sight
-      // isn't gated just because its photo hasn't been fetched yet.
-      const gate =
-        (s.place.confidence ?? 0) +
-        (s.place.verified && !s.place.photoResolved ? 0.15 : 0);
-      return !(isAttraction && gate < 0.7);
+      return !(isAttraction && (s.place.confidence ?? 0) < 0.7);
     });
     const hadMain = d.stops.some((s) => s.slot === "main_attraction");
     const keepsMain = kept.some((s) => s.slot === "main_attraction");
@@ -502,6 +492,11 @@ function findIndoorAlt(
  * re-timed — so the headline experience is preserved.
  */
 function weatherAdapt(days: ItineraryDay[], pool: Place[], req: TripRequest): void {
+  // Trip-wide name set so a weather swap never duplicates a place used on
+  // another day.
+  const used = new Set<string>();
+  days.forEach((d) => d.stops.forEach((s) => used.add(norm(s.place.name))));
+
   for (const d of days) {
     const w = d.weather;
     if (!w) continue;
@@ -511,7 +506,6 @@ function weatherAdapt(days: ItineraryDay[], pool: Place[], req: TripRequest): vo
     const windy = (w.windKmh ?? 0) >= 40;
     if (!(hot || cold || rainy || windy)) continue;
 
-    const used = new Set(d.stops.map((s) => norm(s.place.name)));
     for (const s of d.stops) {
       const flexAttr = s.slot === "morning_activity" || s.slot === "afternoon_activity";
       const outdoor = isOutdoor(s.place.category);
@@ -540,59 +534,6 @@ function weatherAdapt(days: ItineraryDay[], pool: Place[], req: TripRequest): vo
       }
     }
   }
-}
-
-// ── Day-flow route optimization (constrained 2-opt) ─────────────────────────
-
-const DP_RANK: Record<Daypart, number> = {
-  morning: 0, lunch: 1, afternoon: 2, dinner: 3, evening: 4,
-};
-
-function stopRank(s: ItineraryStop): number {
-  const dp = s.slot ? SLOT_DAYPART[s.slot] : s.daypart;
-  return DP_RANK[dp] ?? 2;
-}
-
-function pathDistance(stops: ItineraryStop[]): number {
-  let d = 0;
-  for (let i = 1; i < stops.length; i++) d += haversineKm(stops[i - 1].place, stops[i].place);
-  return d;
-}
-
-function isMonotonic(stops: ItineraryStop[]): boolean {
-  for (let i = 1; i < stops.length; i++) if (stopRank(stops[i]) < stopRank(stops[i - 1])) return false;
-  return true;
-}
-
-/**
- * True day-flow optimization: 2-opt that minimises total travel while keeping
- * the day's temporal order intact (breakfast → … → night never reshuffles
- * across dayparts). This removes back-and-forth zig-zags within each part of the
- * day, replacing the old plain nearest-neighbour pass.
- */
-function optimizeDayFlow(stops: ItineraryStop[]): ItineraryStop[] {
-  if (stops.length <= 3) return stops;
-  let best = [...stops];
-  let improved = true;
-  let guard = 0;
-  while (improved && guard++ < 40) {
-    improved = false;
-    for (let i = 0; i < best.length - 1; i++) {
-      for (let j = i + 1; j < best.length; j++) {
-        const cand = [
-          ...best.slice(0, i),
-          ...best.slice(i, j + 1).reverse(),
-          ...best.slice(j + 1),
-        ];
-        if (!isMonotonic(cand)) continue;
-        if (pathDistance(cand) < pathDistance(best) - 1e-6) {
-          best = cand;
-          improved = true;
-        }
-      }
-    }
-  }
-  return best;
 }
 
 /** Build itinerary days from the AI plan (routing/images added in finalize). */
@@ -680,8 +621,9 @@ async function finalizeDays(
         day.estimatedCost = dailyTransport(req.budget);
         return;
       }
-      // Minimise back-and-forth while keeping the day's temporal flow intact.
-      day.stops = optimizeDayFlow(day.stops);
+      // Guarantee morning→night order, then minimise back-and-forth within each
+      // part of the day (constrained 2-opt) before computing the real route.
+      day.stops = optimizeDayFlow(sortBySlot(day.stops));
       const route = await dayRoute(day.stops.map((st) => st.place));
       day.stops.forEach((st, i) => {
         if (i === 0) return;
@@ -694,7 +636,7 @@ async function finalizeDays(
       });
       day.routeGeometry = route.geometry;
       // Now that real travel times are known, lay the day out on the clock.
-      scheduleDay(day);
+      scheduleDay(day.stops);
       day.estimatedCost =
         day.stops.reduce((s, st) => s + (st.estimatedCost ?? 0), 0) +
         dailyTransport(req.budget);
@@ -734,49 +676,6 @@ async function enrichStopPhotos(stops: ItineraryStop[], city: string): Promise<v
 function pickDaypart(index: number): ItineraryStop["daypart"] {
   const order: ItineraryStop["daypart"][] = ["morning", "lunch", "afternoon", "dinner", "evening"];
   return order[Math.min(index, order.length - 1)];
-}
-
-function parseHM(t?: string): number | null {
-  const m = (t ?? "").match(/^(\d{1,2}):(\d{2})$/);
-  return m ? parseInt(m[1], 10) * 60 + parseInt(m[2], 10) : null;
-}
-
-function fmtHM(min: number): string {
-  const h = Math.floor((min % 1440) / 60);
-  const m = Math.round(min % 60);
-  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
-}
-
-/** First opening time (minutes) from an OSM opening_hours string, if parseable. */
-function firstOpenMinutes(oh?: string): number | null {
-  if (!oh) return null;
-  if (/24\/7/.test(oh)) return 0;
-  const m = oh.match(/(\d{1,2}):(\d{2})/);
-  return m ? parseInt(m[1], 10) * 60 + parseInt(m[2], 10) : null;
-}
-
-/**
- * Assign each stop a realistic clock time: anchor to the guide's canonical slot
- * time, then push later as real travel + dwell time accumulates — so the day
- * reads like a schedule a local actually walked, never overlapping itself.
- */
-function scheduleDay(day: ItineraryDay): void {
-  let clock = 8 * 60; // 08:00 default start
-  day.stops.forEach((st, i) => {
-    const desired =
-      parseHM(st.startTime) ?? (st.slot ? parseHM(SLOT_DEFAULT_TIME[st.slot]) : null);
-    if (i === 0) {
-      clock = desired ?? clock;
-    } else {
-      const earliest = clock + (st.travelFromPrevMin ?? 0);
-      clock = desired != null ? Math.max(earliest, desired) : earliest;
-    }
-    // Never schedule a stop before it opens (when OSM hours are known).
-    const open = firstOpenMinutes(st.place.openingHours);
-    if (open != null && clock < open) clock = open;
-    st.startTime = fmtHM(clock);
-    clock += st.durationMin ?? 60;
-  });
 }
 
 function norm(s: string): string {

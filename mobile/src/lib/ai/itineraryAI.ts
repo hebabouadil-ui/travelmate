@@ -1,5 +1,6 @@
 import type { Daypart, GuideSlot, PlaceCategory, TripRequest } from "../types";
 import type { KnowledgePack } from "../data/knowledge";
+import { SLOTS, SLOT_DAYPART, SLOT_DEFAULT_TIME } from "../itinerary/slots";
 import { getProvider, extractJson } from "./provider";
 
 export interface AIStop {
@@ -42,36 +43,6 @@ You use ONLY real, specific, named places that genuinely exist in the destinatio
 You always return STRICT, COMPLETE, valid JSON and nothing else.`;
 
 const DAYPARTS: Daypart[] = ["morning", "lunch", "afternoon", "dinner", "evening"];
-
-/** The fixed guided-day skeleton, in order. */
-export const SLOTS: GuideSlot[] = [
-  "breakfast", "morning_activity", "main_attraction", "lunch",
-  "afternoon_activity", "coffee_break", "sunset", "dinner", "night",
-];
-
-export const SLOT_DAYPART: Record<GuideSlot, Daypart> = {
-  breakfast: "morning",
-  morning_activity: "morning",
-  main_attraction: "morning",
-  lunch: "lunch",
-  afternoon_activity: "afternoon",
-  coffee_break: "afternoon",
-  sunset: "evening",
-  dinner: "dinner",
-  night: "evening",
-};
-
-export const SLOT_DEFAULT_TIME: Record<GuideSlot, string> = {
-  breakfast: "08:00",
-  morning_activity: "09:00",
-  main_attraction: "10:30",
-  lunch: "13:00",
-  afternoon_activity: "15:00",
-  coffee_break: "16:30",
-  sunset: "18:00",
-  dinner: "20:00",
-  night: "22:00",
-};
 const CATEGORIES: PlaceCategory[] = [
   "monument", "museum", "attraction", "landmark", "restaurant",
   "cafe", "beach", "park", "viewpoint", "nightlife", "shopping",

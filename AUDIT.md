@@ -211,6 +211,10 @@ enrichment → persisted to store.
   temporal order — no zig-zag).
 - ◐ Staged: Pexels photo fallback, full Discover redesign (weather-suitability
   blocks), real astronomical sunset times.
+- ✅ Quality Validation phase: offline harness (`npm run validate`, 29/29) on the
+  real algorithms; fixed 4 bugs (must-see spelling matching, cross-day weather
+  duplicate, day-2/3 confidence drop, out-of-order day). See VALIDATION.md.
+- ✅ Added TravelMate_Master_Spec.md (single source of truth).
 
 ## 6. Ranking Methodology (how "best" is decided)
 

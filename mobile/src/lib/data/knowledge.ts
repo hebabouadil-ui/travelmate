@@ -845,15 +845,53 @@ export function getKnowledgePack(destination: string): KnowledgePack | undefined
   return undefined;
 }
 
-/** Normalised set of all Tier-1 + Tier-2 names for quick membership tests. */
+const MATCH_STOPWORDS = new Set([
+  "the", "a", "an", "of", "and", "de", "la", "le", "el", "du", "des", "da",
+  "di", "do", "las", "los", "al", "place", "plaza", "parc", "park", "musee",
+  "museo", "museum", "wat", "gardens", "garden",
+]);
+
+function tokenize(s: string): string[] {
+  return s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .split(/[^a-z0-9]+/)
+    .filter((t) => t.length >= 3 && !MATCH_STOPWORDS.has(t));
+}
+
+/** Two tokens "match" if equal or one is a ≥3-char prefix of the other
+ *  (tolerates Fna/Fnaa, Senso/Sensoji-style spelling variants). */
+function tokenMatch(a: string, b: string): boolean {
+  if (a === b) return true;
+  const min = Math.min(a.length, b.length);
+  return min >= 3 && (a.startsWith(b) || b.startsWith(a));
+}
+
+/**
+ * Tolerant match of a candidate place name against a curated name: exact /
+ * substring on the normalised form, OR ≥60% of the curated name's significant
+ * tokens are covered by the candidate's tokens. Robust to prefixes ("Place …")
+ * and minor spelling variants without matching unrelated places.
+ */
+export function looseMatch(curated: string, candidate: string): boolean {
+  const a = norm(curated);
+  const b = norm(candidate);
+  if (!a || !b) return false;
+  if (a === b) return true;
+  if (a.length >= 6 && (a.includes(b) || b.includes(a))) return true;
+  const ta = tokenize(curated);
+  const tb = tokenize(candidate);
+  if (ta.length === 0) return false;
+  if (ta.length === 1) return tb.some((t) => tokenMatch(ta[0], t)) && ta[0].length >= 5;
+  const covered = ta.filter((t) => tb.some((u) => tokenMatch(t, u))).length;
+  return covered / ta.length >= 0.6;
+}
+
+/** Priority tier of a place against a pack: 1 = must-see, 2 = strong, 0 = none. */
 export function packNameTier(pack: KnowledgePack, placeName: string): 1 | 2 | 0 {
-  const n = norm(placeName);
-  const hit = (list: string[]) => list.some((x) => {
-    const nx = norm(x);
-    return nx === n || (nx.length >= 5 && (n.includes(nx) || nx.includes(n)));
-  });
-  if (hit(pack.mustSee)) return 1;
-  if (hit(pack.strong)) return 2;
+  if (pack.mustSee.some((x) => looseMatch(x, placeName))) return 1;
+  if (pack.strong.some((x) => looseMatch(x, placeName))) return 2;
   return 0;
 }
 

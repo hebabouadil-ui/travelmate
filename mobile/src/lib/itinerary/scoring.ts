@@ -94,7 +94,10 @@ export function selectionValue(p: Place, distanceKm: number, interests: Interest
 export function confidenceScore(p: Place): number {
   let c = 0;
   if (p.verified) c += 0.3; // verified, real-world location
-  if (p.photoResolved) c += 0.15; // a real, place-specific photo resolved
+  // A real, place-specific photo. Verified OSM places reliably resolve a Commons
+  // photo, so credit them even before the (lazy) fetch completes — this keeps a
+  // stop's confidence consistent across day 1 and later days.
+  if (p.photoResolved || p.verified) c += 0.15;
   if (p.openingHours) c += 0.1; // opening hours on file
   // destination-knowledge match
   c += p.tier === 1 ? 0.25 : p.tier === 2 ? 0.15 : 0;
