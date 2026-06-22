@@ -202,6 +202,8 @@ export interface DayWeather {
   weatherCode: number;
   summary: string;
   rainRisk: boolean;
+  /** Peak wind speed (km/h), when available. */
+  windKmh?: number;
 }
 
 /** Inputs collected from the trip planner form. */

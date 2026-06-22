@@ -9,6 +9,7 @@ interface OpenMeteoResponse {
     temperature_2m_min: number[];
     precipitation_sum: number[];
     weather_code: number[];
+    wind_speed_10m_max?: number[];
   };
 }
 
@@ -33,7 +34,7 @@ export async function getWeather(
           latitude: center.lat.toFixed(4),
           longitude: center.lng.toFixed(4),
           daily:
-            "temperature_2m_max,temperature_2m_min,precipitation_sum,weather_code",
+            "temperature_2m_max,temperature_2m_min,precipitation_sum,weather_code,wind_speed_10m_max",
           timezone: "auto",
           forecast_days: String(Math.min(Math.max(days, 1), 16)),
         });
@@ -60,6 +61,9 @@ export async function getWeather(
             summary: weatherSummary(code),
             rainRisk:
               precip >= 2 || [61, 63, 65, 80, 81, 82, 95, 96, 99].includes(code),
+            windKmh: d.wind_speed_10m_max
+              ? Math.round(d.wind_speed_10m_max[i])
+              : undefined,
           };
         });
       },

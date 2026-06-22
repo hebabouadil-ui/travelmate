@@ -201,9 +201,16 @@ enrichment → persisted to store.
 - ✅ V2 knowledge-first AI: pack fed INTO the prompt so AI organises around real
   verified picks rather than inventing. Opening-hours guard in scheduling.
 - ✅ V2 Discover cards enriched (attraction count, best months, budget).
-- ◐ V2 staged: weather-based indoor/outdoor swaps, directional N→Center→S
-  routing, Pexels photo fallback, full Discover redesign (confidence/weather
-  suitability blocks).
+- ✅ V3 weather-aware days: rain / extreme heat / cold / wind swap flexible
+  outdoor activities for the best nearby indoor option (must-sees re-timed, not
+  swapped); wind added to the forecast.
+- ✅ V3 expertise expansion: knowledge packs grown to ~60 curated destinations
+  across Morocco, Spain, France, Italy, Japan, Thailand and the UK.
+- ✅ V3 route intelligence: nearest-neighbour replaced by constrained 2-opt
+  day-flow optimisation (minimises travel while preserving breakfast→night
+  temporal order — no zig-zag).
+- ◐ Staged: Pexels photo fallback, full Discover redesign (weather-suitability
+  blocks), real astronomical sunset times.
 
 ## 6. Ranking Methodology (how "best" is decided)
 

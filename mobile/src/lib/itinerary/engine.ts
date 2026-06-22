@@ -147,6 +147,8 @@ export async function generateItinerary(req: TripRequest): Promise<Itinerary> {
   if (pack) injectMustSees(days, pool, pack, geo.name);
   applyTiers(days, pack);
   gateLowConfidence(days);
+  // Adapt each day to its forecast (rain/heat/cold/wind) before routing.
+  weatherAdapt(days, pool, req);
 
   // Guarantee every day is full (backfill from the OSM pool) + accurate routing.
   await finalizeDays(days, pool, geo.center, req);
@@ -467,6 +469,132 @@ function gateLowConfidence(days: ItineraryDay[]): void {
   }
 }
 
+// ── Weather-aware adaptation ────────────────────────────────────────────────
+
+function isIndoor(c: PlaceCategory): boolean {
+  return c === "museum" || c === "shopping";
+}
+function isOutdoor(c: PlaceCategory): boolean {
+  return c === "park" || c === "viewpoint" || c === "beach" || c === "monument" || c === "landmark";
+}
+
+/** Best indoor alternative near an anchor (museum/indoor market), tier-ranked. */
+function findIndoorAlt(
+  anchor: GeoPoint,
+  pool: Place[],
+  used: Set<string>,
+  interests: TripRequest["interests"]
+): Place | null {
+  const cands = pool.filter((p) => isIndoor(p.category) && !used.has(norm(p.name)));
+  if (!cands.length) return null;
+  cands.sort(
+    (a, b) =>
+      selectionValue(b, haversineKm(anchor, b), interests) -
+      selectionValue(a, haversineKm(anchor, a), interests)
+  );
+  return cands[0] ?? null;
+}
+
+/**
+ * Adapt each day to its forecast: on rainy / very hot / cold / windy days, swap
+ * flexible OUTDOOR activity slots for the best nearby INDOOR option, and add a
+ * timing tip to outdoor must-sees. Must-sees (Tier-1) are never swapped — only
+ * re-timed — so the headline experience is preserved.
+ */
+function weatherAdapt(days: ItineraryDay[], pool: Place[], req: TripRequest): void {
+  for (const d of days) {
+    const w = d.weather;
+    if (!w) continue;
+    const hot = w.tempMaxC >= 32;
+    const cold = w.tempMaxC <= 8;
+    const rainy = w.rainRisk;
+    const windy = (w.windKmh ?? 0) >= 40;
+    if (!(hot || cold || rainy || windy)) continue;
+
+    const used = new Set(d.stops.map((s) => norm(s.place.name)));
+    for (const s of d.stops) {
+      const flexAttr = s.slot === "morning_activity" || s.slot === "afternoon_activity";
+      const outdoor = isOutdoor(s.place.category);
+      const swap =
+        flexAttr &&
+        outdoor &&
+        s.place.tier !== 1 &&
+        (rainy || cold || windy || (hot && s.slot === "afternoon_activity"));
+      if (swap) {
+        const alt = findIndoorAlt(s.place, pool, used, req.interests);
+        if (alt) {
+          used.delete(norm(s.place.name));
+          used.add(norm(alt.name));
+          const reason = rainy ? "rain expected" : hot ? "the afternoon heat" : cold ? "a cold day" : "strong winds";
+          const p: Place = { ...alt };
+          if (!p.imageUrl) p.imageUrl = categoryImage(p.category, p.name);
+          s.place = p;
+          s.note = `Indoor pick for ${reason} — swapped from an outdoor stop to keep the day comfortable.`;
+          s.durationMin = DURATION[p.category] ?? s.durationMin;
+        }
+      } else if (s.slot === "main_attraction" && outdoor && (hot || rainy)) {
+        const tip = hot
+          ? " Go early — afternoons get very hot."
+          : " Bring a layer or umbrella — rain is likely.";
+        if (s.note && !/early|umbrella|layer/i.test(s.note)) s.note += tip;
+      }
+    }
+  }
+}
+
+// ── Day-flow route optimization (constrained 2-opt) ─────────────────────────
+
+const DP_RANK: Record<Daypart, number> = {
+  morning: 0, lunch: 1, afternoon: 2, dinner: 3, evening: 4,
+};
+
+function stopRank(s: ItineraryStop): number {
+  const dp = s.slot ? SLOT_DAYPART[s.slot] : s.daypart;
+  return DP_RANK[dp] ?? 2;
+}
+
+function pathDistance(stops: ItineraryStop[]): number {
+  let d = 0;
+  for (let i = 1; i < stops.length; i++) d += haversineKm(stops[i - 1].place, stops[i].place);
+  return d;
+}
+
+function isMonotonic(stops: ItineraryStop[]): boolean {
+  for (let i = 1; i < stops.length; i++) if (stopRank(stops[i]) < stopRank(stops[i - 1])) return false;
+  return true;
+}
+
+/**
+ * True day-flow optimization: 2-opt that minimises total travel while keeping
+ * the day's temporal order intact (breakfast → … → night never reshuffles
+ * across dayparts). This removes back-and-forth zig-zags within each part of the
+ * day, replacing the old plain nearest-neighbour pass.
+ */
+function optimizeDayFlow(stops: ItineraryStop[]): ItineraryStop[] {
+  if (stops.length <= 3) return stops;
+  let best = [...stops];
+  let improved = true;
+  let guard = 0;
+  while (improved && guard++ < 40) {
+    improved = false;
+    for (let i = 0; i < best.length - 1; i++) {
+      for (let j = i + 1; j < best.length; j++) {
+        const cand = [
+          ...best.slice(0, i),
+          ...best.slice(i, j + 1).reverse(),
+          ...best.slice(j + 1),
+        ];
+        if (!isMonotonic(cand)) continue;
+        if (pathDistance(cand) < pathDistance(best) - 1e-6) {
+          best = cand;
+          improved = true;
+        }
+      }
+    }
+  }
+  return best;
+}
+
 /** Build itinerary days from the AI plan (routing/images added in finalize). */
 function buildDaysFromAI(
   plan: AIPlan,
@@ -552,6 +680,8 @@ async function finalizeDays(
         day.estimatedCost = dailyTransport(req.budget);
         return;
       }
+      // Minimise back-and-forth while keeping the day's temporal flow intact.
+      day.stops = optimizeDayFlow(day.stops);
       const route = await dayRoute(day.stops.map((st) => st.place));
       day.stops.forEach((st, i) => {
         if (i === 0) return;
