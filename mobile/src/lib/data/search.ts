@@ -21,8 +21,17 @@ interface NominatimItem {
   type?: string;
   addresstype?: string;
   class?: string;
+  importance?: number;
   address?: { country?: string; city?: string; town?: string; village?: string; state?: string };
 }
+
+// Prefer real settlements over streets/POIs/regions in autocomplete.
+const TYPE_RANK: Record<string, number> = {
+  city: 0, town: 1, municipality: 2, village: 3,
+  administrative: 4, county: 5, state: 6, country: 7,
+};
+const rankOf = (it: NominatimItem): number =>
+  TYPE_RANK[(it.addresstype || it.type || "").toLowerCase()] ?? 9;
 
 /**
  * Global city/place search via free Nominatim (OpenStreetMap). Returns ranked
@@ -42,6 +51,8 @@ export async function searchCities(query: string): Promise<CitySuggestion[]> {
           `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=8&accept-language=en&addressdetails=1&q=${encodeURIComponent(q)}`;
         const items = await fetchJson<NominatimItem[]>(url, { timeoutMs: 8000 });
         return items
+          // settlements first, then by Nominatim importance
+          .sort((a, b) => rankOf(a) - rankOf(b) || (b.importance ?? 0) - (a.importance ?? 0))
           .map(toSuggestion)
           .filter((s): s is CitySuggestion => s !== null)
           // de-dupe by label

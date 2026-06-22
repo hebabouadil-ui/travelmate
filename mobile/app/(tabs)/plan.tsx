@@ -50,6 +50,7 @@ export default function Plan() {
   const [suggestions, setSuggestions] = useState<CitySuggestion[]>([]);
   const [picked, setPicked] = useState(false);
   const [pickedCenter, setPickedCenter] = useState<GeoPoint | null>(null);
+  const [pickedCountry, setPickedCountry] = useState<string | null>(null);
 
   useEffect(() => {
     if (params.destination) {
@@ -105,6 +106,7 @@ export default function Plan() {
       const req: TripRequest = {
         destination: destination.trim(),
         center: pickedCenter ?? undefined,
+        country: pickedCountry ?? undefined,
         days,
         budget,
         interests,
@@ -152,7 +154,7 @@ export default function Plan() {
             <Icon name="search" size={18} color={colors.primary} />
             <TextInput
               value={destination}
-              onChangeText={(t) => { setDestination(t); setPicked(false); setPickedCenter(null); }}
+              onChangeText={(t) => { setDestination(t); setPicked(false); setPickedCenter(null); setPickedCountry(null); }}
               placeholder="Search any city worldwide…"
               placeholderTextColor={colors.textFaint}
               style={styles.input}
@@ -176,6 +178,7 @@ export default function Plan() {
                     Haptics.selectionAsync();
                     setDestination(s.value);
                     setPickedCenter(s.center);
+                    setPickedCountry(s.country || null);
                     setPicked(true);
                     setSuggestions([]);
                   }}
@@ -192,6 +195,7 @@ export default function Plan() {
                   setDestination(c);
                   const seed = Object.values(SEED_CITIES).find((x) => x.name === c);
                   setPickedCenter(seed ? seed.center : null);
+                  setPickedCountry(seed?.country ?? null);
                   setPicked(true);
                   setSuggestions([]);
                 }} />

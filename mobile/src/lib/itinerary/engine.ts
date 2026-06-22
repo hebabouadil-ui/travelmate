@@ -76,6 +76,7 @@ export async function generateItinerary(req: TripRequest): Promise<Itinerary> {
         name: req.destination.split(",")[0].trim() || req.destination,
         center: req.center,
         displayName: req.destination,
+        country: req.country,
       }
     : await geocode(req.destination);
 
@@ -125,7 +126,10 @@ export async function generateItinerary(req: TripRequest): Promise<Itinerary> {
   if (days[0]) await enrichStopPhotos(days[0].stops, geo.name);
 
   const totalEstimatedCost = days.reduce((s, d) => s + d.estimatedCost, 0);
-  const resolvedCountry = country ?? lastSegment(geo.displayName);
+  // Prefer an explicitly picked country, then the AI's, then the geocoder's,
+  // then the display-name tail — so currency/locale is rarely wrong.
+  const resolvedCountry =
+    req.country ?? country ?? geo.country ?? lastSegment(geo.displayName);
 
   return {
     id: makeId("trip"),

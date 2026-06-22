@@ -157,6 +157,8 @@ export interface TripRequest {
   destination: string;
   /** Exact coordinates of the picked city (skips ambiguous re-geocoding). */
   center?: GeoPoint;
+  /** Resolved country of the picked city (drives currency, avoids bad guesses). */
+  country?: string;
   startDate?: string;
   days: number;
   budget: Budget;
