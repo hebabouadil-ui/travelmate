@@ -69,7 +69,27 @@ engine, validation pipeline, photo engine, and Definition of Done._
 > `Itinerary.audit.qualityScore`/`qualityLabel` (Premium Plan / Very Good /
 > Good / Limited Verified Data) — replacing the old flat per-stop
 > confidence average as the headline quality measure. 57/57 offline
-> assertions pass; `npm run typecheck` is clean. Phases 5-12 remain open.
+> assertions pass; `npm run typecheck` is clean.
+
+> **Phase 5 status: shipped.** The §9 "Photo Validator" finding —
+> `enrichPlace` (`wikipedia.ts`) trusted the Wikipedia search API's single
+> best guess unconditionally, with no check that the returned article
+> actually depicts the queried place, so a disambiguation page or an
+> unrelated topic the search merely ranked could silently attach a
+> stranger's photo/description to a stop — is fixed. New
+> `isMatchingArticle(queriedName, articleTitle, pageprops)` in
+> `data/knowledge.ts` (kept in the pure, offline-harness-testable module
+> rather than `wikipedia.ts`, which pulls in `AsyncStorage` and can't run
+> under plain Node) rejects a disambiguation hit and rejects any title that
+> isn't a tolerant match for the queried name, reusing the same
+> `looseMatch` matcher already proven against real OSM spelling variants
+> (§1b/§1c) instead of duplicating a second name-matching heuristic.
+> `enrichPlace` now calls it post-fetch and discards the result (falls
+> through to Commons/Foursquare/category fallback) on a mismatch.
+> `cityHeroImage` and `commonsPhotoNear` were already validated (REST
+> summary's own `disambiguation` type check; geosearch is location-bound by
+> construction) and needed no change. 63/63 offline assertions pass;
+> `npm run typecheck` is clean. Phases 6-12 remain open.
 
 ---
 

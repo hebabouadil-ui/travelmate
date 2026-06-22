@@ -45,7 +45,7 @@ optimized · supported by a real photo.**
 | Attractions / POIs | **OpenStreetMap** (Overpass) | real coordinates, categories, opening hours |
 | Fame / popularity | **Wikidata** sitelink counts | real global-fame signal (no reviews exist for free) |
 | Destination expertise | **Curated Knowledge Packs** | ~60 cities, hand-authored |
-| Photos | **Wikimedia Commons** → official site → Unsplash → *Pexels (staged)* | never AI-generated, never generic city stock |
+| Photos | **Wikimedia Commons** → official site → Unsplash → *Pexels (staged)* | never AI-generated, never generic city stock; Wikipedia hits pass a subject-match gate (`isMatchingArticle`) before being trusted |
 | Weather | **Open-Meteo** | temp, precipitation, wind, codes |
 | Routing | **OSRM** | real road/walking travel times |
 | Narration/personalization | **Gemini** (AI) | organizes & explains only |
@@ -179,11 +179,11 @@ Data — never presenting a low-quality plan as high quality.
 
 ## 11. Quality bar & validation
 
-`npm run validate` runs 57 assertions against the real algorithms offline
+`npm run validate` runs 63 assertions against the real algorithms offline
 (tiering, must-see matching, interest coverage, confidence bands, candidate
-validation, Verified badge, Itinerary Quality Score, route flow, scheduling,
-opening-hours guard). See `VALIDATION.md` for the full report and the
-10-point checklist.
+validation, Verified badge, Itinerary Quality Score, the photo subject-match
+validator, route flow, scheduling, opening-hours guard). See `VALIDATION.md`
+for the full report and the 10-point checklist.
 
 Live, on-device spot-checks remain for photo correctness and day-trip travel
 legs (cannot be verified in the network-restricted CI).

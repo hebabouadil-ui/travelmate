@@ -895,4 +895,24 @@ export function packNameTier(pack: KnowledgePack, placeName: string): 1 | 2 | 0 
   return 0;
 }
 
+/**
+ * Photo Validator's subject-match gate: a text search for "name + city" can
+ * return its single best guess even when that guess is a disambiguation page
+ * (no single real place) or an article about something the query merely
+ * ranked near — neither was checked before this existed, so an OSM place
+ * could silently get a stranger's photo/description attached. Reuses the
+ * same tolerant matcher already used to grade must-see candidates, so a
+ * genuine spelling/translation variant (e.g. "Sensō-ji" vs "Sensoji Temple")
+ * still passes, but an unrelated topic the search merely surfaced does not.
+ */
+export function isMatchingArticle(
+  queriedName: string,
+  articleTitle: string | undefined,
+  pageprops?: { disambiguation?: string }
+): boolean {
+  if (pageprops?.disambiguation !== undefined) return false;
+  if (!articleTitle) return false;
+  return looseMatch(queriedName, articleTitle);
+}
+
 export { norm as normName };

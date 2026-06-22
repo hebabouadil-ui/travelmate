@@ -52,11 +52,20 @@ Rome, Tokyo, Kyoto, Bangkok.** All nine have curated knowledge packs (harness
   pool for that city (true for these 9 in practice). 1-day trips have 3 sight
   slots, so at most 3 of 4 must-sees fit — by design.
 
-### 2. Are the photos correct for every attraction? ⚠️ mechanism only — spot-check live
+### 2. Are the photos correct for every attraction? ⚠️ mechanism verified offline — spot-check live for the live APIs
 - **How:** `resolveStopMedia` resolves a place-specific photo (Wikimedia Commons
   → Wikipedia), keyed on the place name; category placeholder only as fallback.
-- **Cannot verify here** (photo APIs blocked). Risk: ambiguous names could fetch
-  a wrong image. **Staged improvement:** Pexels fallback + name disambiguation.
+- **Photo Validator (v2 Phase 5):** `enrichPlace` no longer trusts the
+  Wikipedia search API's top hit unconditionally — `isMatchingArticle()`
+  rejects a disambiguation page and rejects any article whose title isn't a
+  tolerant match for the queried name (reusing `looseMatch`), so an
+  ambiguous name can no longer silently attach a stranger's photo. Harness
+  §18 asserts both rejection paths plus that real spelling/translation
+  variants still pass.
+- **Cannot fully verify here** (live photo APIs blocked in CI). Remaining
+  risk is confined to the live network responses themselves, not the
+  matching logic. **Staged improvement:** Pexels fallback + name
+  disambiguation.
 
 ### 3. Any duplicate attractions? ✅ verified
 - **How:** dedupe by normalized name across the whole trip in backfill;
@@ -254,8 +263,39 @@ Data); §17 asserts each sub-score measurement independently.
 
 57/57 assertions pass; `npm run typecheck` is clean.
 
+## v2 Phase 5 — shipped: Photo Validator (subject-match gate)
+**Finding (v2 audit, §9):** `enrichPlace` (`wikipedia.ts`) queries Wikipedia
+search by `name + city` and trusts the single top result unconditionally —
+there was no check that the returned article actually depicts the queried
+place, so a disambiguation page or an unrelated topic the search merely
+ranked highly could silently attach a stranger's photo/description to a
+stop.
+
+**Fix:** new `isMatchingArticle(queriedName, articleTitle, pageprops)` in
+`data/knowledge.ts` — kept there rather than in `wikipedia.ts` because
+`wikipedia.ts` pulls in `cache.ts` → `AsyncStorage`, which can't run under
+plain Node, and the matching logic needed to stay testable in the offline
+harness. It rejects a disambiguation hit (`pageprops.disambiguation`) and
+rejects any title that isn't a tolerant match for the queried name, reusing
+the existing `looseMatch` matcher (already proven against real OSM spelling
+variants in §1b/§1c) instead of writing a second name-matching heuristic.
+`enrichPlace` now calls it post-fetch and discards the result on a mismatch,
+falling through to Commons geosearch → Foursquare → the seeded category
+fallback. `cityHeroImage` (REST summary API) already checked
+`type !== "disambiguation"` and `commonsPhotoNear` is location-bound by
+construction (geosearch around the place's own coordinates), so neither
+needed a change.
+
+Harness §18 asserts: exact-title match accepted; a spelling/translation
+variant ("Sensō-ji" → "Sensoji Temple") still accepted; an unrelated topic
+the search merely ranked rejected; a different landmark in the same city
+rejected; a disambiguation page rejected even when its title looks close;
+no article found rejected.
+
+63/63 assertions pass; `npm run typecheck` is clean.
+
 ## How to reproduce
 ```
-cd mobile && npm run validate   # 57/57 assertions on the real algorithms
+cd mobile && npm run validate   # 63/63 assertions on the real algorithms
 cd mobile && npm run typecheck  # clean compile
 ```

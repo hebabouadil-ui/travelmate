@@ -153,5 +153,13 @@ ok(V.photoQualityScore(photoStops) === 0.5, "1 of 2 stops has a real resolved ph
 const verifStops = [{ place: { verified: true } }, { place: { verified: true } }, { place: { verified: false } }];
 ok(Math.abs(V.verificationQualityScore(verifStops) - 2 / 3) < 1e-9, "2 of 3 stops Verified -> 0.67");
 
+console.log("\n=== 18. Photo Validator: rejects mismatched Wikipedia subjects ===");
+ok(K.isMatchingArticle("Eiffel Tower", "Eiffel Tower") === true, `exact title -> accepted`);
+ok(K.isMatchingArticle("Sensō-ji", "Sensoji Temple") === true, `spelling/translation variant -> accepted`);
+ok(K.isMatchingArticle("Eiffel Tower", "Tower of London") === false, `unrelated topic the search merely ranked -> rejected`);
+ok(K.isMatchingArticle("Park Güell", "Parc de la Ciutadella") === false, `different park, same city -> rejected (not a name match)`);
+ok(K.isMatchingArticle("Colosseum", "Colosseum (disambiguation)", { disambiguation: "" }) === false, `disambiguation page -> rejected even if the title looks close`);
+ok(K.isMatchingArticle("Some Place", undefined) === false, `no article found -> rejected`);
+
 console.log(`\n========== ${pass} passed, ${fail} failed ==========`);
 process.exit(fail ? 1 : 0);

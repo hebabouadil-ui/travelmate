@@ -1,5 +1,6 @@
 import { withCache } from "../cache";
 import { slugify } from "../utils";
+import { isMatchingArticle } from "./knowledge";
 import type { PlaceCategory } from "../types";
 
 interface WikiResponse {
@@ -11,6 +12,7 @@ interface WikiResponse {
         extract?: string;
         thumbnail?: { source: string };
         original?: { source: string };
+        pageprops?: { disambiguation?: string };
       }
     >;
   };
@@ -27,6 +29,14 @@ export interface PlaceEnrichment {
  * when there's no good match. Crucially it does NOT substitute a category stock
  * photo here — that's the caller's job, seeded by the place name so different
  * places never share one image. Cached for offline reuse.
+ *
+ * Photo Validator: the search API returns its single best guess even when that
+ * guess is a disambiguation page or an unrelated topic the query happened to
+ * rank — neither is checked before this function existed, so an OSM place could
+ * silently get someone else's photo. Both are now rejected post-fetch: a
+ * disambiguation hit, and any article whose title doesn't actually match the
+ * queried place name (`looseMatch`, the same tolerant matcher already used to
+ * grade must-see candidates against the knowledge pack).
  */
 export async function enrichPlace(
   name: string,
@@ -41,9 +51,10 @@ export async function enrichPlace(
       const params = new URLSearchParams({
         action: "query",
         format: "json",
-        prop: "pageimages|extracts",
+        prop: "pageimages|extracts|pageprops",
         piprop: "thumbnail",
         pithumbsize: "600",
+        ppprop: "disambiguation",
         exintro: "1",
         explaintext: "1",
         exsentences: "2",
@@ -63,6 +74,7 @@ export async function enrichPlace(
         const pages = data.query?.pages;
         if (!pages) return {};
         const page = Object.values(pages)[0];
+        if (!page || !isMatchingArticle(name, page.title, page.pageprops)) return {};
         return {
           // Prefer the (smaller) thumbnail so it loads fast even on weak data.
           imageUrl: page?.thumbnail?.source ?? page?.original?.source,
