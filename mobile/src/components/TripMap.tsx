@@ -8,7 +8,7 @@ import {
   LineLayer,
   UserLocation,
 } from "@maplibre/maplibre-react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import type { GeoPoint, Place } from "@/lib/types";
 import { colors, radius, spacing, font, CATEGORY_META } from "@/theme";
 import { ENV } from "@/lib/env";
@@ -138,7 +138,7 @@ export function TripMap({
                   {route ? (
                     <Text style={styles.pinNum}>{i + 1}</Text>
                   ) : (
-                    <Ionicons name={meta.icon as any} size={13} color={colors.white} />
+                    <Icon name={meta.icon as any} size={13} color={colors.white} />
                   )}
                 </View>
                 <View style={[styles.pinTip, { borderTopColor: meta.color }]} />

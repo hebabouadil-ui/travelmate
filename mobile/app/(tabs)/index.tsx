@@ -8,7 +8,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { colors, font, radius, spacing } from "@/theme";
 import { SectionTitle } from "@/components/ui";
@@ -57,14 +57,14 @@ export default function Discover() {
 
         {!online && (
           <View style={styles.offline}>
-            <Ionicons name="cloud-offline" size={14} color={colors.warning} />
+            <Icon name="cloud-offline" size={14} color={colors.warning} />
             <Text style={styles.offlineText}>Offline — showing cached recommendations</Text>
           </View>
         )}
 
         {/* Search prompt */}
         <Pressable style={styles.search} onPress={() => router.push("/(tabs)/plan")}>
-          <Ionicons name="search" size={18} color={colors.textFaint} />
+          <Icon name="search" size={18} color={colors.textFaint} />
           <Text style={styles.searchText}>Search a city or plan a trip…</Text>
         </Pressable>
 
@@ -72,13 +72,13 @@ export default function Discover() {
         {savedTrips.length > 0 && (
           <Pressable style={styles.resume} onPress={() => router.push(`/trip/${savedTrips[0].id}`)}>
             <View style={styles.resumeIcon}>
-              <Ionicons name="briefcase" size={18} color={colors.white} />
+              <Icon name="briefcase" size={18} color={colors.white} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.resumeLabel}>Continue planning</Text>
               <Text style={styles.resumeName}>{savedTrips[0].destination}</Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+            <Icon name="chevron-forward" size={20} color={colors.textMuted} />
           </Pressable>
         )}
 

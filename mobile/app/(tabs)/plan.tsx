@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import * as Haptics from "expo-haptics";
 import { colors, font, radius, spacing } from "@/theme";
 import { Chip, GradientButton } from "@/components/ui";
@@ -149,7 +149,7 @@ export default function Plan() {
           {/* Destination */}
           <Text style={styles.label}>Destination</Text>
           <View style={styles.inputWrap}>
-            <Ionicons name="search" size={18} color={colors.primary} />
+            <Icon name="search" size={18} color={colors.primary} />
             <TextInput
               value={destination}
               onChangeText={(t) => { setDestination(t); setPicked(false); setPickedCenter(null); }}
@@ -161,7 +161,7 @@ export default function Plan() {
             />
             {destination.length > 0 && (
               <Pressable onPress={() => { setDestination(""); setSuggestions([]); setPicked(false); }} hitSlop={8}>
-                <Ionicons name="close-circle" size={18} color={colors.textFaint} />
+                <Icon name="close-circle" size={18} color={colors.textFaint} />
               </Pressable>
             )}
           </View>
@@ -180,7 +180,7 @@ export default function Plan() {
                     setSuggestions([]);
                   }}
                 >
-                  <Ionicons name="location-outline" size={16} color={colors.textMuted} />
+                  <Icon name="location-outline" size={16} color={colors.textMuted} />
                   <Text style={styles.suggestionText} numberOfLines={1}>{s.label}</Text>
                 </Pressable>
               ))}
@@ -272,7 +272,7 @@ export default function Plan() {
 
           {error && (
             <View style={styles.error}>
-              <Ionicons name="alert-circle" size={16} color={colors.danger} />
+              <Icon name="alert-circle" size={16} color={colors.danger} />
               <Text style={styles.errorText}>{error}</Text>
             </View>
           )}

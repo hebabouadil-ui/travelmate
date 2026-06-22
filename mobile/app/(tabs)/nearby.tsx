@@ -8,7 +8,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import { colors, font, radius, spacing } from "@/theme";
 import { GradientButton, EmptyState, Chip } from "@/components/ui";
 import { PlaceRow } from "@/components/cards";
@@ -65,7 +65,7 @@ export default function Nearby() {
           <Text style={styles.title}>Nearby</Text>
           <Text style={styles.subtitle}>Discover what's around you right now</Text>
         </View>
-        <Ionicons name="navigate-circle" size={34} color={colors.primary} />
+        <Icon name="navigate-circle" size={34} color={colors.primary} />
       </View>
 
       {!coords ? (
@@ -120,7 +120,7 @@ export default function Nearby() {
               <View style={styles.countRow}>
                 <Text style={styles.count}>{filtered.length} places nearby</Text>
                 <Pressable onPress={discover} hitSlop={8} style={styles.refresh}>
-                  <Ionicons name="refresh" size={16} color={colors.accent} />
+                  <Icon name="refresh" size={16} color={colors.accent} />
                   <Text style={styles.refreshText}>Refresh</Text>
                 </Pressable>
               </View>

@@ -7,7 +7,7 @@ import {
   View,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import * as Haptics from "expo-haptics";
 import type { DestinationMatch, ItineraryStop, Place } from "@/lib/types";
 import { categoryImage } from "@/lib/data/wikipedia";
@@ -60,7 +60,7 @@ export function DestinationCard({
           style={styles.heart}
           hitSlop={10}
         >
-          <Ionicons
+          <Icon
             name={favorite ? "heart" : "heart-outline"}
             size={20}
             color={favorite ? colors.danger : colors.white}
@@ -73,7 +73,7 @@ export function DestinationCard({
       <View style={styles.destBody}>
         <Text style={styles.destName}>{match.name}</Text>
         <View style={styles.destMetaRow}>
-          <Ionicons name="location" size={12} color={colors.textMuted} />
+          <Icon name="location" size={12} color={colors.textMuted} />
           <Text style={styles.destCountry}>{match.country}</Text>
         </View>
         <Text style={styles.destReason} numberOfLines={2}>
@@ -126,27 +126,27 @@ export function StopCard({
   const daypart = DAYPART_META[stop.daypart];
   const transport = TRANSPORT_META[stop.travelMode ?? "walk"];
 
-  // Lazily upgrade to this place's own real photo (cached) — keeps each card
-  // distinct instead of reusing one category image.
+  // Photos are normally resolved up-front during generation and embedded on the
+  // place, so cards render the right image instantly. Only fall back to a lazy
+  // fetch for older saved trips that predate that (no photoResolved flag).
   const [image, setImage] = useState(stop.place.imageUrl);
   useEffect(() => {
+    if (stop.place.photoResolved || !city) return;
     let active = true;
-    if (city) {
-      resolveStopMedia(stop.place, city)
-        .then((m) => {
-          if (active && m.imageUrl) setImage(m.imageUrl);
-        })
-        .catch(() => undefined);
-    }
+    resolveStopMedia(stop.place, city)
+      .then((m) => {
+        if (active && m.imageUrl) setImage(m.imageUrl);
+      })
+      .catch(() => undefined);
     return () => {
       active = false;
     };
-  }, [city, stop.place.name, stop.place.category]);
+  }, [city, stop.place.photoResolved, stop.place.name, stop.place.category]);
   return (
     <View>
       {stop.travelFromPrevMin ? (
         <View style={styles.travelConnector}>
-          <Ionicons name={transport.icon as any} size={12} color={colors.textMuted} />
+          <Icon name={transport.icon as any} size={12} color={colors.textMuted} />
           <Text style={styles.travelText}>
             {transport.label} · {stop.travelFromPrevMin} min
             {stop.travelDistanceKm ? ` · ${stop.travelDistanceKm} km` : ""}
@@ -176,12 +176,12 @@ export function StopCard({
           <View style={styles.stopBody}>
             <View style={styles.stopHeader}>
               <View style={[styles.daypartPill, { backgroundColor: daypart.color + "22" }]}>
-                <Ionicons name={daypart.icon as any} size={11} color={daypart.color} />
+                <Icon name={daypart.icon as any} size={11} color={daypart.color} />
                 <Text style={[styles.daypartText, { color: daypart.color }]}>{daypart.label}</Text>
               </View>
               {stop.place.hiddenGem && (
                 <View style={styles.gem}>
-                  <Ionicons name="diamond" size={10} color={colors.accent} />
+                  <Icon name="diamond" size={10} color={colors.accent} />
                   <Text style={styles.gemText}>Hidden gem</Text>
                 </View>
               )}
@@ -193,7 +193,7 @@ export function StopCard({
             <View style={styles.stopMetaRow}>
               <Text style={styles.stopMeta}>{meta.emoji} {meta.label}</Text>
               <Text style={styles.stopDot2}>·</Text>
-              <Ionicons name="time-outline" size={12} color={colors.textFaint} />
+              <Icon name="time-outline" size={12} color={colors.textFaint} />
               <Text style={styles.stopMeta}>{stop.durationMin}m</Text>
               {stop.estimatedCost ? (
                 <>
@@ -207,18 +207,18 @@ export function StopCard({
 
             <View style={styles.stopActions}>
               <View style={styles.stopAction}>
-                <Ionicons name="information-circle-outline" size={14} color={colors.primary} />
+                <Icon name="information-circle-outline" size={14} color={colors.primary} />
                 <Text style={[styles.stopActionText, { color: colors.primary }]}>Details</Text>
               </View>
               {onNavigate && (
                 <Pressable onPress={onNavigate} style={styles.stopAction} hitSlop={6}>
-                  <Ionicons name="navigate" size={14} color={colors.accent} />
+                  <Icon name="navigate" size={14} color={colors.accent} />
                   <Text style={[styles.stopActionText, { color: colors.accent }]}>Go</Text>
                 </Pressable>
               )}
               {onRemove && (
                 <Pressable onPress={onRemove} style={styles.stopAction} hitSlop={6}>
-                  <Ionicons name="trash-outline" size={14} color={colors.danger} />
+                  <Icon name="trash-outline" size={14} color={colors.danger} />
                   <Text style={[styles.stopActionText, { color: colors.danger }]}>Remove</Text>
                 </Pressable>
               )}
@@ -249,7 +249,7 @@ export function PlaceRow({
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [styles.row, { opacity: pressed ? 0.8 : 1 }]}>
       <View style={[styles.rowIcon, { backgroundColor: meta.color + "22" }]}>
-        <Ionicons name={meta.icon as any} size={18} color={meta.color} />
+        <Icon name={meta.icon as any} size={18} color={meta.color} />
       </View>
       <View style={{ flex: 1 }}>
         <Text style={styles.rowName} numberOfLines={1}>{place.name}</Text>

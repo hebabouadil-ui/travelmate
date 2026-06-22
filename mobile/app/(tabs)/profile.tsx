@@ -11,7 +11,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import { colors, font, radius, spacing } from "@/theme";
 import { Card, Pill } from "@/components/ui";
 import { useProfile } from "@/store/useProfile";
@@ -73,7 +73,7 @@ export default function Profile() {
         </LinearGradient>
 
         <Pressable style={styles.editBtn} onPress={onEditProfile}>
-          <Ionicons name="create-outline" size={18} color={colors.text} />
+          <Icon name="create-outline" size={18} color={colors.text} />
           <Text style={styles.editText}>Edit travel preferences</Text>
         </Pressable>
 
@@ -135,7 +135,7 @@ function Row({ icon, label, children }: { icon: any; label: string; children: Re
   return (
     <View style={styles.row}>
       <View style={styles.rowLeft}>
-        <Ionicons name={icon} size={18} color={colors.textMuted} />
+        <Icon name={icon} size={18} color={colors.textMuted} />
         <Text style={styles.rowLabel}>{label}</Text>
       </View>
       {children}

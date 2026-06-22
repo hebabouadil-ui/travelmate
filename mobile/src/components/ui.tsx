@@ -10,7 +10,7 @@ import {
   StyleProp,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import * as Haptics from "expo-haptics";
 import { colors, radius, spacing, font, shadow } from "@/theme";
 
@@ -25,7 +25,7 @@ export function GradientButton({
 }: {
   label: string;
   onPress: () => void;
-  icon?: keyof typeof Ionicons.glyphMap;
+  icon?: string;
   loading?: boolean;
   disabled?: boolean;
   style?: StyleProp<ViewStyle>;
@@ -53,7 +53,7 @@ export function GradientButton({
           <ActivityIndicator color={colors.white} />
         ) : (
           <View style={styles.btnRow}>
-            {icon && <Ionicons name={icon} size={18} color={colors.white} />}
+            {icon && <Icon name={icon} size={18} color={colors.white} />}
             <Text style={styles.btnText}>{label}</Text>
           </View>
         )}
@@ -71,7 +71,7 @@ export function GhostButton({
 }: {
   label: string;
   onPress: () => void;
-  icon?: keyof typeof Ionicons.glyphMap;
+  icon?: string;
   style?: StyleProp<ViewStyle>;
 }) {
   return (
@@ -86,7 +86,7 @@ export function GhostButton({
         style,
       ]}
     >
-      {icon && <Ionicons name={icon} size={18} color={colors.text} />}
+      {icon && <Icon name={icon} size={18} color={colors.text} />}
       <Text style={styles.ghostText}>{label}</Text>
     </Pressable>
   );
@@ -143,11 +143,11 @@ export function Pill({
 }: {
   label: string;
   color?: string;
-  icon?: keyof typeof Ionicons.glyphMap;
+  icon?: string;
 }) {
   return (
     <View style={[styles.pill, { backgroundColor: color + "22", borderColor: color + "55" }]}>
-      {icon && <Ionicons name={icon} size={12} color={color} />}
+      {icon && <Icon name={icon} size={12} color={color} />}
       <Text style={[styles.pillText, { color }]}>{label}</Text>
     </View>
   );
@@ -191,7 +191,7 @@ export function EmptyState({
   message,
   cta,
 }: {
-  icon?: keyof typeof Ionicons.glyphMap;
+  icon?: string;
   title: string;
   message: string;
   cta?: React.ReactNode;
@@ -199,7 +199,7 @@ export function EmptyState({
   return (
     <View style={styles.empty}>
       <View style={styles.emptyIcon}>
-        <Ionicons name={icon} size={36} color={colors.primary} />
+        <Icon name={icon} size={36} color={colors.primary} />
       </View>
       <Text style={styles.emptyTitle}>{title}</Text>
       <Text style={styles.emptyMessage}>{message}</Text>

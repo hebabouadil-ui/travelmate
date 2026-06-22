@@ -14,7 +14,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import Animated, { FadeIn, Layout } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { colors, font, radius, spacing, shadow } from "@/theme";
@@ -127,14 +127,14 @@ export default function TripDetail() {
           <LinearGradient colors={["rgba(5,8,16,0.5)", "transparent", "rgba(11,15,26,1)"]} style={StyleSheet.absoluteFill} />
           <View style={[styles.heroNav, { paddingTop: topPad }]}>
             <Pressable onPress={() => router.back()} style={styles.navBtn} hitSlop={8}>
-              <Ionicons name="chevron-back" size={24} color={colors.white} />
+              <Icon name="chevron-back" size={24} color={colors.white} />
             </Pressable>
             <View style={{ flexDirection: "row", gap: spacing.sm }}>
               <Pressable onPress={onShare} style={styles.navBtn} hitSlop={8}>
-                <Ionicons name="share-outline" size={20} color={colors.white} />
+                <Icon name="share-outline" size={20} color={colors.white} />
               </Pressable>
               <Pressable onPress={() => { Haptics.selectionAsync(); toggleFavorite(trip.id); }} style={styles.navBtn} hitSlop={8}>
-                <Ionicons name={fav ? "heart" : "heart-outline"} size={20} color={fav ? colors.danger : colors.white} />
+                <Icon name={fav ? "heart" : "heart-outline"} size={20} color={fav ? colors.danger : colors.white} />
               </Pressable>
             </View>
           </View>
@@ -154,7 +154,7 @@ export default function TripDetail() {
             <View style={styles.overviewCard}>
               <View style={styles.overviewHeader}>
                 <View style={styles.overviewIcon}>
-                  <Ionicons name="sparkles" size={16} color={colors.white} />
+                  <Icon name="sparkles" size={16} color={colors.white} />
                 </View>
                 <Text style={styles.overviewTitle}>Why visit {trip.destination}</Text>
               </View>
@@ -163,7 +163,7 @@ export default function TripDetail() {
                 <View style={styles.highlightWrap}>
                   {trip.highlights.map((h) => (
                     <View key={h} style={styles.highlightChip}>
-                      <Ionicons name="checkmark-circle" size={12} color={colors.accent} />
+                      <Icon name="checkmark-circle" size={12} color={colors.accent} />
                       <Text style={styles.highlightText}>{h}</Text>
                     </View>
                   ))}
@@ -220,7 +220,7 @@ export default function TripDetail() {
                 </View>
               )}
               <View style={styles.stripItem}>
-                <Ionicons name="wallet" size={20} color={colors.accent} />
+                <Icon name="wallet" size={20} color={colors.accent} />
                 <View>
                   <Text style={styles.stripValue}>{formatCurrency(day.estimatedCost, trip.currency)}</Text>
                   <Text style={styles.stripLabel}>est. for the day</Text>
@@ -230,7 +230,7 @@ export default function TripDetail() {
 
             {day.weather?.rainRisk && (
               <View style={styles.rain}>
-                <Ionicons name="umbrella" size={14} color={colors.rain} />
+                <Icon name="umbrella" size={14} color={colors.rain} />
                 <Text style={styles.rainText}>Rain likely — pack an umbrella or plan indoor stops.</Text>
               </View>
             )}
@@ -262,7 +262,7 @@ export default function TripDetail() {
         <View style={[styles.section, { gap: spacing.md }]}>
           <GradientButton label="Set trip reminder" icon="notifications" onPress={onReminder} />
           <Pressable onPress={onDelete} style={styles.deleteBtn}>
-            <Ionicons name="trash-outline" size={18} color={colors.danger} />
+            <Icon name="trash-outline" size={18} color={colors.danger} />
             <Text style={styles.deleteText}>Delete trip</Text>
           </Pressable>
         </View>

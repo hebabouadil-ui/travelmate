@@ -1,7 +1,7 @@
 import { Redirect } from "expo-router";
 import { View, StyleSheet } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -52,7 +52,7 @@ export default function Index() {
   return (
     <LinearGradient colors={colors.heroGradient} style={styles.container}>
       <Animated.View entering={FadeIn.duration(400)} style={[styles.badge, badgeStyle]}>
-        <Ionicons name="compass" size={52} color={colors.white} />
+        <Icon name="compass" size={52} color={colors.white} />
       </Animated.View>
     </LinearGradient>
   );

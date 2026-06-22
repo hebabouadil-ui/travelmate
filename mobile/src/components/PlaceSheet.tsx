@@ -10,7 +10,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import type { ItineraryStop } from "@/lib/types";
 import { colors, font, radius, spacing, CATEGORY_META } from "@/theme";
 import { resolveStopMedia } from "@/lib/data/media";
@@ -82,17 +82,17 @@ export function PlaceSheet({
                 <ActivityIndicator color={colors.white} style={styles.heroLoading} />
               ) : null}
               <Pressable style={styles.close} onPress={onClose} hitSlop={8}>
-                <Ionicons name="close" size={20} color={colors.white} />
+                <Icon name="close" size={20} color={colors.white} />
               </Pressable>
               <View style={styles.heroBody}>
                 <View style={[styles.catChip, { backgroundColor: meta.color }]}>
-                  <Ionicons name={meta.icon as any} size={12} color={colors.white} />
+                  <Icon name={meta.icon as any} size={12} color={colors.white} />
                   <Text style={styles.catText}>{meta.label}</Text>
                 </View>
                 <Text style={styles.name}>{place.name}</Text>
                 {place.neighborhood ? (
                   <Text style={styles.area}>
-                    <Ionicons name="location" size={12} color="rgba(255,255,255,0.85)" />{" "}
+                    <Icon name="location" size={12} color="rgba(255,255,255,0.85)" />{" "}
                     {place.neighborhood}
                   </Text>
                 ) : null}
@@ -102,7 +102,7 @@ export function PlaceSheet({
             <View style={styles.content}>
               {place.whyVisit ? (
                 <View style={styles.whyBox}>
-                  <Ionicons name="sparkles" size={15} color={colors.primary} />
+                  <Icon name="sparkles" size={15} color={colors.primary} />
                   <Text style={styles.whyText}>{place.whyVisit}</Text>
                 </View>
               ) : null}
@@ -136,7 +136,7 @@ export function PlaceSheet({
 function Info({ icon, label, value }: { icon: any; label: string; value: string }) {
   return (
     <View style={styles.info}>
-      <Ionicons name={icon} size={16} color={colors.textMuted} />
+      <Icon name={icon} size={16} color={colors.textMuted} />
       <View>
         <Text style={styles.infoLabel}>{label}</Text>
         <Text style={styles.infoValue}>{value}</Text>

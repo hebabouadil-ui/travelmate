@@ -9,7 +9,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import Animated, { FadeIn, FadeOut, SlideInRight } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { colors, font, radius, spacing } from "@/theme";
@@ -73,7 +73,7 @@ export default function Onboarding() {
         <View style={styles.progressRow}>
           {step > 0 ? (
             <Pressable onPress={back} hitSlop={10} style={styles.backBtn}>
-              <Ionicons name="chevron-back" size={22} color={colors.text} />
+              <Icon name="chevron-back" size={22} color={colors.text} />
             </Pressable>
           ) : (
             <View style={styles.backBtn} />
@@ -93,7 +93,7 @@ export default function Onboarding() {
           {current === "welcome" && (
             <Animated.View entering={FadeIn} exiting={FadeOut} style={styles.welcome}>
               <LinearGradient colors={colors.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.logoBadge}>
-                <Ionicons name="compass" size={42} color={colors.white} />
+                <Icon name="compass" size={42} color={colors.white} />
               </LinearGradient>
               <Text style={styles.brand}>Voyage AI</Text>
               <Text style={styles.tagline}>
@@ -107,7 +107,7 @@ export default function Onboarding() {
                   ["cloud-offline", "Works fully offline"],
                 ].map(([icon, label]) => (
                   <View key={label} style={styles.featureItem}>
-                    <Ionicons name={icon as any} size={18} color={colors.accent} />
+                    <Icon name={icon as any} size={18} color={colors.accent} />
                     <Text style={styles.featureText}>{label}</Text>
                   </View>
                 ))}
@@ -249,7 +249,7 @@ function OptionRow({
         <Text style={[styles.optionLabel, selected && { color: colors.text }]}>{label}</Text>
         <Text style={styles.optionHint}>{hint}</Text>
       </View>
-      <Ionicons
+      <Icon
         name={selected ? "checkmark-circle" : "ellipse-outline"}
         size={24}
         color={selected ? colors.primary : colors.textFaint}

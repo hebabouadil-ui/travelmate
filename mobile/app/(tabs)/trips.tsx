@@ -9,7 +9,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import ReanimatedSwipeable from "react-native-gesture-handler/ReanimatedSwipeable";
 import Reanimated, { FadeIn, Layout } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
@@ -68,7 +68,7 @@ export default function Trips() {
                 <ReanimatedSwipeable
                   renderRightActions={() => (
                     <Pressable style={styles.deleteAction} onPress={() => confirmDelete(trip)}>
-                      <Ionicons name="trash" size={22} color={colors.white} />
+                      <Icon name="trash" size={22} color={colors.white} />
                     </Pressable>
                   )}
                   overshootRight={false}
@@ -99,7 +99,7 @@ export default function Trips() {
                       hitSlop={10}
                       onPress={() => { Haptics.selectionAsync(); toggleFavorite(trip.id); }}
                     >
-                      <Ionicons
+                      <Icon
                         name={fav ? "heart" : "heart-outline"}
                         size={22}
                         color={fav ? colors.danger : colors.textFaint}

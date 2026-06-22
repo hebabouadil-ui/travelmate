@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Modal, View, Text, StyleSheet } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -34,6 +34,7 @@ export function GeneratingOverlay({
   const scale = useSharedValue(0.9);
   const spin = useSharedValue(0);
   const orb = useSharedValue(0);
+  const bar = useSharedValue(0);
 
   useEffect(() => {
     if (!visible) {
@@ -54,12 +55,22 @@ export function GeneratingOverlay({
       -1,
       true
     );
-    const id = setInterval(() => setStep((s) => Math.min(s + 1, STEPS.length - 1)), 2500);
+    bar.value = withTiming(1 / STEPS.length, { duration: 600 });
+    const id = setInterval(
+      () =>
+        setStep((s) => {
+          const next = Math.min(s + 1, STEPS.length - 1);
+          bar.value = withTiming((next + 1) / STEPS.length, { duration: 600 });
+          return next;
+        }),
+      2500
+    );
     return () => clearInterval(id);
-  }, [visible, scale, spin, orb]);
+  }, [visible, scale, spin, orb, bar]);
 
   const badge = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
   const ring = useAnimatedStyle(() => ({ transform: [{ rotate: `${spin.value * 360}deg` }] }));
+  const progress = useAnimatedStyle(() => ({ width: `${bar.value * 100}%` }));
   const orbA = useAnimatedStyle(() => ({
     transform: [{ translateY: -20 + orb.value * 24 }, { translateX: -16 + orb.value * 10 }],
     opacity: 0.5 + orb.value * 0.3,
@@ -78,7 +89,7 @@ export function GeneratingOverlay({
         <View style={styles.badgeWrap}>
           <Animated.View style={[styles.ring, ring]} />
           <Animated.View style={[styles.badge, badge]}>
-            <Ionicons name="compass" size={48} color={colors.white} />
+            <Icon name="compass" size={48} color={colors.white} />
           </Animated.View>
         </View>
         <Text style={styles.title}>Crafting your trip</Text>
@@ -86,9 +97,13 @@ export function GeneratingOverlay({
 
         <View style={styles.stepRow}>
           <Animated.View key={step} entering={FadeIn.duration(300)} exiting={FadeOut.duration(200)} style={styles.stepInner}>
-            <Ionicons name={current.icon as any} size={16} color={colors.white} />
+            <Icon name={current.icon as any} size={16} color={colors.white} />
             <Text style={styles.stepText}>{current.label}</Text>
           </Animated.View>
+        </View>
+
+        <View style={styles.progressTrack}>
+          <Animated.View style={[styles.progressFill, progress]} />
         </View>
 
         <View style={styles.dots}>
@@ -130,6 +145,15 @@ const styles = StyleSheet.create({
   stepRow: { height: 30, marginTop: spacing.xxl, justifyContent: "center" },
   stepInner: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   stepText: { color: colors.white, fontSize: font.body, fontWeight: "600" },
-  dots: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.xl },
+  progressTrack: {
+    width: 220,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    marginTop: spacing.xl,
+    overflow: "hidden",
+  },
+  progressFill: { height: 6, borderRadius: 3, backgroundColor: colors.white },
+  dots: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.lg },
   dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.white },
 });

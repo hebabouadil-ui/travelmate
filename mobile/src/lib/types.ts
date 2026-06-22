@@ -60,6 +60,9 @@ export interface Place extends GeoPoint {
   source: "overpass" | "opentripmap" | "wikipedia" | "ai" | "mock";
   wikipediaUrl?: string;
   imageUrl?: string;
+  /** True once a real (Wikipedia/Foursquare) photo has been resolved for this
+   *  place, so the UI knows it's not just a category placeholder. */
+  photoResolved?: boolean;
   /** Human opening hours if known (OSM). */
   openingHours?: string;
   /** Suggested neighborhood/area label. */

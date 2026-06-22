@@ -15,6 +15,7 @@ import { discoverPlaces } from "../data/places";
 import { getWeather } from "../data/weather";
 import { buildOverview } from "../data/overviews";
 import { categoryImage, cityHeroImage as cityImageFor } from "../data/wikipedia";
+import { resolveStopMedia } from "../data/media";
 import { currencyForCountry } from "../currency";
 import { dayRoute } from "../data/routing";
 import { clusterIntoDays, nearestWhere, optimizeRoute, planPerDay } from "./optimize";
@@ -115,8 +116,11 @@ export async function generateItinerary(req: TripRequest): Promise<Itinerary> {
   }
 
   // Guarantee every day is full (backfill from the OSM pool) + accurate routing.
-  // Per-stop real photos load lazily in the cards (keeps generation fast).
   await finalizeDays(days, pool, geo.center, req);
+
+  // Resolve a real, distinct photo for every stop up-front (bounded) so cards
+  // render the correct image instantly instead of fetching lazily on scroll.
+  await enrichStopPhotos(days, geo.name);
 
   const totalEstimatedCost = days.reduce((s, d) => s + d.estimatedCost, 0);
   const resolvedCountry = country ?? lastSegment(geo.displayName);
@@ -276,6 +280,36 @@ async function finalizeDays(
         dailyTransport(req.budget);
     })
   );
+}
+
+/**
+ * Resolve a real photo (and description) for every stop, in parallel, and embed
+ * it on the place so cards show the correct image immediately — and so saved
+ * trips keep their photos offline. Bounded by an overall deadline so a slow
+ * network never stalls generation; unresolved stops keep their category image.
+ */
+async function enrichStopPhotos(days: ItineraryDay[], city: string): Promise<void> {
+  const stops = days.flatMap((d) => d.stops);
+  const work = Promise.all(
+    stops.map(async (st) => {
+      if (st.place.photoResolved) return;
+      try {
+        const media = await resolveStopMedia(st.place, city);
+        if (media.imageUrl) st.place.imageUrl = media.imageUrl;
+        if (media.description && !st.place.description) {
+          st.place.description = media.description;
+        }
+        st.place.photoResolved = true;
+      } catch {
+        // keep the existing category image
+      }
+    })
+  );
+  // Don't let photo enrichment hold the whole generation hostage.
+  await Promise.race([
+    work,
+    new Promise<void>((resolve) => setTimeout(resolve, 14000)),
+  ]);
 }
 
 function pickDaypart(index: number): ItineraryStop["daypart"] {
