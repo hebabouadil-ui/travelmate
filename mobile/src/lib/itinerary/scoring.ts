@@ -76,26 +76,30 @@ export function attractionScore(p: Place, interests: Interest[] = []): number {
 }
 
 /**
- * Selection value used when choosing which places make the cut. Fame dominates;
- * distance is only a gentle tie-breaker (~0.005/km), so a famous attraction a
- * few km away still beats a minor one next door.
+ * Selection value used when choosing which places make the cut. Tier-1 must-see
+ * places dominate, then fame; distance is only a gentle tie-breaker (~0.005/km),
+ * so a world-famous attraction is never dropped because a smaller one is closer.
  */
 export function selectionValue(p: Place, distanceKm: number, interests: Interest[] = []): number {
-  return attractionScore(p, interests) - distanceKm * 0.005;
+  const tierBoost = p.tier === 1 ? 0.5 : p.tier === 2 ? 0.2 : 0;
+  return attractionScore(p, interests) + tierBoost - distanceKm * 0.005;
 }
 
 /**
- * Confidence (0..1) that THIS recommendation is trustworthy: a real, well-placed,
- * documented place — not an AI approximation. This is the per-stop score shown
- * in the quality audit.
+ * Confidence (0..1) that THIS recommendation is trustworthy, using the factors
+ * from the spec: verified location, real photo, opening hours, destination-
+ * knowledge match (tier) and attraction importance (fame). Shown as a 0–100%
+ * score per stop and gated at 70% for attractions.
  */
 export function confidenceScore(p: Place): number {
   let c = 0;
-  if (p.verified) c += 0.4; // grounded to a real OSM POI
-  if (p.wikidataId || p.wikipediaTitle || p.wikipediaUrl) c += 0.25; // documented
-  if (typeof p.popularity === "number") c += p.popularity > 0 ? 0.15 : 0.05;
-  if (p.source === "overpass" || p.verified) c += 0.1; // real-world coordinates
-  if (p.openingHours || p.cuisine) c += 0.1; // concrete attributes on file
+  if (p.verified) c += 0.3; // verified, real-world location
+  if (p.photoResolved) c += 0.15; // a real, place-specific photo resolved
+  if (p.openingHours) c += 0.1; // opening hours on file
+  // destination-knowledge match
+  c += p.tier === 1 ? 0.25 : p.tier === 2 ? 0.15 : 0;
+  // attraction importance (real fame signal)
+  c += fameValue(p) * 0.2;
   return Math.min(1, Math.round(c * 100) / 100);
 }
 

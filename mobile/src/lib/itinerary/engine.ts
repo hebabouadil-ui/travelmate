@@ -13,6 +13,7 @@ import { addDays, haversineKm, makeId, walkingMinutes } from "../utils";
 import { geocode, type GeocodeResult } from "../data/geocode";
 import { discoverPlaces } from "../data/places";
 import { enrichPopularity } from "../data/popularity";
+import { getKnowledgePack, packNameTier, type KnowledgePack } from "../data/knowledge";
 import { getWeather } from "../data/weather";
 import { buildOverview } from "../data/overviews";
 import { categoryImage, cityHeroImage as cityImageFor } from "../data/wikipedia";
@@ -96,6 +97,11 @@ export async function generateItinerary(req: TripRequest): Promise<Itinerary> {
   // The pool is also enriched with a REAL popularity signal (Wikidata sitelink
   // counts) so ranking reflects global fame, not just category/proximity. All of
   // this overlaps with the AI call, so it adds little wall-clock time.
+  // Destination knowledge pack — curated expert data. Fed to the AI so it
+  // ORGANISES around real, verified must-sees instead of inventing, and used to
+  // tier/guarantee them afterward. This is the "knowledge first" principle.
+  const pack = getKnowledgePack(req.destination);
+
   const poolPromise = discoverPlaces(req.destination, geo.center)
     .then(async (pl) => {
       await enrichPopularity(pl).catch(() => {});
@@ -103,7 +109,7 @@ export async function generateItinerary(req: TripRequest): Promise<Itinerary> {
     })
     .catch(() => [] as Place[]);
   const [aiPlan, weather, heroImage, pool] = await Promise.all([
-    aiPlanItinerary(req, req.destination).catch(() => null),
+    aiPlanItinerary(req, req.destination, pack).catch(() => null),
     getWeather(geo.center, req.startDate, req.days),
     cityImageFor(geo.name).catch(() => undefined),
     poolPromise,
@@ -114,6 +120,8 @@ export async function generateItinerary(req: TripRequest): Promise<Itinerary> {
   let highlights: string[];
   let country: string | undefined;
   let engine: Itinerary["engine"];
+
+  if (pack) pool.forEach((p) => (p.tier = tierOf(p, pack)));
 
   if (aiPlan) {
     days = buildDaysFromAI(aiPlan, geo, req, weather);
@@ -133,6 +141,13 @@ export async function generateItinerary(req: TripRequest): Promise<Itinerary> {
     engine = "mock";
   }
 
+  // Knowledge-first quality pass: tier every stop, guarantee Tier-1 must-sees
+  // appear (replacing weak anchors), then drop low-confidence attractions.
+  applyTiers(days, pack);
+  if (pack) injectMustSees(days, pool, pack, geo.name);
+  applyTiers(days, pack);
+  gateLowConfidence(days);
+
   // Guarantee every day is full (backfill from the OSM pool) + accurate routing.
   await finalizeDays(days, pool, geo.center, req);
 
@@ -144,7 +159,7 @@ export async function generateItinerary(req: TripRequest): Promise<Itinerary> {
 
   // Score every recommendation's confidence and build a data-quality audit so
   // the plan can honestly report how many stops are verified vs. approximated.
-  const audit = buildAudit(days);
+  const audit = buildAudit(days, pack);
 
   const totalEstimatedCost = days.reduce((s, d) => s + d.estimatedCost, 0);
   // Prefer an explicitly picked country, then the AI's, then the geocoder's,
@@ -175,7 +190,7 @@ export async function generateItinerary(req: TripRequest): Promise<Itinerary> {
  * Compute each stop's confidence score and roll the whole plan up into a
  * data-quality audit (verified vs. approximate, provenance, average confidence).
  */
-function buildAudit(days: ItineraryDay[]): Itinerary["audit"] {
+function buildAudit(days: ItineraryDay[], pack?: KnowledgePack): Itinerary["audit"] {
   let total = 0;
   let verified = 0;
   let fromOSM = 0;
@@ -199,6 +214,7 @@ function buildAudit(days: ItineraryDay[]): Itinerary["audit"] {
     fromOSM,
     fromWikidata,
     avgConfidence: total ? Math.round((confidenceSum / total) * 100) / 100 : 0,
+    destinationConfidence: pack?.confidence,
   };
 }
 
@@ -334,6 +350,120 @@ function groundDaysToPool(days: ItineraryDay[], pool: Place[]): void {
       // guess — so the badge only appears on authentic, lower-traffic spots.
       stop.place.hiddenGem = isConfidentGem(stop.place);
     }
+  }
+}
+
+// ── Knowledge-pack pipeline: tiering, guaranteed must-sees, confidence gate ──
+
+const ATTRACTION_SLOTS = new Set<GuideSlot>([
+  "main_attraction", "morning_activity", "afternoon_activity",
+]);
+
+/** Tier a place: 1 = pack must-see, 2 = pack strong / very famous, 3 = optional. */
+function tierOf(p: Place, pack?: KnowledgePack): 1 | 2 | 3 {
+  if (pack) {
+    const t = packNameTier(pack, p.name);
+    if (t === 1) return 1;
+    if (t === 2) return 2;
+  }
+  const fame = p.popularity ?? 0;
+  if (fame >= 0.8) return 1;
+  if (fame >= 0.5) return 2;
+  return 3;
+}
+
+function applyTiers(days: ItineraryDay[], pack?: KnowledgePack): void {
+  for (const d of days) for (const s of d.stops) s.place.tier = tierOf(s.place, pack);
+}
+
+/** Best verified pool place matching a known name (≥0.7 similarity). */
+function bestPoolByName(name: string, pool: Place[], used: Set<string>): Place | null {
+  let best: Place | null = null;
+  let bestSim = 0;
+  for (const p of pool) {
+    if (used.has(p.id)) continue;
+    const sim = nameSimilarity(name, p.name);
+    if (sim >= 0.7 && sim > bestSim) {
+      bestSim = sim;
+      best = p;
+    }
+  }
+  return best;
+}
+
+function nameIsPresent(name: string, present: Set<string>): boolean {
+  const nx = norm(name);
+  for (const pn of present) {
+    if (pn === nx || (nx.length >= 5 && (pn.includes(nx) || nx.includes(pn)))) return true;
+  }
+  return false;
+}
+
+/**
+ * Guarantee the destination's Tier-1 must-sees appear: any missing one that we
+ * can verify against the real OSM pool REPLACES the weakest (Tier-3) anchor, so
+ * a world-famous sight is never absent because a smaller place was closer. We
+ * never inject a must-see we can't verify (no invented coordinates).
+ */
+function injectMustSees(
+  days: ItineraryDay[],
+  pool: Place[],
+  pack: KnowledgePack,
+  city: string
+): void {
+  const present = new Set<string>();
+  days.forEach((d) => d.stops.forEach((s) => present.add(norm(s.place.name))));
+  const usedPool = new Set<string>();
+
+  for (const name of pack.mustSee) {
+    if (nameIsPresent(name, present)) continue;
+    const match = bestPoolByName(name, pool, usedPool);
+    if (!match) continue; // can't verify it → never invent; skip
+
+    // Find a weak anchor to replace (Tier-3 main attraction, else Tier-3 activity).
+    let target: ItineraryStop | undefined;
+    for (const d of days) {
+      target = d.stops.find((s) => s.slot === "main_attraction" && (s.place.tier ?? 3) >= 3);
+      if (target) break;
+    }
+    if (!target) {
+      for (const d of days) {
+        target = d.stops.find((s) => ATTRACTION_SLOTS.has(s.slot as GuideSlot) && (s.place.tier ?? 3) >= 3);
+        if (target) break;
+      }
+    }
+    if (!target) continue;
+
+    usedPool.add(match.id);
+    const p: Place = { ...match, tier: 1, hiddenGem: false };
+    if (!p.imageUrl) p.imageUrl = categoryImage(p.category, p.name);
+    present.delete(norm(target.place.name));
+    present.add(norm(p.name));
+    target.place = p;
+    target.note = `A must-see of ${city} — one of its defining sights; arrive early to beat the crowds.`;
+  }
+}
+
+/**
+ * Drop low-confidence ATTRACTION stops (<70%), per the spec, while keeping every
+ * day complete (≥3 stops and a main attraction). Backfill then refills from the
+ * tier-preferred pool. Meals/coffee/sunset/night are structural and never gated.
+ */
+function gateLowConfidence(days: ItineraryDay[]): void {
+  for (const d of days) {
+    d.stops.forEach((s) => (s.place.confidence = confidenceScore(s.place)));
+    const kept = d.stops.filter((s) => {
+      const isAttraction = ATTRACTION_SLOTS.has(s.slot as GuideSlot);
+      // Photos resolve later; credit verified places now so a real Tier-2 sight
+      // isn't gated just because its photo hasn't been fetched yet.
+      const gate =
+        (s.place.confidence ?? 0) +
+        (s.place.verified && !s.place.photoResolved ? 0.15 : 0);
+      return !(isAttraction && gate < 0.7);
+    });
+    const hadMain = d.stops.some((s) => s.slot === "main_attraction");
+    const keepsMain = kept.some((s) => s.slot === "main_attraction");
+    if (kept.length >= 3 && (keepsMain || !hadMain)) d.stops = kept;
   }
 }
 
@@ -487,6 +617,14 @@ function fmtHM(min: number): string {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
+/** First opening time (minutes) from an OSM opening_hours string, if parseable. */
+function firstOpenMinutes(oh?: string): number | null {
+  if (!oh) return null;
+  if (/24\/7/.test(oh)) return 0;
+  const m = oh.match(/(\d{1,2}):(\d{2})/);
+  return m ? parseInt(m[1], 10) * 60 + parseInt(m[2], 10) : null;
+}
+
 /**
  * Assign each stop a realistic clock time: anchor to the guide's canonical slot
  * time, then push later as real travel + dwell time accumulates — so the day
@@ -503,6 +641,9 @@ function scheduleDay(day: ItineraryDay): void {
       const earliest = clock + (st.travelFromPrevMin ?? 0);
       clock = desired != null ? Math.max(earliest, desired) : earliest;
     }
+    // Never schedule a stop before it opens (when OSM hours are known).
+    const open = firstOpenMinutes(st.place.openingHours);
+    if (open != null && clock < open) clock = open;
     st.startTime = fmtHM(clock);
     clock += st.durationMin ?? 60;
   });

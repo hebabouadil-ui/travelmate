@@ -205,7 +205,10 @@ export default function TripDetail() {
               </View>
               <Text style={styles.auditNote}>
                 Verified stops are matched to a real mapped location with correct
-                coordinates. Ranking favours globally famous places (Wikidata).
+                coordinates. Ranking favours must-see, globally famous places.
+                {typeof trip.audit.destinationConfidence === "number"
+                  ? ` Destination expertise: ${trip.audit.destinationConfidence}%.`
+                  : ""}
               </Text>
             </View>
           </View>

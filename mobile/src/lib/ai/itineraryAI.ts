@@ -1,4 +1,5 @@
 import type { Daypart, GuideSlot, PlaceCategory, TripRequest } from "../types";
+import type { KnowledgePack } from "../data/knowledge";
 import { getProvider, extractJson } from "./provider";
 
 export interface AIStop {
@@ -85,11 +86,24 @@ function chunkPrompt(
   fromDay: number,
   toDay: number,
   avoid: string[],
-  wantMeta: boolean
+  wantMeta: boolean,
+  pack?: KnowledgePack
 ): string {
   const p = req.profile ?? {};
   const personalized = req.mode !== "recommended";
   const interests = req.interests?.length ? req.interests.join(", ") : "general sightseeing";
+  const expertise = pack
+    ? `
+
+DESTINATION EXPERTISE — these are REAL, verified local-expert picks. Build the days around them; do NOT invent alternatives when these fit:
+- MUST-SEE (use as the main_attraction across days, most famous first): ${pack.mustSee.join("; ")}
+- STRONG sights: ${pack.strong.join("; ")}
+- BEST SUNSET spots: ${pack.sunsetSpots.join("; ")}
+- FOOD experiences: ${pack.foodExperiences.join("; ")}
+- NEIGHBORHOODS to base days around: ${pack.neighborhoods.join("; ")}
+- CULTURAL experiences: ${pack.culturalExperiences.join("; ")}
+Your job is to ORGANISE, optimise and personalise these into a flowing day — not to replace them with lesser-known places.`
+    : "";
   const meta = wantMeta
     ? `"overview": "<2-3 vivid sentences on why ${place} is worth visiting>",
   "highlights": ["<3-5 short reasons to go>"],
@@ -101,7 +115,7 @@ function chunkPrompt(
   return `Plan days ${fromDay}-${toDay} of a ${req.days}-day trip to ${place} as a LOCAL GUIDE designing the perfect complete day — not a list of attractions.
 
 TRAVELLER: group/style ${p.travelerType ?? "explorer"}, budget ${req.budget}, food ${p.foodPreference ?? "none"}, pace ${p.activityLevel ?? "moderate"}.
-MODE: ${personalized ? `PERSONALIZED — strongly weight these interests: ${interests}. They MUST shape the activities and main attraction chosen.` : "RECOMMENDED — the most iconic, must-see experiences."}
+MODE: ${personalized ? `PERSONALIZED — strongly weight these interests: ${interests}. They MUST shape the activities and main attraction chosen.` : "RECOMMENDED — the most iconic, must-see experiences."}${expertise}
 
 DESIGN EACH DAY AS A GUIDED EXPERIENCE — answer "what should I do from waking up to night?". Follow THIS EXACT structure, in order, one stop per slot:
 1. breakfast (cafe/restaurant) — start the day right, near where the day begins
@@ -214,7 +228,8 @@ function cleanDays(rawDays: AIDay[] | undefined, startDay: number): AIDay[] {
  */
 export async function aiPlanItinerary(
   req: TripRequest,
-  place: string
+  place: string,
+  pack?: KnowledgePack
 ): Promise<AIPlan | null> {
   const provider = getProvider();
   if (!provider.isLive) return null;
@@ -232,7 +247,7 @@ export async function aiPlanItinerary(
       const raw = await provider.complete(
         [
           { role: "system", content: SYSTEM },
-          { role: "user", content: chunkPrompt(req, place, from, to, avoid, wantMeta) },
+          { role: "user", content: chunkPrompt(req, place, from, to, avoid, wantMeta, pack) },
         ],
         { json: true, temperature: 0.9, maxOutputTokens: 8192 }
       );

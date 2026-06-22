@@ -12,6 +12,7 @@ import * as Haptics from "expo-haptics";
 import type { DestinationMatch, ItineraryStop, Place } from "@/lib/types";
 import { categoryImage } from "@/lib/data/wikipedia";
 import { resolveStopMedia } from "@/lib/data/media";
+import { getKnowledgePack } from "@/lib/data/knowledge";
 import { currencySymbol } from "@/lib/currency";
 import { SmartImage } from "./SmartImage";
 import {
@@ -39,6 +40,7 @@ export function DestinationCard({
 }) {
   const tone =
     match.score >= 85 ? colors.success : match.score >= 70 ? colors.accent : colors.warning;
+  const pack = getKnowledgePack(match.name);
   return (
     <Pressable
       onPress={() => {
@@ -81,6 +83,18 @@ export function DestinationCard({
         <Text style={styles.destReason} numberOfLines={2}>
           {match.reason}
         </Text>
+        {pack ? (
+          <View style={styles.destFacts}>
+            <Icon name="location" size={11} color={colors.white} />
+            <Text style={styles.destFact}>{pack.attractionCount} sights</Text>
+            <Text style={styles.destFactDot}>·</Text>
+            <Icon name="calendar" size={11} color={colors.white} />
+            <Text style={styles.destFact}>Best {pack.bestMonths[0]}–{pack.bestMonths[pack.bestMonths.length - 1]}</Text>
+            <Text style={styles.destFactDot}>·</Text>
+            <Icon name="wallet" size={11} color={colors.white} />
+            <Text style={styles.destFact}>~${pack.budgetPerDay.medium}/day</Text>
+          </View>
+        ) : null}
       </View>
     </Pressable>
   );
@@ -188,6 +202,12 @@ export function StopCard({
                 <Text style={[styles.daypartText, { color: momentColor }]}>{momentLabel}</Text>
               </View>
               <View style={styles.badgeRow}>
+                {stop.place.tier === 1 && (
+                  <View style={styles.tier1}>
+                    <Icon name="star" size={10} color={colors.warning} fill />
+                    <Text style={styles.tier1Text}>Must-see</Text>
+                  </View>
+                )}
                 {stop.place.hiddenGem && (
                   <View style={styles.gem}>
                     <Icon name="diamond" size={10} color={colors.accent} />
@@ -225,6 +245,15 @@ export function StopCard({
                   <Text style={[styles.stopMeta, { color: colors.accent }]}>{stop.place.bestTime}</Text>
                 </>
               ) : null}
+              {typeof stop.place.confidence === "number" ? (
+                <>
+                  <Text style={styles.stopDot2}>·</Text>
+                  <View style={[styles.confDot, { backgroundColor: confColor(stop.place.confidence) }]} />
+                  <Text style={[styles.stopMeta, { color: confColor(stop.place.confidence), fontWeight: "700" }]}>
+                    {Math.round(stop.place.confidence * 100)}%
+                  </Text>
+                </>
+              ) : null}
             </View>
 
             {stop.note ? <Text style={styles.stopNote} numberOfLines={2}>{stop.note}</Text> : null}
@@ -252,6 +281,12 @@ export function StopCard({
       </View>
     </View>
   );
+}
+
+function confColor(c: number): string {
+  if (c >= 0.85) return colors.success;
+  if (c >= 0.7) return colors.accent;
+  return colors.warning;
 }
 
 const TRANSPORT_META: Record<string, { icon: string; label: string }> = {
@@ -335,6 +370,9 @@ const styles = StyleSheet.create({
   destMetaRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 },
   destCountry: { color: colors.textMuted, fontSize: font.small, fontWeight: "600" },
   destReason: { color: "rgba(255,255,255,0.82)", fontSize: font.small, marginTop: spacing.xs, lineHeight: 18 },
+  destFacts: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: spacing.sm, flexWrap: "wrap" },
+  destFact: { color: colors.white, fontSize: font.tiny, fontWeight: "700" },
+  destFactDot: { color: "rgba(255,255,255,0.5)", fontSize: font.tiny },
 
   mini: {
     ...shadow.card,
@@ -388,6 +426,9 @@ const styles = StyleSheet.create({
   daypartPill: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: spacing.md, paddingVertical: 5, borderRadius: radius.pill },
   daypartText: { fontSize: font.tiny, fontWeight: "700", letterSpacing: 0.2 },
   badgeRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  tier1: { flexDirection: "row", alignItems: "center", gap: 3 },
+  tier1Text: { color: colors.warning, fontSize: font.tiny, fontWeight: "800" },
+  confDot: { width: 6, height: 6, borderRadius: 3 },
   gem: { flexDirection: "row", alignItems: "center", gap: 3 },
   gemText: { color: colors.accent, fontSize: font.tiny, fontWeight: "700" },
   verified: { flexDirection: "row", alignItems: "center", gap: 3 },

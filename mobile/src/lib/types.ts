@@ -68,6 +68,8 @@ export interface Place extends GeoPoint {
   popularity?: number;
   /** 0..1 confidence that this recommendation is real, well-placed and notable. */
   confidence?: number;
+  /** Priority tier from destination knowledge: 1 = must-see, 2 = strong, 3 = optional. */
+  tier?: 1 | 2 | 3;
   imageUrl?: string;
   /** True once a real (Wikipedia/Foursquare) photo has been resolved for this
    *  place, so the UI knows it's not just a category placeholder. */
@@ -186,6 +188,8 @@ export interface ItineraryAudit {
   fromWikidata: number;
   /** Average per-stop confidence (0..1). */
   avgConfidence: number;
+  /** Our coverage confidence for this destination (0..100), if we have a pack. */
+  destinationConfidence?: number;
 }
 
 export type ItineraryMode = "personalized" | "recommended";

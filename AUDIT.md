@@ -190,6 +190,20 @@ enrichment → persisted to store.
   fame dominates distance; confidence-based hidden gems.
 - ✅ Per-stop confidence score + itinerary self-audit panel (verified /
   approximate / OSM / Wikidata / avg confidence).
+- ✅ Guided full-day structure (breakfast → night) with clock times + reasons.
+- ✅ V2 Knowledge Packs: curated expert data for 9 flagship cities (Marrakech,
+  Madrid, Tangier, Tokyo, Paris, Rome, Barcelona, Istanbul, Lisbon) — must-see
+  tiers, sunset/food/neighborhood/cultural picks, best months, budget, weather.
+- ✅ V2 Tier 1/2/3 priority; Tier-1 dominates selection; missing must-sees are
+  injected (replacing weak anchors) — verified against OSM, never invented.
+- ✅ V2 confidence factors per spec (verified, photo, hours, knowledge match,
+  fame) + <70% gating for attractions (day always stays complete).
+- ✅ V2 knowledge-first AI: pack fed INTO the prompt so AI organises around real
+  verified picks rather than inventing. Opening-hours guard in scheduling.
+- ✅ V2 Discover cards enriched (attraction count, best months, budget).
+- ◐ V2 staged: weather-based indoor/outdoor swaps, directional N→Center→S
+  routing, Pexels photo fallback, full Discover redesign (confidence/weather
+  suitability blocks).
 
 ## 6. Ranking Methodology (how "best" is decided)
 
