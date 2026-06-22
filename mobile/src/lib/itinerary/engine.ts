@@ -15,6 +15,7 @@ import { discoverPlaces } from "../data/places";
 import { getWeather } from "../data/weather";
 import { buildOverview } from "../data/overviews";
 import { categoryImage, cityHeroImage as cityImageFor } from "../data/wikipedia";
+import { currencyForCountry } from "../currency";
 import { dayRoute } from "../data/routing";
 import { clusterIntoDays, nearestWhere, optimizeRoute, planPerDay } from "./optimize";
 import { dailyTransport, stopCost } from "./budget";
@@ -77,11 +78,13 @@ export async function generateItinerary(req: TripRequest): Promise<Itinerary> {
       }
     : await geocode(req.destination);
 
-  const [aiPlan, weather, heroImage, pool] = await Promise.all([
+  // Note: we deliberately DON'T fetch the (slow) Overpass pool up-front. When
+  // the AI returns full days we don't need it at all — fetching it lazily only
+  // when a day is thin removes ~10-20s from a normal AI generation.
+  const [aiPlan, weather, heroImage] = await Promise.all([
     aiPlanItinerary(req, req.destination).catch(() => null),
     getWeather(geo.center, req.startDate, req.days),
     cityImageFor(geo.name).catch(() => undefined),
-    discoverPlaces(req.destination, geo.center).catch(() => [] as Place[]),
   ]);
 
   let days: ItineraryDay[];
@@ -89,6 +92,7 @@ export async function generateItinerary(req: TripRequest): Promise<Itinerary> {
   let highlights: string[];
   let country: string | undefined;
   let engine: Itinerary["engine"];
+  let pool: Place[] = [];
 
   if (aiPlan) {
     days = buildDaysFromAI(aiPlan, geo, req, weather);
@@ -96,7 +100,12 @@ export async function generateItinerary(req: TripRequest): Promise<Itinerary> {
     highlights = aiPlan.highlights?.length ? aiPlan.highlights : buildOverview(req).highlights;
     country = aiPlan.country;
     engine = "gemini";
+    // Only pay for Overpass if the AI left a day thin.
+    if (days.some((d) => d.stops.length < MIN_STOPS_PER_DAY)) {
+      pool = await discoverPlaces(req.destination, geo.center).catch(() => []);
+    }
   } else {
+    pool = await discoverPlaces(req.destination, geo.center).catch(() => []);
     days = await buildDeterministicDays(req, geo, weather, pool);
     const ov = buildOverview(req);
     overview = ov.overview;
@@ -110,11 +119,12 @@ export async function generateItinerary(req: TripRequest): Promise<Itinerary> {
   await finalizeDays(days, pool, geo.center, req);
 
   const totalEstimatedCost = days.reduce((s, d) => s + d.estimatedCost, 0);
+  const resolvedCountry = country ?? lastSegment(geo.displayName);
 
   return {
     id: makeId("trip"),
     destination: geo.name,
-    country,
+    country: resolvedCountry,
     center: geo.center,
     overview,
     highlights,
@@ -123,10 +133,17 @@ export async function generateItinerary(req: TripRequest): Promise<Itinerary> {
     profile: req.profile ?? {},
     mode: req.mode ?? "personalized",
     totalEstimatedCost,
-    currency: "EUR",
+    currency: currencyForCountry(resolvedCountry),
     createdAt: new Date().toISOString(),
     engine,
   };
+}
+
+/** Last comma-separated segment of a display name (usually the country). */
+function lastSegment(displayName?: string): string | undefined {
+  if (!displayName) return undefined;
+  const parts = displayName.split(",").map((p) => p.trim()).filter(Boolean);
+  return parts[parts.length - 1];
 }
 
 /** Is a coordinate plausible (near the destination, not a hallucination)? */
@@ -165,7 +182,7 @@ function placeFromAIStop(s: AIStop, geo: GeocodeResult, seed: number): Place {
     tags: s.cuisine ? [s.cuisine] : [],
     score: 0.9,
     source: "ai",
-    imageUrl: categoryImage(s.category),
+    imageUrl: categoryImage(s.category, s.name),
   };
 }
 
@@ -225,7 +242,7 @@ async function finalizeDays(
       for (const p of candidates) {
         if (day.stops.length >= MIN_STOPS_PER_DAY) break;
         used.add(norm(p.name));
-        if (!p.imageUrl) p.imageUrl = categoryImage(p.category);
+        if (!p.imageUrl) p.imageUrl = categoryImage(p.category, p.name);
         day.stops.push({
           daypart: pickDaypart(day.stops.length),
           place: p,
@@ -302,7 +319,7 @@ async function buildDeterministicDays(
     const ordered = optimizeRoute(group, center);
     const stops = buildStops(ordered, food, scored, center, usedFood, usedExtra, req, wantsEvening);
     stops.forEach((st) => {
-      if (!st.place.imageUrl) st.place.imageUrl = categoryImage(st.place.category);
+      if (!st.place.imageUrl) st.place.imageUrl = categoryImage(st.place.category, st.place.name);
     });
     return {
       day: idx + 1,

@@ -15,6 +15,7 @@ import Reanimated, { FadeIn, Layout } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { colors, font, radius, spacing } from "@/theme";
 import { EmptyState, GhostButton, Pill } from "@/components/ui";
+import { SmartImage } from "@/components/SmartImage";
 import { useProfile } from "@/store/useProfile";
 import { SEED_CITIES } from "@/lib/data/seed";
 import { formatCurrency, humanDate } from "@/lib/utils";
@@ -60,7 +61,7 @@ export default function Trips() {
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           <Text style={styles.hint}>Swipe a trip left to delete</Text>
           {savedTrips.map((trip) => {
-            const img = cityImage(trip.destination);
+            const img = trip.imageUrl || cityImage(trip.destination);
             const fav = favorites.includes(trip.id);
             return (
               <Reanimated.View key={trip.id} entering={FadeIn} layout={Layout.springify()}>
@@ -76,13 +77,7 @@ export default function Trips() {
                     style={styles.tripCard}
                     onPress={() => router.push(`/trip/${trip.id}`)}
                   >
-                    {img ? (
-                      <Image source={{ uri: img }} style={styles.tripThumb} />
-                    ) : (
-                      <View style={[styles.tripThumb, styles.tripThumbFallback]}>
-                        <Ionicons name="airplane" size={22} color={colors.primary} />
-                      </View>
-                    )}
+                    <SmartImage uri={img} icon="airplane" style={styles.tripThumb} />
                     <View style={{ flex: 1 }}>
                       <Text style={styles.tripName}>{trip.destination}</Text>
                       <Text style={styles.tripMeta}>

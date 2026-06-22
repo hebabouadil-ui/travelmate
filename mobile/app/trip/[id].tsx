@@ -8,8 +8,10 @@ import {
   Image,
   Share,
   Alert,
+  Platform,
+  StatusBar,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -46,6 +48,8 @@ export default function TripDetail() {
 
   const [activeDay, setActiveDay] = useState(0);
   const [sheetStop, setSheetStop] = useState<ItineraryStop | null>(null);
+  const insets = useSafeAreaInsets();
+  const topPad = Math.max(insets.top, Platform.OS === "android" ? StatusBar.currentHeight ?? 0 : 0, 12);
 
   const day = trip?.days[activeDay];
   const dayPlaces = useMemo(() => day?.stops.map((s) => s.place) ?? [], [day]);
@@ -122,7 +126,7 @@ export default function TripDetail() {
             <LinearGradient colors={colors.gradient} style={StyleSheet.absoluteFill} />
           )}
           <LinearGradient colors={["rgba(5,8,16,0.5)", "transparent", "rgba(11,15,26,1)"]} style={StyleSheet.absoluteFill} />
-          <SafeAreaView edges={["top"]} style={styles.heroNav}>
+          <View style={[styles.heroNav, { paddingTop: topPad }]}>
             <Pressable onPress={() => router.back()} style={styles.navBtn} hitSlop={8}>
               <Ionicons name="chevron-back" size={24} color={colors.white} />
             </Pressable>
@@ -134,7 +138,7 @@ export default function TripDetail() {
                 <Ionicons name={fav ? "heart" : "heart-outline"} size={20} color={fav ? colors.danger : colors.white} />
               </Pressable>
             </View>
-          </SafeAreaView>
+          </View>
           <View style={styles.heroBody}>
             <Text style={styles.heroTitle}>{trip.destination}</Text>
             <View style={styles.heroMeta}>
@@ -243,6 +247,7 @@ export default function TripDetail() {
                       stop={stop}
                       index={i}
                       city={trip.destination}
+                      currency={trip.currency}
                       onPress={() => setSheetStop(stop)}
                       onRemove={() => removeStop(i)}
                       onNavigate={() => openDirections(stop.place, stop.place.name)}

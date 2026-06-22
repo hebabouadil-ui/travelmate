@@ -100,7 +100,21 @@ export default function Nearby() {
           </ScrollView>
 
           {loading ? (
-            <ActivityIndicator color={colors.primary} style={{ marginTop: spacing.xl }} />
+            <View style={{ marginTop: spacing.sm }}>
+              <View style={styles.loadingRow}>
+                <ActivityIndicator color={colors.primary} />
+                <Text style={styles.loadingText}>Finding great places around you…</Text>
+              </View>
+              {[0, 1, 2, 3].map((i) => (
+                <View key={i} style={styles.skeleton}>
+                  <View style={styles.skelIcon} />
+                  <View style={{ flex: 1, gap: 8 }}>
+                    <View style={[styles.skelBar, { width: "60%" }]} />
+                    <View style={[styles.skelBar, { width: "35%" }]} />
+                  </View>
+                </View>
+              ))}
+            </View>
           ) : (
             <>
               <View style={styles.countRow}>
@@ -124,6 +138,11 @@ export default function Nearby() {
 }
 
 const styles = StyleSheet.create({
+  loadingRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginBottom: spacing.lg },
+  loadingText: { color: colors.textMuted, fontSize: font.small, fontWeight: "600" },
+  skeleton: { flexDirection: "row", alignItems: "center", gap: spacing.md, backgroundColor: colors.card, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.md, marginBottom: spacing.sm },
+  skelIcon: { width: 42, height: 42, borderRadius: 12, backgroundColor: colors.surfaceAlt },
+  skelBar: { height: 12, borderRadius: 6, backgroundColor: colors.surfaceAlt },
   safe: { flex: 1, backgroundColor: colors.bg },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: spacing.lg },
   title: { color: colors.text, fontSize: font.hero, fontWeight: "900", letterSpacing: -0.5 },

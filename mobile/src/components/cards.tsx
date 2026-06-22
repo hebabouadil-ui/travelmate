@@ -10,7 +10,9 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import type { DestinationMatch, ItineraryStop, Place } from "@/lib/types";
-import { enrichPlace } from "@/lib/data/wikipedia";
+import { enrichPlace, categoryImage } from "@/lib/data/wikipedia";
+import { currencySymbol } from "@/lib/currency";
+import { SmartImage } from "./SmartImage";
 import {
   colors,
   radius,
@@ -106,6 +108,7 @@ export function StopCard({
   stop,
   index,
   city,
+  currency = "EUR",
   onRemove,
   onNavigate,
   onPress,
@@ -113,6 +116,7 @@ export function StopCard({
   stop: ItineraryStop;
   index: number;
   city?: string;
+  currency?: string;
   onRemove?: () => void;
   onNavigate?: () => void;
   onPress?: () => void;
@@ -161,9 +165,12 @@ export function StopCard({
           onPress={onPress}
           style={({ pressed }) => [styles.stopCard, { transform: [{ scale: pressed ? 0.99 : 1 }] }]}
         >
-          {image ? (
-            <Image source={{ uri: image }} style={styles.stopImage} />
-          ) : null}
+          <SmartImage
+            uri={image}
+            fallback={categoryImage(stop.place.category, stop.place.name)}
+            style={styles.stopImage}
+            icon={(meta.icon as any) ?? "image"}
+          />
 
           <View style={styles.stopBody}>
             <View style={styles.stopHeader}>
@@ -179,7 +186,9 @@ export function StopCard({
               )}
             </View>
 
-            <Text style={styles.stopName}>{stop.place.name}</Text>
+            <Text style={styles.stopName} numberOfLines={2} ellipsizeMode="tail">
+              {stop.place.name}
+            </Text>
             <View style={styles.stopMetaRow}>
               <Text style={styles.stopMeta}>{meta.emoji} {meta.label}</Text>
               <Text style={styles.stopDot2}>·</Text>
@@ -188,7 +197,7 @@ export function StopCard({
               {stop.estimatedCost ? (
                 <>
                   <Text style={styles.stopDot2}>·</Text>
-                  <Text style={styles.stopMeta}>€{stop.estimatedCost}</Text>
+                  <Text style={styles.stopMeta}>{currencySymbol(currency)}{stop.estimatedCost}</Text>
                 </>
               ) : null}
             </View>
