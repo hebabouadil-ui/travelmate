@@ -12,6 +12,7 @@ import type {
 import { addDays, haversineKm, makeId, walkingMinutes } from "../utils";
 import { geocode, type GeocodeResult } from "../data/geocode";
 import { discoverPlaces } from "../data/places";
+import { enrichPopularity } from "../data/popularity";
 import { getWeather } from "../data/weather";
 import { buildOverview } from "../data/overviews";
 import { categoryImage, cityHeroImage as cityImageFor } from "../data/wikipedia";
@@ -19,7 +20,7 @@ import { resolveStopMedia } from "../data/media";
 import { currencyForCountry } from "../currency";
 import { dayRoute } from "../data/routing";
 import { clusterIntoDays, nearestWhere, optimizeRoute, planPerDay } from "./optimize";
-import { attractionScore, isConfidentGem } from "./scoring";
+import { confidenceScore, isConfidentGem, selectionValue } from "./scoring";
 import { dailyTransport, stopCost } from "./budget";
 import { getProvider, extractJson } from "../ai/provider";
 import { CONCIERGE_SYSTEM, buildEnrichmentPrompt } from "../ai/prompts";
@@ -84,11 +85,20 @@ export async function generateItinerary(req: TripRequest): Promise<Itinerary> {
   // Fetch the real OSM POI pool IN PARALLEL with the AI call (which is the long
   // pole), so we can VERIFY the AI's places against real mapped locations
   // without adding much wall-clock time. This is the core "real, not fake" step.
+  // The pool is also enriched with a REAL popularity signal (Wikidata sitelink
+  // counts) so ranking reflects global fame, not just category/proximity. All of
+  // this overlaps with the AI call, so it adds little wall-clock time.
+  const poolPromise = discoverPlaces(req.destination, geo.center)
+    .then(async (pl) => {
+      await enrichPopularity(pl).catch(() => {});
+      return pl;
+    })
+    .catch(() => [] as Place[]);
   const [aiPlan, weather, heroImage, pool] = await Promise.all([
     aiPlanItinerary(req, req.destination).catch(() => null),
     getWeather(geo.center, req.startDate, req.days),
     cityImageFor(geo.name).catch(() => undefined),
-    discoverPlaces(req.destination, geo.center).catch(() => [] as Place[]),
+    poolPromise,
   ]);
 
   let days: ItineraryDay[];
@@ -124,6 +134,10 @@ export async function generateItinerary(req: TripRequest): Promise<Itinerary> {
   // generation fast and avoids the long waits/timeouts of enriching everything.
   if (days[0]) await enrichStopPhotos(days[0].stops, geo.name);
 
+  // Score every recommendation's confidence and build a data-quality audit so
+  // the plan can honestly report how many stops are verified vs. approximated.
+  const audit = buildAudit(days);
+
   const totalEstimatedCost = days.reduce((s, d) => s + d.estimatedCost, 0);
   // Prefer an explicitly picked country, then the AI's, then the geocoder's,
   // then the display-name tail — so currency/locale is rarely wrong.
@@ -145,6 +159,38 @@ export async function generateItinerary(req: TripRequest): Promise<Itinerary> {
     currency: currencyForCountry(resolvedCountry),
     createdAt: new Date().toISOString(),
     engine,
+    audit,
+  };
+}
+
+/**
+ * Compute each stop's confidence score and roll the whole plan up into a
+ * data-quality audit (verified vs. approximate, provenance, average confidence).
+ */
+function buildAudit(days: ItineraryDay[]): Itinerary["audit"] {
+  let total = 0;
+  let verified = 0;
+  let fromOSM = 0;
+  let fromWikidata = 0;
+  let confidenceSum = 0;
+  for (const day of days) {
+    for (const stop of day.stops) {
+      const p = stop.place;
+      p.confidence = confidenceScore(p);
+      total++;
+      confidenceSum += p.confidence;
+      if (p.verified) verified++;
+      if (p.source === "overpass" || p.verified) fromOSM++;
+      if (p.wikidataId || p.wikipediaTitle || p.wikipediaUrl) fromWikidata++;
+    }
+  }
+  return {
+    totalStops: total,
+    verified,
+    approximate: total - verified,
+    fromOSM,
+    fromWikidata,
+    avgConfidence: total ? Math.round((confidenceSum / total) * 100) / 100 : 0,
   };
 }
 
@@ -268,6 +314,9 @@ function groundDaysToPool(days: ItineraryDay[], pool: Place[]): void {
         p.verified = true;
         p.openingHours = p.openingHours ?? match.openingHours;
         p.wikipediaUrl = p.wikipediaUrl ?? match.wikipediaUrl;
+        p.wikidataId = p.wikidataId ?? match.wikidataId;
+        p.wikipediaTitle = p.wikipediaTitle ?? match.wikipediaTitle;
+        p.popularity = match.popularity ?? p.popularity; // real fame signal
         p.neighborhood = p.neighborhood ?? match.neighborhood;
         if (match.cuisine && !p.cuisine) p.cuisine = match.cuisine;
       } else {
@@ -330,15 +379,12 @@ async function finalizeDays(
   for (const day of days) {
     const anchor = day.stops[0]?.place ?? center;
     if (day.stops.length < MIN_STOPS_PER_DAY && pool.length) {
-      // Rank by real desirability (notability, tourist value, interest match)
-      // with a gentle distance penalty — so we backfill the BEST nearby places,
-      // not a random/nearest one.
+      // Rank by real desirability — global fame (Wikidata) dominates, with only
+      // a gentle distance tie-breaker, so the BEST places win and a famous
+      // attraction is never dropped just because a minor one is closer.
       const candidates = pool
         .filter((p) => !used.has(norm(p.name)))
-        .map((p) => ({
-          p,
-          v: attractionScore(p, req.interests) - haversineKm(anchor, p) * 0.04,
-        }))
+        .map((p) => ({ p, v: selectionValue(p, haversineKm(anchor, p), req.interests) }))
         .sort((a, b) => b.v - a.v)
         .map((x) => x.p);
       for (const p of candidates) {

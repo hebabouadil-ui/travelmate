@@ -4,13 +4,16 @@ import type { Interest, Place, PlaceCategory } from "../types";
  * Attraction scoring engine.
  *
  * Free OSM/Wikipedia data has no star ratings or review counts, so — per the
- * "never invent data" rule — we DO NOT fabricate them. Instead we score using
- * signals we can actually trust:
- *   - notability  (a linked Wikipedia/Wikidata entry ⇒ a real, significant site)
+ * "never invent data" rule — we DO NOT fabricate them. Instead we rank on
+ * signals we can actually trust, with GLOBAL FAME as the dominant factor:
+ *   - popularity  (Wikidata sitelink count → how many language Wikipedias cover
+ *                  it; a real, source-backed fame proxy)            ← dominant
  *   - tourist value of the category (a monument outranks a generic mall)
  *   - interest match (does it fit what the traveller asked for?)
  *   - verification (grounded to a real OSM POI)
- * The result is a 0..1 score used to rank candidates for selection/backfill.
+ * The result is a 0..1 score used to rank candidates. Fame deliberately
+ * outweighs distance at selection time, so a world-famous attraction is never
+ * dropped just because a smaller place sits closer.
  */
 
 const INTEREST_CATEGORIES: Record<Interest, PlaceCategory[]> = {
@@ -41,9 +44,22 @@ const CATEGORY_VALUE: Record<PlaceCategory, number> = {
   shopping: 0.5,
 };
 
+/** Weights — popularity (fame) is intentionally the heaviest term. */
+const W_POPULARITY = 0.6;
+const W_CATEGORY = 0.3;
+const W_INTEREST = 0.2;
+const W_VERIFIED = 0.06;
+const W_GEM = 0.04;
+
 /** True when a place is a well-documented, notable site (Wikipedia/Wikidata). */
 function isNotable(p: Place): boolean {
-  return Boolean(p.wikipediaUrl) || (p.score ?? 0) >= 0.85;
+  return Boolean(p.wikidataId || p.wikipediaTitle || p.wikipediaUrl) || (p.score ?? 0) >= 0.85;
+}
+
+/** Best available 0..1 fame value: real popularity, else a notability fallback. */
+export function fameValue(p: Place): number {
+  if (typeof p.popularity === "number") return p.popularity;
+  return isNotable(p) ? 0.5 : 0;
 }
 
 /** 0..1 desirability score for a place given the traveller's interests. */
@@ -51,13 +67,36 @@ export function attractionScore(p: Place, interests: Interest[] = []): number {
   const wanted = new Set<PlaceCategory>();
   interests.forEach((i) => INTEREST_CATEGORIES[i]?.forEach((c) => wanted.add(c)));
 
-  let score = CATEGORY_VALUE[p.category] ?? 0.5;
-  if (isNotable(p)) score += 0.18;
-  if (p.verified) score += 0.08;
-  if (wanted.has(p.category)) score += 0.22;
-  // gentle nudge toward authentic spots when they're a confident gem
-  if (p.hiddenGem) score += 0.05;
-  return Math.min(1, score);
+  let s = fameValue(p) * W_POPULARITY;
+  s += (CATEGORY_VALUE[p.category] ?? 0.5) * W_CATEGORY;
+  if (wanted.has(p.category)) s += W_INTEREST;
+  if (p.verified) s += W_VERIFIED;
+  if (p.hiddenGem) s += W_GEM;
+  return Math.min(1, s);
+}
+
+/**
+ * Selection value used when choosing which places make the cut. Fame dominates;
+ * distance is only a gentle tie-breaker (~0.005/km), so a famous attraction a
+ * few km away still beats a minor one next door.
+ */
+export function selectionValue(p: Place, distanceKm: number, interests: Interest[] = []): number {
+  return attractionScore(p, interests) - distanceKm * 0.005;
+}
+
+/**
+ * Confidence (0..1) that THIS recommendation is trustworthy: a real, well-placed,
+ * documented place — not an AI approximation. This is the per-stop score shown
+ * in the quality audit.
+ */
+export function confidenceScore(p: Place): number {
+  let c = 0;
+  if (p.verified) c += 0.4; // grounded to a real OSM POI
+  if (p.wikidataId || p.wikipediaTitle || p.wikipediaUrl) c += 0.25; // documented
+  if (typeof p.popularity === "number") c += p.popularity > 0 ? 0.15 : 0.05;
+  if (p.source === "overpass" || p.verified) c += 0.1; // real-world coordinates
+  if (p.openingHours || p.cuisine) c += 0.1; // concrete attributes on file
+  return Math.min(1, Math.round(c * 100) / 100);
 }
 
 /**
@@ -66,9 +105,8 @@ export function attractionScore(p: Place, interests: Interest[] = []): number {
  * above a threshold so the badge stays meaningful.
  */
 export function gemConfidence(p: Place): number {
-  // Major, heavily-documented sites are by definition not hidden.
-  if (isNotable(p)) return 0;
-  // Real, mapped places in "local-feel" categories are the best candidates.
+  // Famous, heavily-documented sites are by definition not hidden.
+  if (fameValue(p) >= 0.45 || isNotable(p)) return 0;
   const local: PlaceCategory[] = ["cafe", "viewpoint", "park", "restaurant", "landmark"];
   let c = 0;
   if (local.includes(p.category)) c += 0.5;

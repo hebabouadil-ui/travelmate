@@ -103,6 +103,8 @@ function toPlace(el: OverpassElement): Place | null {
     score:
       isMajor ? 0.9 : category === "restaurant" || category === "cafe" ? 0.5 : 0.6,
     source: "overpass",
+    wikidataId: tags.wikidata,
+    wikipediaTitle: tags.wikipedia ? tags.wikipedia.replace(/^[a-z]+:/, "") : undefined,
     wikipediaUrl: tags.wikipedia
       ? `https://en.wikipedia.org/wiki/${encodeURIComponent(
           tags.wikipedia.replace(/^[a-z]+:/, "")

@@ -119,6 +119,9 @@ export function PlaceSheet({
                   {place.verified
                     ? "Verified location · OpenStreetMap"
                     : "Location approximate — not independently verified"}
+                  {typeof place.confidence === "number"
+                    ? `  ·  ${Math.round(place.confidence * 100)}% confidence`
+                    : ""}
                 </Text>
               </View>
 

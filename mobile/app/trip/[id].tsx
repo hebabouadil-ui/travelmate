@@ -37,6 +37,15 @@ function cityImage(name: string): string | undefined {
   )?.image;
 }
 
+function AuditStat({ value, label }: { value: string; label: string }) {
+  return (
+    <View style={styles.auditStat}>
+      <Text style={styles.auditValue}>{value}</Text>
+      <Text style={styles.auditLabel}>{label}</Text>
+    </View>
+  );
+}
+
 export default function TripDetail() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -173,6 +182,35 @@ export default function TripDetail() {
           </View>
         ) : null}
 
+        {/* Plan quality / data-provenance audit */}
+        {trip.audit ? (
+          <View style={styles.section}>
+            <View style={styles.auditCard}>
+              <View style={styles.overviewHeader}>
+                <View style={[styles.overviewIcon, { backgroundColor: colors.success }]}>
+                  <Icon name="checkmark-circle" size={16} color={colors.white} />
+                </View>
+                <Text style={styles.overviewTitle}>Plan quality</Text>
+                <View style={styles.confBadge}>
+                  <Text style={styles.confBadgeText}>
+                    {Math.round(trip.audit.avgConfidence * 100)}% confidence
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.auditGrid}>
+                <AuditStat value={`${trip.audit.verified}/${trip.audit.totalStops}`} label="Verified places" />
+                <AuditStat value={`${trip.audit.fromOSM}`} label="From OpenStreetMap" />
+                <AuditStat value={`${trip.audit.fromWikidata}`} label="Notable (Wikipedia)" />
+                <AuditStat value={`${trip.audit.approximate}`} label="AI approximations" />
+              </View>
+              <Text style={styles.auditNote}>
+                Verified stops are matched to a real mapped location with correct
+                coordinates. Ranking favours globally famous places (Wikidata).
+              </Text>
+            </View>
+          </View>
+        ) : null}
+
         {/* Map */}
         <View style={styles.section}>
           <TripMap
@@ -292,6 +330,14 @@ const styles = StyleSheet.create({
   overviewIcon: { width: 28, height: 28, borderRadius: 9, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
   overviewTitle: { color: colors.text, fontSize: font.h3, fontWeight: "800", flex: 1 },
   overviewText: { color: colors.textMuted, fontSize: font.body, lineHeight: 23 },
+  auditCard: { backgroundColor: colors.card, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: spacing.lg },
+  confBadge: { backgroundColor: colors.success + "1A", borderRadius: radius.pill, paddingHorizontal: spacing.sm, paddingVertical: 4 },
+  confBadgeText: { color: colors.success, fontSize: font.tiny, fontWeight: "800" },
+  auditGrid: { flexDirection: "row", flexWrap: "wrap", marginTop: spacing.md },
+  auditStat: { width: "50%", paddingVertical: spacing.sm },
+  auditValue: { color: colors.text, fontSize: font.h2, fontWeight: "900" },
+  auditLabel: { color: colors.textFaint, fontSize: font.tiny, marginTop: 2 },
+  auditNote: { color: colors.textMuted, fontSize: font.tiny, lineHeight: 17, marginTop: spacing.sm },
   highlightWrap: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginTop: spacing.md },
   highlightChip: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: colors.accent + "14", borderColor: colors.accent + "44", borderWidth: 1, borderRadius: radius.pill, paddingHorizontal: spacing.sm, paddingVertical: 5 },
   highlightText: { color: colors.accent, fontSize: font.tiny, fontWeight: "700" },

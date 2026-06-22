@@ -184,3 +184,39 @@ enrichment → persisted to store.
 - ✅ H1 — distinct real per-place photos (Commons geosearch + seeded fallback).
 - ✅ H2 — photo loading speed (thumbnails, day-1 up-front, lazy rest).
 - ◐ H3 — generation latency (partial).
+- ✅ P2 — verified places: AI stops grounded to real OSM POIs (coords/name/
+  hours), unmatched flagged unverified.
+- ✅ P3 — attraction scoring with REAL fame signal (Wikidata sitelink counts);
+  fame dominates distance; confidence-based hidden gems.
+- ✅ Per-stop confidence score + itinerary self-audit panel (verified /
+  approximate / OSM / Wikidata / avg confidence).
+
+## 6. Ranking Methodology (how "best" is decided)
+
+Free data (OSM/Wikipedia) has **no review counts or star ratings**, so we never
+invent them. Ranking uses only source-backed signals:
+
+| Signal | Source | Weight | Notes |
+|---|---|---|---|
+| **Global fame / popularity** | Wikidata sitelink count (# of language Wikipedias) | **0.60 (dominant)** | log-scaled 0..1; Eiffel Tower ≈200 langs → ~1.0, minor site → ~0.1 |
+| Category tourist value | curated table | 0.30 | monument > museum > park > café/mall |
+| Interest match | user's selected interests | 0.20 | boosts categories the traveller asked for |
+| Verified | OSM match | 0.06 | real, mapped location |
+| Hidden-gem | confidence model | 0.04 | authentic, low-traffic only |
+
+**Distance is only a ~0.005/km tie-breaker** at selection time, so a world-famous
+attraction is never dropped because a smaller place is closer.
+
+**Per category:**
+- **Restaurants / cafés / nightlife:** OSM has *no* quality signal for these, so
+  they cannot be truly ranked "best" on free data — they're ranked by category
+  value + interest + proximity and marked **lower confidence**. True
+  best-restaurant ranking requires a paid reviews API (Google Places / Foursquare).
+- **Monuments / landmarks / museums / attractions:** ranked by real fame
+  (Wikidata) — this is where the engine is genuinely strong.
+- **Hidden gems:** by definition *not* famous, so fame can't rank them; we label
+  a gem only when it's a verified, authentic, low-traffic spot above a threshold.
+
+**Confidence score (per stop, 0..1):** verified +0.40, documented (Wikidata/
+Wikipedia) +0.25, popularity known +0.15, real coordinates +0.10, concrete
+attributes (hours/cuisine) +0.10.

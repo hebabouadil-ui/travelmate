@@ -59,6 +59,15 @@ export interface Place extends GeoPoint {
   cuisine?: string;
   source: "overpass" | "opentripmap" | "wikipedia" | "ai" | "mock";
   wikipediaUrl?: string;
+  /** Wikidata entity id (e.g. "Q243") from OSM — used to fetch fame/popularity. */
+  wikidataId?: string;
+  /** Wikipedia article title (e.g. "Eiffel Tower") for pageview/popularity lookups. */
+  wikipediaTitle?: string;
+  /** 0..1 global-fame signal derived from Wikidata sitelink count (how many
+   *  language Wikipedias cover it). A real, source-backed popularity proxy. */
+  popularity?: number;
+  /** 0..1 confidence that this recommendation is real, well-placed and notable. */
+  confidence?: number;
   imageUrl?: string;
   /** True once a real (Wikipedia/Foursquare) photo has been resolved for this
    *  place, so the UI knows it's not just a category placeholder. */
@@ -141,6 +150,23 @@ export interface Itinerary {
   createdAt: string;
   /** Which engine produced this plan. */
   engine: "gemini" | "mock" | "openai" | "claude";
+  /** Data-quality breakdown for the whole plan (provenance + confidence). */
+  audit?: ItineraryAudit;
+}
+
+/** Self-audit of an itinerary's recommendation quality / data provenance. */
+export interface ItineraryAudit {
+  totalStops: number;
+  /** Stops grounded to a real OSM POI (coords/name/hours verified). */
+  verified: number;
+  /** Stops kept as AI approximations (no real-world match found). */
+  approximate: number;
+  /** Stops sourced from OpenStreetMap. */
+  fromOSM: number;
+  /** Stops with a Wikipedia/Wikidata entry (notable, documented sites). */
+  fromWikidata: number;
+  /** Average per-stop confidence (0..1). */
+  avgConfidence: number;
 }
 
 export type ItineraryMode = "personalized" | "recommended";
