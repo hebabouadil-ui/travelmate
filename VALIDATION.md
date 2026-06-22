@@ -294,8 +294,38 @@ no article found rejected.
 
 63/63 assertions pass; `npm run typecheck` is clean.
 
+## v2 Phase 6 — shipped: Restaurant/Café/Nightlife engines (walking-distance bound, district-first nightlife)
+**Finding (v2 audit, §9):** lunch/dinner/coffee were picked by raw
+nearest-neighbor search over the whole food pool, with no real
+walking-distance constraint — in a thin-data city this could hand back a
+match from anywhere in the pool, not "within walking distance of the
+current itinerary" as the spec requires. Nightlife was ranked as a single
+candidate like any other category, with no preference for a real nightlife
+district (a cluster of several venues) over an isolated bar that merely
+happened to be closer.
+
+**Fix:** new `nearestWithinRadius()` (`itinerary/optimize.ts`) makes a near,
+already-used spot (reusing a great nearby restaurant for both lunch and
+dinner) beat a brand-new spot outside `WALK_RADIUS_KM` (1.5km) — the
+walking-distance constraint is now the top priority, and the function only
+widens to the unrestricted nearest match when nothing at all exists within
+radius, so a day is never left without food in a thin-data city. New
+`bestNightlifeVenue()` measures each nightlife candidate's real local
+density (other OSM nightlife venues within 300m) and picks from the
+densest genuine cluster, breaking ties by distance to the anchor — a
+district-first rule built entirely from real OSM density, nothing invented.
+Both are wired into `buildStops()` (`engine.ts`) for the coffee/lunch/
+dinner/evening-nightlife slots.
+
+Harness §19 asserts: a near reused spot beats a far new one; nothing
+walkable still returns something (no day starves); an unused near spot is
+the obvious pick when no reuse is needed. §20 asserts a 3-venue district
+beats a closer lone bar, and picks the closest member of that district.
+
+67/67 assertions pass; `npm run typecheck` is clean.
+
 ## How to reproduce
 ```
-cd mobile && npm run validate   # 63/63 assertions on the real algorithms
+cd mobile && npm run validate   # 67/67 assertions on the real algorithms
 cd mobile && npm run typecheck  # clean compile
 ```

@@ -16,6 +16,7 @@ const S = require(path.join(base, "itinerary", "scoring.js"));
 const F = require(path.join(base, "itinerary", "dayflow.js"));
 const I = require(path.join(base, "itinerary", "interests.js"));
 const V = require(path.join(base, "itinerary", "validate.js"));
+const O = require(path.join(base, "itinerary", "optimize.js"));
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { (c ? pass++ : fail++); console.log(`${c ? "PASS" : "FAIL"}  ${m}`); };
@@ -160,6 +161,25 @@ ok(K.isMatchingArticle("Eiffel Tower", "Tower of London") === false, `unrelated 
 ok(K.isMatchingArticle("Park Güell", "Parc de la Ciutadella") === false, `different park, same city -> rejected (not a name match)`);
 ok(K.isMatchingArticle("Colosseum", "Colosseum (disambiguation)", { disambiguation: "" }) === false, `disambiguation page -> rejected even if the title looks close`);
 ok(K.isMatchingArticle("Some Place", undefined) === false, `no article found -> rejected`);
+
+console.log("\n=== 19. Restaurant/Café Engine: real walking-distance constraint ===");
+const anchor0 = { lat: 0, lng: 0 };
+const nearUsed = place({ id: "near", lat: 0, lng: 0.005 }); // ~0.56km
+const farNew = place({ id: "far", lat: 0, lng: 0.05 }); // ~5.6km
+const pickReuseNear = O.nearestWithinRadius(anchor0, [nearUsed, farNew], () => true, new Set(["near"]), 1.5, true);
+ok(pickReuseNear.id === "near", `reusing a walkable spot beats a brand-new one across town -> picked "${pickReuseNear.id}"`);
+const pickOnlyFar = O.nearestWithinRadius(anchor0, [farNew], () => true, new Set(), 1.5, true);
+ok(pickOnlyFar.id === "far", `nothing walkable exists -> widens rather than leaving the day without food, picked "${pickOnlyFar.id}"`);
+const pickUnusedNear = O.nearestWithinRadius(anchor0, [nearUsed, farNew], () => true, new Set(), 1.5, true);
+ok(pickUnusedNear.id === "near", `an unused walkable spot is simply the obvious best pick -> "${pickUnusedNear.id}"`);
+
+console.log("\n=== 20. Nightlife Engine: a real district beats a closer isolated venue ===");
+const isolatedBar = place({ id: "isolated", lat: 0, lng: 0.001 }); // ~0.11km from anchor, alone
+const clusterA = place({ id: "clusterA", lat: 0, lng: 0.02 }); // ~2.2km from anchor
+const clusterB = place({ id: "clusterB", lat: 0, lng: 0.0205 }); // ~0.06km from clusterA
+const clusterC = place({ id: "clusterC", lat: 0, lng: 0.021 }); // ~0.06km from clusterB
+const districtPick = O.bestNightlifeVenue(anchor0, [isolatedBar, clusterA, clusterB, clusterC], new Set());
+ok(districtPick.id === "clusterA", `picks the nearest member of the real 3-bar district, not the closer lone bar -> "${districtPick.id}"`);
 
 console.log(`\n========== ${pass} passed, ${fail} failed ==========`);
 process.exit(fail ? 1 : 0);

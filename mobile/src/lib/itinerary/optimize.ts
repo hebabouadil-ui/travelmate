@@ -125,3 +125,69 @@ export function nearestWhere(
 function avg(nums: number[]): number {
   return nums.reduce((a, b) => a + b, 0) / (nums.length || 1);
 }
+
+/**
+ * Restaurant/Café Engine's walking-distance constraint: a meal must come
+ * from within walking distance of the current itinerary, not from anywhere
+ * in the city. A near, already-used match (reusing a great nearby spot for
+ * both lunch and dinner) beats a brand-new match outside `maxKm` — so a meal
+ * is never picked from across town just because it hasn't been visited yet.
+ * Only widens to the unrestricted nearest match (any distance) when literally
+ * nothing in the pool falls within `maxKm`, so a day is never left without
+ * food in a thin-data city.
+ */
+export function nearestWithinRadius(
+  anchor: GeoPoint,
+  pool: Place[],
+  predicate: (p: Place) => boolean,
+  exclude: Set<string>,
+  maxKm: number,
+  allowReuse = false
+): Place | undefined {
+  const candidates = pool
+    .filter(predicate)
+    .map((p) => ({ p, d: haversineKm(anchor, p) }));
+  const within = candidates.filter((c) => c.d <= maxKm);
+
+  const unusedWithin = within.filter((c) => !exclude.has(c.p.id));
+  if (unusedWithin.length) return closest(unusedWithin);
+  if (allowReuse && within.length) return closest(within);
+
+  const unused = candidates.filter((c) => !exclude.has(c.p.id));
+  if (unused.length) return closest(unused);
+  return allowReuse && candidates.length ? closest(candidates) : undefined;
+}
+
+function closest(cs: { p: Place; d: number }[]): Place {
+  return cs.reduce((best, c) => (c.d < best.d ? c : best)).p;
+}
+
+/**
+ * Nightlife Engine's district-first rule: prioritize a real nightlife
+ * DISTRICT — a cluster of several bars/clubs genuinely close together in the
+ * real OSM data, nothing invented — over a single isolated venue that merely
+ * happens to be slightly closer to the anchor. Within the winning district,
+ * picks the closest unused venue; falls back to reuse only when every
+ * nightlife candidate has already been used.
+ */
+export function bestNightlifeVenue(
+  anchor: GeoPoint,
+  nightlife: Place[],
+  exclude: Set<string>,
+  allowReuse = false,
+  districtRadiusKm = 0.3
+): Place | undefined {
+  const density = (p: Place) =>
+    nightlife.filter((o) => o.id !== p.id && haversineKm(p, o) <= districtRadiusKm).length;
+
+  const pickBest = (list: Place[]): Place | undefined => {
+    if (!list.length) return undefined;
+    return list
+      .map((p) => ({ p, density: density(p), d: haversineKm(anchor, p) }))
+      // Densest real cluster wins; distance to the anchor only breaks ties.
+      .sort((a, b) => b.density - a.density || a.d - b.d)[0].p;
+  };
+
+  const unused = nightlife.filter((p) => !exclude.has(p.id));
+  return pickBest(unused) ?? (allowReuse ? pickBest(nightlife) : undefined);
+}

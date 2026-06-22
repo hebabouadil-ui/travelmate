@@ -20,7 +20,14 @@ import { categoryImage, cityHeroImage as cityImageFor } from "../data/wikipedia"
 import { resolveStopMedia } from "../data/media";
 import { currencyForCountry } from "../currency";
 import { dayRoute } from "../data/routing";
-import { clusterIntoDays, nearestWhere, optimizeRoute, planPerDay } from "./optimize";
+import {
+  bestNightlifeVenue,
+  clusterIntoDays,
+  nearestWhere,
+  nearestWithinRadius,
+  optimizeRoute,
+  planPerDay,
+} from "./optimize";
 import { confidenceScore, isConfidentGem, selectionValue } from "./scoring";
 import { categoriesForInterests, INTEREST_CATEGORIES, interestCoverageScore } from "./interests";
 import {
@@ -46,6 +53,10 @@ import { SLOTS, SLOT_DAYPART, SLOT_DEFAULT_TIME } from "./slots";
 import { leastLoadedOrder, optimizeDayFlow, scheduleDay, sortBySlot } from "./dayflow";
 
 const FOOD_CATEGORIES: PlaceCategory[] = ["restaurant", "cafe"];
+
+/** Restaurant/Café Engine: a meal must come from within walking distance of
+ *  the current itinerary, not from anywhere in the city (see `nearestWithinRadius`). */
+const WALK_RADIUS_KM = 1.5;
 
 const DURATION: Record<PlaceCategory, number> = {
   museum: 90,
@@ -728,7 +739,7 @@ function buildStops(
 
   // Optional morning coffee at a nearby café — a small touch that makes the
   // day feel curated rather than a bare list of monuments.
-  const coffee = nearestWhere(anchor, pool, (p) => p.category === "cafe", usedExtra, true);
+  const coffee = nearestWithinRadius(anchor, pool, (p) => p.category === "cafe", usedExtra, WALK_RADIUS_KM, true);
   if (coffee) {
     usedExtra.add(coffee.id);
     push(coffee, "morning", "breakfast");
@@ -740,8 +751,9 @@ function buildStops(
   // Second sight before lunch, if the day has one
   if (ordered[1]) push(ordered[1], "morning", "morning_activity");
 
-  // Lunch near the morning area (reuse a great spot if the pool is small)
-  const lunch = nearestWhere(anchor, food, (p) => p.category === "restaurant", usedFood, true);
+  // Lunch within walking distance of the morning area (reuse a great spot
+  // rather than picking one from across town if the pool is small).
+  const lunch = nearestWithinRadius(anchor, food, (p) => p.category === "restaurant", usedFood, WALK_RADIUS_KM, true);
   if (lunch) {
     usedFood.add(lunch.id);
     push(lunch, "lunch", "lunch");
@@ -765,22 +777,19 @@ function buildStops(
     push(goldenHour, "afternoon", "sunset");
   }
 
-  // Dinner near the last sight
-  const dinner = nearestWhere(last, food, (p) => p.category === "restaurant", usedFood, true);
+  // Dinner within walking distance of the last sight
+  const dinner = nearestWithinRadius(last, food, (p) => p.category === "restaurant", usedFood, WALK_RADIUS_KM, true);
   if (dinner) {
     usedFood.add(dinner.id);
     push(dinner, "dinner", "dinner");
   }
 
-  // Optional evening: nightlife or a scenic viewpoint
+  // Optional evening: a real nightlife district first, else a scenic viewpoint
   if (wantsEvening) {
-    const evening = nearestWhere(
-      last,
-      pool,
-      (p) => p.category === "nightlife" || p.category === "viewpoint",
-      usedExtra,
-      true
-    );
+    const nightlifePool = pool.filter((p) => p.category === "nightlife");
+    const evening =
+      bestNightlifeVenue(last, nightlifePool, usedExtra, true) ??
+      nearestWhere(last, pool, (p) => p.category === "viewpoint", usedExtra, true);
     if (evening) {
       usedExtra.add(evening.id);
       push(evening, "evening", "night");

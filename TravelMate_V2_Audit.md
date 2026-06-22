@@ -89,7 +89,27 @@ engine, validation pipeline, photo engine, and Definition of Done._
 > `cityHeroImage` and `commonsPhotoNear` were already validated (REST
 > summary's own `disambiguation` type check; geosearch is location-bound by
 > construction) and needed no change. 63/63 offline assertions pass;
-> `npm run typecheck` is clean. Phases 6-12 remain open.
+> `npm run typecheck` is clean.
+
+> **Phase 6 status: shipped.** The §9 "Restaurant/Café/Nightlife engines"
+> findings — restaurant/café picks had no real walking-distance constraint
+> (`nearestWhere` could, in a thin-data city, hand back a match from
+> anywhere in the pool), and nightlife was ranked like any other single
+> candidate with no district-first preference — are fixed. New
+> `nearestWithinRadius()` (`itinerary/optimize.ts`) enforces the spec's
+> "within walking distance of the current itinerary, not from anywhere in
+> the city" rule: a near, already-used spot (reusing a great nearby
+> restaurant for both lunch and dinner) now beats a brand-new spot outside
+> `WALK_RADIUS_KM` (1.5km), and only widens to the unrestricted nearest
+> match when literally nothing exists within radius, so a day is never left
+> without food. New `bestNightlifeVenue()` implements district-first
+> selection: it measures each nightlife candidate's real local density
+> (other OSM nightlife venues within 300m — nothing invented) and picks
+> from the densest genuine cluster, breaking ties by distance to the
+> anchor, instead of the single literal-nearest bar regardless of context.
+> Both are wired into `buildStops()` in `engine.ts` for the morning
+> coffee/lunch/dinner/evening-nightlife slots. 67/67 offline assertions
+> pass; `npm run typecheck` is clean. Phases 7-12 remain open.
 
 ---
 
