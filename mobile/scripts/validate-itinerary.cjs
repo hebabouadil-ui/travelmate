@@ -14,6 +14,7 @@ const base = path.join(__dirname, "..", ".validate", "lib");
 const K = require(path.join(base, "data", "knowledge.js"));
 const S = require(path.join(base, "itinerary", "scoring.js"));
 const F = require(path.join(base, "itinerary", "dayflow.js"));
+const I = require(path.join(base, "itinerary", "interests.js"));
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { (c ? pass++ : fail++); console.log(`${c ? "PASS" : "FAIL"}  ${m}`); };
@@ -98,6 +99,15 @@ const order1 = F.leastLoadedOrder([0, 0, 0]);
 ok(JSON.stringify(order1) === JSON.stringify([0, 1, 2]), `even load -> stable original order [${order1.join(",")}]`);
 const order2 = F.leastLoadedOrder([2, 0, 1]);
 ok(JSON.stringify(order2) === JSON.stringify([1, 2, 0]), `uneven load -> ascending by load [${order2.join(",")}] (Day 1 never forced first)`);
+
+console.log("\n=== 12. Interest Coverage Score: measures the actual result, not intent ===");
+const tripStops = [{ category: "monument" }, { category: "restaurant" }, { category: "cafe" }];
+const fullCov = I.interestCoverageScore(tripStops, ["monuments", "food"]);
+ok(fullCov === 1, `monuments+food both represented -> ${fullCov} (want 1)`);
+const partialCov = I.interestCoverageScore(tripStops, ["monuments", "food", "beaches"]);
+ok(Math.abs(partialCov - 2 / 3) < 1e-9, `beaches missing from real data -> honest ${partialCov.toFixed(2)} (want 0.67)`);
+const noInterests = I.interestCoverageScore(tripStops, []);
+ok(noInterests === 1, `no interests selected -> trivially ${noInterests} (want 1)`);
 
 console.log(`\n========== ${pass} passed, ${fail} failed ==========`);
 process.exit(fail ? 1 : 0);

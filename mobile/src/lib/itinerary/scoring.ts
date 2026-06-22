@@ -1,4 +1,5 @@
 import type { Interest, Place, PlaceCategory } from "../types";
+import { categoriesForInterests } from "./interests";
 
 /**
  * Attraction scoring engine.
@@ -15,18 +16,6 @@ import type { Interest, Place, PlaceCategory } from "../types";
  * outweighs distance at selection time, so a world-famous attraction is never
  * dropped just because a smaller place sits closer.
  */
-
-const INTEREST_CATEGORIES: Record<Interest, PlaceCategory[]> = {
-  monuments: ["monument", "landmark"],
-  museums: ["museum"],
-  beaches: ["beach"],
-  nature: ["park", "viewpoint", "beach"],
-  food: ["restaurant", "cafe"],
-  architecture: ["landmark", "monument", "attraction"],
-  shopping: ["shopping"],
-  photography: ["viewpoint", "landmark", "monument"],
-  nightlife: ["nightlife"],
-};
 
 // Baseline tourist value per category (0..1) — how much a typical visitor
 // builds a day around it.
@@ -64,8 +53,7 @@ export function fameValue(p: Place): number {
 
 /** 0..1 desirability score for a place given the traveller's interests. */
 export function attractionScore(p: Place, interests: Interest[] = []): number {
-  const wanted = new Set<PlaceCategory>();
-  interests.forEach((i) => INTEREST_CATEGORIES[i]?.forEach((c) => wanted.add(c)));
+  const wanted = categoriesForInterests(interests);
 
   let s = fameValue(p) * W_POPULARITY;
   s += (CATEGORY_VALUE[p.category] ?? 0.5) * W_CATEGORY;

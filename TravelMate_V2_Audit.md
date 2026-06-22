@@ -22,7 +22,25 @@ engine, validation pipeline, photo engine, and Definition of Done._
 > (`dayflow.ts`) spreads must-see injections across the least-loaded day
 > first instead of always scanning day 1 first. 32/32 offline assertions
 > pass (`npm run validate`); `npm run typecheck` is clean. See
-> `VALIDATION.md` for the updated report. Phases 3-12 remain open.
+> `VALIDATION.md` for the updated report.
+
+> **Phase 3 status: shipped.** The §11/§14 "Critical" finding — interests
+> only nudged scoring weighting, with no enforcement and **no Interest
+> Coverage Score anywhere** — is fixed. New `itinerary/interests.ts` is the
+> single source of truth for the interest→category mapping (collapsing the
+> duplicate copies that previously lived separately in `scoring.ts` and
+> `engine.ts`, flagged in §4), and adds `interestCoverageScore()`: an honest
+> 0..1 measurement of how many of the traveller's selected interests are
+> actually represented in the *finished* trip — not intent, the result. New
+> `ensureInterestCoverage()` in `engine.ts` runs right after `injectMustSees`
+> and *enforces* coverage on the built plan: any selected interest with zero
+> matching stops trip-wide gets its single best real OSM candidate swapped
+> into the weakest Tier-3 (non-must-see) attraction slot, least-loaded day
+> first — must-sees are never overwritten, and an interest is left honestly
+> uncovered only when the destination's real data has nothing in that
+> category (never invented). The score is now reported on
+> `Itinerary.audit.interestCoverage` (0-100). 35/35 offline assertions pass;
+> `npm run typecheck` is clean. Phases 4-12 remain open.
 
 ---
 

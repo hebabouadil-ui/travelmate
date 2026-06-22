@@ -167,8 +167,34 @@ day 1 is never forced first).
 
 32/32 assertions pass; `npm run typecheck` is clean.
 
+## v2 Phase 3 — shipped: Interest Engine v2 + Interest Coverage Score
+**Finding (v2 audit, §11/§14, Critical):** selected interests only nudged
+`attractionScore`/`scorePlaces` weighting (+0.35 if the category matched) —
+an interest could still end up with zero representation if nothing in its
+category ranked high enough on fame/distance, and there was no score
+anywhere measuring whether the trip actually delivered on what the
+traveller asked for.
+
+**Fix:** new `itinerary/interests.ts` centralizes the interest→category
+mapping (previously duplicated independently in `scoring.ts` and
+`engine.ts`) and adds `interestCoverageScore(stops, interests)` — the
+fraction of selected interests with at least one matching stop, an honest
+measurement of the result, not the intent. `ensureInterestCoverage()`
+(`engine.ts`) runs right after `injectMustSees` and **enforces** coverage:
+any interest with zero matching stops gets its single best real OSM
+candidate swapped into the weakest Tier-3 attraction slot, least-loaded day
+first (must-sees are never overwritten; an interest stays honestly
+uncovered if the destination's real data has nothing in that category).
+The score is reported on `Itinerary.audit.interestCoverage` (0-100).
+
+Harness §12 asserts the score is honest: two represented interests → 1.0;
+adding a third interest absent from the real data → 0.67 (not silently
+rounded up to "covered"); zero interests selected → trivially 1.0.
+
+35/35 assertions pass; `npm run typecheck` is clean.
+
 ## How to reproduce
 ```
-cd mobile && npm run validate   # 32/32 assertions on the real algorithms
+cd mobile && npm run validate   # 35/35 assertions on the real algorithms
 cd mobile && npm run typecheck  # clean compile
 ```

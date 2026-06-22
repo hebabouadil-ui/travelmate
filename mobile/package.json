@@ -14,7 +14,7 @@
     "build:apk": "eas build -p android --profile preview",
     "build:play": "eas build -p android --profile production",
     "typecheck": "tsc --noEmit",
-    "validate": "tsc src/lib/itinerary/dayflow.ts src/lib/itinerary/scoring.ts src/lib/data/knowledge.ts src/lib/itinerary/optimize.ts --outDir .validate --rootDir src --module commonjs --target es2020 --moduleResolution node --skipLibCheck --esModuleInterop --noEmitOnError false && node scripts/validate-itinerary.cjs",
+    "validate": "tsc src/lib/itinerary/dayflow.ts src/lib/itinerary/scoring.ts src/lib/itinerary/interests.ts src/lib/data/knowledge.ts src/lib/itinerary/optimize.ts --outDir .validate --rootDir src --module commonjs --target es2020 --moduleResolution node --skipLibCheck --esModuleInterop --noEmitOnError false && node scripts/validate-itinerary.cjs",
     "lint": "expo lint",
     "doctor": "npx expo-doctor"
   },

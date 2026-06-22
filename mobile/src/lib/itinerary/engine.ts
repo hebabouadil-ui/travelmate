@@ -22,6 +22,7 @@ import { currencyForCountry } from "../currency";
 import { dayRoute } from "../data/routing";
 import { clusterIntoDays, nearestWhere, optimizeRoute, planPerDay } from "./optimize";
 import { confidenceScore, isConfidentGem, selectionValue } from "./scoring";
+import { categoriesForInterests, INTEREST_CATEGORIES, interestCoverageScore } from "./interests";
 import { dailyTransport, stopCost } from "./budget";
 import { getProvider, extractJson } from "../ai/provider";
 import { CONCIERGE_SYSTEM, buildEnrichmentPrompt } from "../ai/prompts";
@@ -30,18 +31,6 @@ import { SLOTS, SLOT_DAYPART, SLOT_DEFAULT_TIME } from "./slots";
 import { leastLoadedOrder, optimizeDayFlow, scheduleDay, sortBySlot } from "./dayflow";
 
 const FOOD_CATEGORIES: PlaceCategory[] = ["restaurant", "cafe"];
-
-const INTEREST_BOOST: Record<Interest, PlaceCategory[]> = {
-  monuments: ["monument", "landmark"],
-  museums: ["museum"],
-  beaches: ["beach"],
-  nature: ["park", "viewpoint", "beach"],
-  food: ["restaurant", "cafe"],
-  architecture: ["landmark", "monument", "attraction"],
-  shopping: ["shopping"],
-  photography: ["viewpoint", "landmark"],
-  nightlife: ["nightlife"],
-};
 
 const DURATION: Record<PlaceCategory, number> = {
   museum: 90,
@@ -112,9 +101,12 @@ export async function generateItinerary(req: TripRequest): Promise<Itinerary> {
 
   // Knowledge-first quality pass: tier every stop, guarantee Tier-1 must-sees
   // appear (replacing weak anchors, spread across days — never stacked into
-  // Day 1), then drop low-confidence attractions.
+  // Day 1), then guarantee every interest the traveller picked is actually
+  // represented (Interest Engine — enforced, not just a scoring nudge),
+  // then drop low-confidence attractions.
   applyTiers(days, pack);
   if (pack) injectMustSees(days, pool, pack, geo.name);
+  ensureInterestCoverage(days, pool, req.interests);
   applyTiers(days, pack);
   gateLowConfidence(days);
   // Adapt each day to its forecast (rain/heat/cold/wind) before routing.
@@ -130,8 +122,9 @@ export async function generateItinerary(req: TripRequest): Promise<Itinerary> {
   if (days[0]) await enrichStopPhotos(days[0].stops, geo.name);
 
   // Score every recommendation's confidence and build a data-quality audit so
-  // the plan can honestly report how many stops are verified vs. approximated.
-  const audit = buildAudit(days, pack);
+  // the plan can honestly report how many stops are verified vs. approximated,
+  // and how well the trip covers the traveller's selected interests.
+  const audit = buildAudit(days, pack, req.interests);
 
   const totalEstimatedCost = days.reduce((s, d) => s + d.estimatedCost, 0);
   // Prefer an explicitly picked country, then the geocoder's resolved country,
@@ -159,14 +152,20 @@ export async function generateItinerary(req: TripRequest): Promise<Itinerary> {
 
 /**
  * Compute each stop's confidence score and roll the whole plan up into a
- * data-quality audit (verified vs. approximate, provenance, average confidence).
+ * data-quality audit (verified vs. approximate, provenance, average
+ * confidence, and how well the trip covers the traveller's interests).
  */
-function buildAudit(days: ItineraryDay[], pack?: KnowledgePack): Itinerary["audit"] {
+function buildAudit(
+  days: ItineraryDay[],
+  pack?: KnowledgePack,
+  interests: Interest[] = []
+): Itinerary["audit"] {
   let total = 0;
   let verified = 0;
   let fromOSM = 0;
   let fromWikidata = 0;
   let confidenceSum = 0;
+  const allStops: ItineraryStop[] = [];
   for (const day of days) {
     for (const stop of day.stops) {
       const p = stop.place;
@@ -176,6 +175,7 @@ function buildAudit(days: ItineraryDay[], pack?: KnowledgePack): Itinerary["audi
       if (p.verified) verified++;
       if (p.source === "overpass" || p.verified) fromOSM++;
       if (p.wikidataId || p.wikipediaTitle || p.wikipediaUrl) fromWikidata++;
+      allStops.push(stop);
     }
   }
   return {
@@ -186,6 +186,7 @@ function buildAudit(days: ItineraryDay[], pack?: KnowledgePack): Itinerary["audi
     fromWikidata,
     avgConfidence: total ? Math.round((confidenceSum / total) * 100) / 100 : 0,
     destinationConfidence: pack?.confidence,
+    interestCoverage: Math.round(interestCoverageScore(allStops.map((s) => s.place), interests) * 100),
   };
 }
 
@@ -284,6 +285,62 @@ function injectMustSees(
     presentNames.push(p.name);
     target.place = p;
     target.note = `A must-see of ${city} — one of its defining sights; arrive early to beat the crowds.`;
+    injectedPerDay[targetDayIdx]++;
+  }
+}
+
+/**
+ * Interest Engine: guarantee every interest the traveller actually picked is
+ * represented by at least one real stop — not just a scoring nudge that can
+ * still lose to fame/distance, an enforced outcome. Any interest with zero
+ * matching stops trip-wide gets its single best real OSM candidate swapped
+ * into the weakest (Tier-3, non-must-see) attraction slot, spread across the
+ * least-loaded day first (same anti-stacking discipline as `injectMustSees`,
+ * which always runs first and is never overwritten here). Must-sees always
+ * take priority; an interest is left honestly uncovered if the destination's
+ * real data has nothing in its category (never invented).
+ */
+function ensureInterestCoverage(days: ItineraryDay[], pool: Place[], interests: Interest[]): void {
+  if (!interests.length) return;
+  const present = new Set<PlaceCategory>();
+  const used = new Set<string>();
+  days.forEach((d) =>
+    d.stops.forEach((s) => {
+      present.add(s.place.category);
+      used.add(norm(s.place.name));
+    })
+  );
+  const injectedPerDay = new Array(days.length).fill(0);
+
+  for (const interest of interests) {
+    const wanted = INTEREST_CATEGORIES[interest] ?? [];
+    if (wanted.some((c) => present.has(c))) continue; // already represented
+
+    const candidate = pool
+      .filter((p) => wanted.includes(p.category) && !used.has(norm(p.name)))
+      .sort((a, b) => selectionValue(b, 0, interests) - selectionValue(a, 0, interests))[0];
+    if (!candidate) continue; // no real candidate → leave honestly uncovered
+
+    const order = leastLoadedOrder(injectedPerDay);
+    let target: ItineraryStop | undefined;
+    let targetDayIdx = -1;
+    for (const i of order) {
+      target = days[i].stops.find(
+        (s) => ATTRACTION_SLOTS.has(s.slot as GuideSlot) && (s.place.tier ?? 3) >= 3
+      );
+      if (target) {
+        targetDayIdx = i;
+        break;
+      }
+    }
+    if (!target) continue;
+
+    used.add(norm(candidate.name));
+    present.add(candidate.category);
+    const p: Place = { ...candidate };
+    if (!p.imageUrl) p.imageUrl = categoryImage(p.category, p.name);
+    target.place = p;
+    target.note = `Matched to your interest in ${interest} — a genuine local highlight in this category.`;
     injectedPerDay[targetDayIdx]++;
   }
 }
@@ -556,8 +613,7 @@ function scorePlaces(
   interests: Interest[],
   foodPref?: string
 ): Place[] {
-  const boosted = new Set<PlaceCategory>();
-  interests.forEach((i) => INTEREST_BOOST[i]?.forEach((c) => boosted.add(c)));
+  const boosted = categoriesForInterests(interests);
 
   return places
     .map((p) => {

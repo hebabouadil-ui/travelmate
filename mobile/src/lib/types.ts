@@ -190,6 +190,12 @@ export interface ItineraryAudit {
   avgConfidence: number;
   /** Our coverage confidence for this destination (0..100), if we have a pack. */
   destinationConfidence?: number;
+  /**
+   * 0..100: how many of the traveller's selected interests are actually
+   * represented by a real stop in the trip (Interest Coverage Score). 100
+   * when no interests were selected.
+   */
+  interestCoverage?: number;
 }
 
 export type ItineraryMode = "personalized" | "recommended";

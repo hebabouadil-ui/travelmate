@@ -108,7 +108,29 @@ boost − a *gentle* distance tie-breaker (`scoring.ts`).
 
 ---
 
-## 7. Confidence model (0–100%)
+## 7. Interest Engine
+
+`src/lib/itinerary/interests.ts` is the single source of truth for which
+real place categories satisfy each traveller interest (monuments, museums,
+beaches, nature, food, architecture, shopping, photography, nightlife).
+Interests act in two places, not one:
+
+1. **Scoring** — a category match nudges `attractionScore`/`scorePlaces`
+   ranking upward (a preference, same as before).
+2. **Enforcement** — after must-sees are guaranteed, `ensureInterestCoverage()`
+   checks the *built* trip: any interest with zero matching stops gets its
+   single best real OSM candidate swapped into the weakest Tier-3 attraction
+   slot (least-loaded day first; must-sees are never overwritten). An
+   interest is left honestly uncovered only when the destination's real data
+   has nothing in that category — never invented.
+
+**Interest Coverage Score** (`interestCoverageScore()`): 0–100%, the fraction
+of selected interests actually represented by a real stop in the finished
+trip — a measurement of the result, reported on `Itinerary.audit.interestCoverage`.
+
+---
+
+## 8. Confidence model (0–100%)
 
 `confidenceScore()` in `scoring.ts`:
 
@@ -124,7 +146,7 @@ Attractions **< 70%** are removed (days stay complete via backfill).
 
 ---
 
-## 8. Destination Knowledge Packs
+## 9. Destination Knowledge Packs
 
 `src/lib/data/knowledge.ts` — ~60 curated cities, prioritized:
 **Morocco, Spain, France, Italy, Japan, Thailand, United Kingdom.**
@@ -136,27 +158,28 @@ Principle: **100 excellent destinations over 10,000 generic ones.**
 
 ---
 
-## 9. Output per stop
+## 10. Output per stop
 
 Name · real photo · time · duration · **why it was selected** · travel time from
 previous · confidence score. Plan-level "Plan quality" panel shows verified vs.
-approximate counts, OSM/Wikidata provenance, average confidence and destination
-expertise %.
+approximate counts, OSM/Wikidata provenance, average confidence, destination
+expertise % and Interest Coverage Score.
 
 ---
 
-## 10. Quality bar & validation
+## 11. Quality bar & validation
 
-`npm run validate` runs 32 assertions against the real algorithms offline
-(tiering, must-see matching, confidence, route flow, scheduling, opening-hours
-guard). See `VALIDATION.md` for the full report and the 10-point checklist.
+`npm run validate` runs 35 assertions against the real algorithms offline
+(tiering, must-see matching, interest coverage, confidence, route flow,
+scheduling, opening-hours guard). See `VALIDATION.md` for the full report and
+the 10-point checklist.
 
 Live, on-device spot-checks remain for photo correctness and day-trip travel
 legs (cannot be verified in the network-restricted CI).
 
 ---
 
-## 11. Roadmap (post-validation priorities)
+## 12. Roadmap (post-validation priorities)
 
 1. **Real astronomical sunset times** for the sunset slot (Open-Meteo daily
    `sunset`). ✅ **Shipped** — `scheduleDay` now anchors the sunset stop to
@@ -170,11 +193,12 @@ itinerary quality trustworthy enough for a real traveler to follow.
 
 ---
 
-## 12. Key modules
+## 13. Key modules
 
 | Area | File |
 |---|---|
 | Orchestration | `src/lib/itinerary/engine.ts` |
+| Interest Engine + Coverage Score | `src/lib/itinerary/interests.ts` |
 | Day flow / scheduling | `src/lib/itinerary/dayflow.ts`, `slots.ts` |
 | Scoring / confidence | `src/lib/itinerary/scoring.ts` |
 | Knowledge packs | `src/lib/data/knowledge.ts` |
