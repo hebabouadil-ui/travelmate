@@ -23,16 +23,18 @@ export interface PlaceEnrichment {
 
 /**
  * Free, key-less enrichment via Wikipedia. Searches for the place (scoped to its
- * city) and returns a high-quality image + a short description. Cached for
- * offline reuse. Falls back to a category photo when no article is found.
+ * city) and returns a real article image + short description, or an empty result
+ * when there's no good match. Crucially it does NOT substitute a category stock
+ * photo here — that's the caller's job, seeded by the place name so different
+ * places never share one image. Cached for offline reuse.
  */
 export async function enrichPlace(
   name: string,
   city: string,
-  category: PlaceCategory
+  _category: PlaceCategory
 ): Promise<PlaceEnrichment> {
   const key = `wiki:${slugify(`${name} ${city}`)}`;
-  const fromWiki = await withCache<PlaceEnrichment>(
+  return withCache<PlaceEnrichment>(
     key,
     1000 * 60 * 60 * 24 * 30,
     async () => {
@@ -72,9 +74,6 @@ export async function enrichPlace(
     },
     (v) => !v.imageUrl && !v.description
   ).catch(() => ({} as PlaceEnrichment));
-
-  if (fromWiki.imageUrl) return fromWiki;
-  return { imageUrl: categoryImage(category), description: fromWiki.description };
 }
 
 /** Curated key-less fallback photos per category (Unsplash CDN). Multiple per
@@ -144,6 +143,74 @@ function hash(s: string): number {
 export function categoryImage(category: PlaceCategory, seed = ""): string {
   const arr = CATEGORY_IMAGES[category] ?? CATEGORY_IMAGES.attraction;
   return arr[hash(category + seed) % arr.length];
+}
+
+interface CommonsResponse {
+  query?: {
+    pages?: Record<
+      string,
+      {
+        title?: string;
+        imageinfo?: { url?: string; thumburl?: string; mediatype?: string; width?: number }[];
+      }
+    >;
+  };
+}
+
+/**
+ * Real, geo-tagged photo taken AT a place, via Wikimedia Commons geosearch
+ * (key-less). Given coordinates it finds nearby uploaded photos and returns the
+ * best one's thumbnail — so even venues without a Wikipedia article get a real
+ * on-location image instead of a generic stock photo. Cached by rounded coords.
+ */
+export async function commonsPhotoNear(
+  lat: number,
+  lng: number
+): Promise<string | undefined> {
+  const key = `commons:${lat.toFixed(4)}:${lng.toFixed(4)}`;
+  return withCache<string | undefined>(
+    key,
+    1000 * 60 * 60 * 24 * 30,
+    async () => {
+      const params = new URLSearchParams({
+        action: "query",
+        format: "json",
+        generator: "geosearch",
+        ggscoord: `${lat}|${lng}`,
+        ggsradius: "500",
+        ggslimit: "12",
+        ggsnamespace: "6", // File: namespace
+        prop: "imageinfo",
+        iiprop: "url|mediatype|size",
+        iiurlwidth: "600",
+        origin: "*",
+      });
+      const url = `https://commons.wikimedia.org/w/api.php?${params}`;
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 7000);
+      try {
+        const res = await fetch(url, { signal: controller.signal });
+        if (!res.ok) return undefined;
+        const data = (await res.json()) as CommonsResponse;
+        const pages = Object.values(data.query?.pages ?? {});
+        // Keep real bitmap photos only (skip SVGs, maps, icons, tiny files).
+        const photo = pages
+          .map((p) => p.imageinfo?.[0])
+          .find(
+            (ii) =>
+              ii?.mediatype === "BITMAP" &&
+              (ii.thumburl ?? ii.url) &&
+              /\.(jpe?g|png)$/i.test(ii.url ?? "") &&
+              (ii.width ?? 0) >= 400
+          );
+        return photo?.thumburl ?? photo?.url;
+      } catch {
+        return undefined;
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+  ).catch(() => undefined);
 }
 
 interface WikiSummary {
