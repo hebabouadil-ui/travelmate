@@ -1,10 +1,14 @@
-import type { Daypart, PlaceCategory, TripRequest } from "../types";
+import type { Daypart, GuideSlot, PlaceCategory, TripRequest } from "../types";
 import { getProvider, extractJson } from "./provider";
 
 export interface AIStop {
   name: string;
   category: PlaceCategory;
   daypart: Daypart;
+  /** Which moment of the guided day this is. */
+  slot?: GuideSlot;
+  /** Suggested arrival clock time, e.g. "08:00". */
+  startTime?: string;
   description?: string;
   whyVisit?: string;
   durationMin?: number;
@@ -30,22 +34,47 @@ export interface AIPlan {
   days: AIDay[];
 }
 
-const SYSTEM = `You are Voyage AI, an elite local travel concierge with deep, accurate knowledge of cities worldwide.
-You design realistic, high-quality day-by-day itineraries using REAL, named places that actually exist in the destination.
-You never invent fake places. You balance world-famous highlights with authentic hidden gems locals love.
+const SYSTEM = `You are Voyage AI, a brilliant LOCAL GUIDE — not a search engine.
+You do NOT produce lists of attractions. You design COMPLETE, realistic days: exactly what the traveller should do from the moment they wake up until the end of the night.
+You think in experiences and MOMENTS, with a clear REASON for every choice, and you weave in best timing, crowd-avoidance, weather sense and budget awareness — like a friend who lives there walking them through the perfect day.
+You use ONLY real, specific, named places that genuinely exist in the destination (as locals/Google know them). You NEVER invent places.
 You always return STRICT, COMPLETE, valid JSON and nothing else.`;
 
 const DAYPARTS: Daypart[] = ["morning", "lunch", "afternoon", "dinner", "evening"];
+
+/** The fixed guided-day skeleton, in order. */
+export const SLOTS: GuideSlot[] = [
+  "breakfast", "morning_activity", "main_attraction", "lunch",
+  "afternoon_activity", "coffee_break", "sunset", "dinner", "night",
+];
+
+export const SLOT_DAYPART: Record<GuideSlot, Daypart> = {
+  breakfast: "morning",
+  morning_activity: "morning",
+  main_attraction: "morning",
+  lunch: "lunch",
+  afternoon_activity: "afternoon",
+  coffee_break: "afternoon",
+  sunset: "evening",
+  dinner: "dinner",
+  night: "evening",
+};
+
+export const SLOT_DEFAULT_TIME: Record<GuideSlot, string> = {
+  breakfast: "08:00",
+  morning_activity: "09:00",
+  main_attraction: "10:30",
+  lunch: "13:00",
+  afternoon_activity: "15:00",
+  coffee_break: "16:30",
+  sunset: "18:00",
+  dinner: "20:00",
+  night: "22:00",
+};
 const CATEGORIES: PlaceCategory[] = [
   "monument", "museum", "attraction", "landmark", "restaurant",
   "cafe", "beach", "park", "viewpoint", "nightlife", "shopping",
 ];
-
-function stopsPerDay(activity?: string): number {
-  if (activity === "relaxed") return 5;
-  if (activity === "intensive") return 7;
-  return 6;
-}
 
 /** How many days to request per API call (keeps responses well under token limits). */
 const CHUNK = 3;
@@ -61,7 +90,6 @@ function chunkPrompt(
   const p = req.profile ?? {};
   const personalized = req.mode !== "recommended";
   const interests = req.interests?.length ? req.interests.join(", ") : "general sightseeing";
-  const per = stopsPerDay(p.activityLevel);
   const meta = wantMeta
     ? `"overview": "<2-3 vivid sentences on why ${place} is worth visiting>",
   "highlights": ["<3-5 short reasons to go>"],
@@ -69,29 +97,42 @@ function chunkPrompt(
   `
     : "";
 
-  return `Design days ${fromDay}-${toDay} of a ${req.days}-day trip to ${place}.
+  const relaxed = p.activityLevel === "relaxed";
+  return `Plan days ${fromDay}-${toDay} of a ${req.days}-day trip to ${place} as a LOCAL GUIDE designing the perfect complete day — not a list of attractions.
 
-TRAVELLER: group/style ${p.travelerType ?? "explorer"}, budget ${req.budget}, food ${p.foodPreference ?? "none"}, pace ${p.activityLevel ?? "moderate"} (~${per} stops/day incl. meals).
-MODE: ${personalized ? `PERSONALIZED — strongly weight these interests: ${interests}. The chosen categories MUST change which places appear.` : "RECOMMENDED — the most iconic, must-see experiences."}
+TRAVELLER: group/style ${p.travelerType ?? "explorer"}, budget ${req.budget}, food ${p.foodPreference ?? "none"}, pace ${p.activityLevel ?? "moderate"}.
+MODE: ${personalized ? `PERSONALIZED — strongly weight these interests: ${interests}. They MUST shape the activities and main attraction chosen.` : "RECOMMENDED — the most iconic, must-see experiences."}
+
+DESIGN EACH DAY AS A GUIDED EXPERIENCE — answer "what should I do from waking up to night?". Follow THIS EXACT structure, in order, one stop per slot:
+1. breakfast (cafe/restaurant) — start the day right, near where the day begins
+2. morning_activity — an experience to ease in (a walk, market, neighborhood, garden) BEFORE crowds
+3. main_attraction — the headline sight of the day (best visited early to beat crowds)
+4. lunch (restaurant) — real, local, near the morning area
+5. afternoon_activity — a second experience/sight in a DIFFERENT nearby spot
+6. coffee_break (cafe) — a genuine local spot to recharge${relaxed ? " (OPTIONAL for relaxed pace)" : ""}
+7. sunset — the BEST place in the city to catch golden hour (rooftop, viewpoint, hilltop, waterfront)
+8. dinner (restaurant) — a memorable evening table
+9. night — the local night atmosphere (bar, rooftop, lively square, live music)${relaxed ? " (OPTIONAL for relaxed pace)" : ""}
 
 RULES
-- Use ONLY real, specific, named places in ${place} (as Google/locals know them). No generic names.
-- DO NOT use any of these already-planned places: ${avoid.length ? avoid.join("; ") : "(none yet)"}.
-- Each day explores a DIFFERENT neighborhood/area with DIFFERENT places. More days = wider exploration (further areas, day-trips, variety).
-- ~${per} stops/day ordered morning→evening, clustered to minimise travel, with a real lunch AND dinner restaurant; add cafe/viewpoint/park where natural; include 1-2 authentic hidden gems.
-- Provide approximate lat & lng for EVERY stop.
-- Keep "description" and "whyVisit" to ONE short sentence each (<14 words).
+- Use ONLY real, specific, named places in ${place}. No generic names ("a local cafe"). Every place must actually exist.
+- DO NOT reuse any of these already-planned places: ${avoid.length ? avoid.join("; ") : "(none yet)"}.
+- Each day = a DIFFERENT neighborhood with a DIFFERENT main_attraction. More days = wider exploration.
+- Cluster each day tightly to minimise travel between consecutive slots.
+- EVERY stop needs a "reason" (whyVisit): WHY this place AND why at this time — fold in crowd-avoidance and best timing (e.g. "go before 10am to beat tour groups"). Vivid, specific, <24 words.
+- Give a realistic "startTime" (HH:MM) and "durationMin" for every slot; respect opening hours and a natural pace.
+- "bestTime" = ideal time/conditions (e.g. "early morning", "golden hour"). Provide approximate lat & lng for EVERY stop.
 
 Return STRICT JSON ONLY:
 {
   ${meta}"days": [
     {
       "day": ${fromDay},
-      "title": "<3-6 word theme>",
-      "summary": "<1 sentence>",
-      "area": "<neighborhood>",
+      "title": "<evocative 3-6 word day theme>",
+      "summary": "<1 inviting sentence on the day's arc>",
+      "area": "<main neighborhood>",
       "stops": [
-        {"name":"<real place>","category":"<${CATEGORIES.join("|")}>","daypart":"<${DAYPARTS.join("|")}>","description":"<short>","whyVisit":"<short>","durationMin":<int>,"bestTime":"<short>","neighborhood":"<area>","cuisine":"<for food only>","lat":<num>,"lng":<num>}
+        {"slot":"<${SLOTS.join("|")}>","startTime":"<HH:MM>","name":"<real place>","category":"<${CATEGORIES.join("|")}>","whyVisit":"<reason incl. timing/crowd insight>","durationMin":<int>,"bestTime":"<short>","neighborhood":"<area>","cuisine":"<for food only>","lat":<num>,"lng":<num>}
       ]
     }
   ]
@@ -119,6 +160,20 @@ function normDaypart(d: string): Daypart {
   return (DAYPARTS.includes(v as Daypart) ? v : "afternoon") as Daypart;
 }
 
+function normSlot(s: string): GuideSlot | undefined {
+  const v = (s || "").toLowerCase().trim().replace(/[\s-]+/g, "_");
+  return SLOTS.includes(v as GuideSlot) ? (v as GuideSlot) : undefined;
+}
+
+/** Accept "8:00", "08:00", "8" → "08:00"; reject junk. */
+function normTime(t: unknown): string | undefined {
+  const m = String(t ?? "").match(/^(\d{1,2})(?::(\d{2}))?$/);
+  if (!m) return undefined;
+  const h = Math.min(23, Math.max(0, parseInt(m[1], 10)));
+  const min = m[2] ? Math.min(59, parseInt(m[2], 10)) : 0;
+  return `${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
+}
+
 function clampInt(n: unknown, min: number, max: number, def: number): number {
   const v = typeof n === "number" ? n : parseInt(String(n ?? ""), 10);
   if (Number.isNaN(v)) return def;
@@ -135,12 +190,18 @@ function cleanDays(rawDays: AIDay[] | undefined, startDay: number): AIDay[] {
       area: d.area,
       stops: (d.stops || [])
         .filter((s) => s?.name)
-        .map((s) => ({
-          ...s,
-          category: normCategory(s.category as string),
-          daypart: normDaypart(s.daypart as string),
-          durationMin: clampInt(s.durationMin, 20, 240, 60),
-        })),
+        .map((s) => {
+          const slot = normSlot((s.slot ?? "") as string);
+          return {
+            ...s,
+            category: normCategory(s.category as string),
+            slot,
+            startTime: normTime(s.startTime) ?? (slot ? SLOT_DEFAULT_TIME[slot] : undefined),
+            // Keep daypart consistent with the slot when we have one.
+            daypart: slot ? SLOT_DAYPART[slot] : normDaypart(s.daypart as string),
+            durationMin: clampInt(s.durationMin, 20, 240, 60),
+          };
+        }),
     }))
     .filter((d) => d.stops.length > 0);
 }

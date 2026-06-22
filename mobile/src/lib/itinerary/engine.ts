@@ -24,7 +24,15 @@ import { confidenceScore, isConfidentGem, selectionValue } from "./scoring";
 import { dailyTransport, stopCost } from "./budget";
 import { getProvider, extractJson } from "../ai/provider";
 import { CONCIERGE_SYSTEM, buildEnrichmentPrompt } from "../ai/prompts";
-import { aiPlanItinerary, type AIPlan, type AIStop } from "../ai/itineraryAI";
+import {
+  aiPlanItinerary,
+  SLOTS,
+  SLOT_DAYPART,
+  SLOT_DEFAULT_TIME,
+  type AIPlan,
+  type AIStop,
+} from "../ai/itineraryAI";
+import type { GuideSlot } from "../types";
 
 const FOOD_CATEGORIES: PlaceCategory[] = ["restaurant", "cafe"];
 
@@ -341,6 +349,8 @@ function buildDaysFromAI(
       const place = placeFromAIStop(s, geo, idx * 13 + j);
       return {
         daypart: s.daypart,
+        slot: s.slot,
+        startTime: s.startTime,
         place,
         durationMin: s.durationMin ?? DURATION[place.category] ?? 60,
         note: s.whyVisit || s.description,
@@ -392,8 +402,11 @@ async function finalizeDays(
         used.add(norm(p.name));
         if (!p.imageUrl) p.imageUrl = categoryImage(p.category, p.name);
         p.hiddenGem = isConfidentGem(p);
+        const slot: GuideSlot = SLOTS[Math.min(day.stops.length, SLOTS.length - 1)];
         day.stops.push({
-          daypart: pickDaypart(day.stops.length),
+          daypart: SLOT_DAYPART[slot],
+          slot,
+          startTime: SLOT_DEFAULT_TIME[slot],
           place: p,
           durationMin: DURATION[p.category] ?? 60,
           note: p.whyVisit ?? noteFor({ place: p } as ItineraryStop),
@@ -420,6 +433,8 @@ async function finalizeDays(
         }
       });
       day.routeGeometry = route.geometry;
+      // Now that real travel times are known, lay the day out on the clock.
+      scheduleDay(day);
       day.estimatedCost =
         day.stops.reduce((s, st) => s + (st.estimatedCost ?? 0), 0) +
         dailyTransport(req.budget);
@@ -459,6 +474,38 @@ async function enrichStopPhotos(stops: ItineraryStop[], city: string): Promise<v
 function pickDaypart(index: number): ItineraryStop["daypart"] {
   const order: ItineraryStop["daypart"][] = ["morning", "lunch", "afternoon", "dinner", "evening"];
   return order[Math.min(index, order.length - 1)];
+}
+
+function parseHM(t?: string): number | null {
+  const m = (t ?? "").match(/^(\d{1,2}):(\d{2})$/);
+  return m ? parseInt(m[1], 10) * 60 + parseInt(m[2], 10) : null;
+}
+
+function fmtHM(min: number): string {
+  const h = Math.floor((min % 1440) / 60);
+  const m = Math.round(min % 60);
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+/**
+ * Assign each stop a realistic clock time: anchor to the guide's canonical slot
+ * time, then push later as real travel + dwell time accumulates — so the day
+ * reads like a schedule a local actually walked, never overlapping itself.
+ */
+function scheduleDay(day: ItineraryDay): void {
+  let clock = 8 * 60; // 08:00 default start
+  day.stops.forEach((st, i) => {
+    const desired =
+      parseHM(st.startTime) ?? (st.slot ? parseHM(SLOT_DEFAULT_TIME[st.slot]) : null);
+    if (i === 0) {
+      clock = desired ?? clock;
+    } else {
+      const earliest = clock + (st.travelFromPrevMin ?? 0);
+      clock = desired != null ? Math.max(earliest, desired) : earliest;
+    }
+    st.startTime = fmtHM(clock);
+    clock += st.durationMin ?? 60;
+  });
 }
 
 function norm(s: string): string {
@@ -559,13 +606,15 @@ function buildStops(
   const stops: ItineraryStop[] = [];
   const anchor = ordered[0] ?? center;
 
-  const push = (place: Place, daypart: Daypart) => {
+  const push = (place: Place, daypart: Daypart, slot?: GuideSlot) => {
     const prev = stops[stops.length - 1]?.place;
     const km = prev ? haversineKm(prev, place) : 0;
     const mode: ItineraryStop["travelMode"] =
       km < 1.8 ? "walk" : km < 8 ? "transit" : "taxi";
     stops.push({
       daypart,
+      slot,
+      startTime: slot ? SLOT_DEFAULT_TIME[slot] : undefined,
       place,
       durationMin: DURATION[place.category] ?? 60,
       travelFromPrevMin: prev
@@ -583,24 +632,24 @@ function buildStops(
   const coffee = nearestWhere(anchor, pool, (p) => p.category === "cafe", usedExtra, true);
   if (coffee) {
     usedExtra.add(coffee.id);
-    push(coffee, "morning");
+    push(coffee, "morning", "breakfast");
   }
 
-  // Morning headline sight
-  if (ordered[0]) push(ordered[0], "morning");
+  // Morning headline sight = the day's main attraction
+  if (ordered[0]) push(ordered[0], "morning", "main_attraction");
 
   // Second sight before lunch, if the day has one
-  if (ordered[1]) push(ordered[1], "morning");
+  if (ordered[1]) push(ordered[1], "morning", "morning_activity");
 
   // Lunch near the morning area (reuse a great spot if the pool is small)
   const lunch = nearestWhere(anchor, food, (p) => p.category === "restaurant", usedFood, true);
   if (lunch) {
     usedFood.add(lunch.id);
-    push(lunch, "lunch");
+    push(lunch, "lunch", "lunch");
   }
 
   // Afternoon sights (the rest of the cluster)
-  ordered.slice(2).forEach((s) => push(s, "afternoon"));
+  ordered.slice(2).forEach((s) => push(s, "afternoon", "afternoon_activity"));
 
   const last = ordered[ordered.length - 1] ?? anchor;
 
@@ -614,14 +663,14 @@ function buildStops(
   );
   if (goldenHour && !ordered.includes(goldenHour)) {
     usedExtra.add(goldenHour.id);
-    push(goldenHour, "afternoon");
+    push(goldenHour, "afternoon", "sunset");
   }
 
   // Dinner near the last sight
   const dinner = nearestWhere(last, food, (p) => p.category === "restaurant", usedFood, true);
   if (dinner) {
     usedFood.add(dinner.id);
-    push(dinner, "dinner");
+    push(dinner, "dinner", "dinner");
   }
 
   // Optional evening: nightlife or a scenic viewpoint
@@ -635,7 +684,7 @@ function buildStops(
     );
     if (evening) {
       usedExtra.add(evening.id);
-      push(evening, "evening");
+      push(evening, "evening", "night");
     }
   }
 

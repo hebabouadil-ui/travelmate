@@ -122,3 +122,29 @@ export const DAYPART_META: Record<
   dinner: { label: "Dinner", icon: "wine", color: "#6E6A8F" },
   evening: { label: "Evening", icon: "moon", color: "#6E8198" },
 };
+
+/**
+ * The guided-day skeleton: ordered moments from waking up to night, each with a
+ * label, icon, canonical start time, the daypart it belongs to and the place
+ * category it typically maps to. Drives both the AI plan and the timeline UI.
+ */
+export const SLOT_META: Record<
+  string,
+  { label: string; icon: string; color: string; start: string; daypart: string; category: string }
+> = {
+  breakfast: { label: "Breakfast", icon: "cafe", color: "#B07A1E", start: "08:00", daypart: "morning", category: "cafe" },
+  morning_activity: { label: "Morning activity", icon: "sunrise", color: "#B07A1E", start: "09:00", daypart: "morning", category: "attraction" },
+  main_attraction: { label: "Main attraction", icon: "flag", color: "#A8894E", start: "10:30", daypart: "morning", category: "monument" },
+  lunch: { label: "Lunch", icon: "utensils", color: "#B4655A", start: "13:00", daypart: "lunch", category: "restaurant" },
+  afternoon_activity: { label: "Afternoon", icon: "sun", color: "#A8894E", start: "15:00", daypart: "afternoon", category: "attraction" },
+  coffee_break: { label: "Coffee break", icon: "coffee", color: "#A86F5A", start: "16:30", daypart: "afternoon", category: "cafe" },
+  sunset: { label: "Sunset", icon: "sunset", color: "#C06A3E", start: "18:00", daypart: "evening", category: "viewpoint" },
+  dinner: { label: "Dinner", icon: "wine", color: "#6E6A8F", start: "20:00", daypart: "dinner", category: "restaurant" },
+  night: { label: "Night", icon: "moon", color: "#6E8198", start: "22:00", daypart: "evening", category: "nightlife" },
+};
+
+/** Ordered slot ids for a full guided day. */
+export const SLOT_ORDER = [
+  "breakfast", "morning_activity", "main_attraction", "lunch",
+  "afternoon_activity", "coffee_break", "sunset", "dinner", "night",
+] as const;

@@ -22,6 +22,7 @@ import {
   shadow,
   CATEGORY_META,
   DAYPART_META,
+  SLOT_META,
 } from "@/theme";
 
 /** Airbnb-style destination card with image, match score and reason. */
@@ -125,6 +126,11 @@ export function StopCard({
 }) {
   const meta = CATEGORY_META[stop.place.category];
   const daypart = DAYPART_META[stop.daypart];
+  // Prefer the guided-day slot (Breakfast, Sunset…) over the generic daypart.
+  const slot = stop.slot ? SLOT_META[stop.slot] : null;
+  const momentLabel = slot?.label ?? daypart.label;
+  const momentIcon = slot?.icon ?? daypart.icon;
+  const momentColor = slot?.color ?? daypart.color;
   const transport = TRANSPORT_META[stop.travelMode ?? "walk"];
 
   // Photos are normally resolved up-front during generation and embedded on the
@@ -157,8 +163,9 @@ export function StopCard({
 
       <View style={styles.stop}>
         <View style={styles.timeline}>
-          <View style={[styles.stopDot, { backgroundColor: meta.color }]}>
-            <Text style={styles.stopDotNum}>{index + 1}</Text>
+          <Text style={styles.stopTime}>{stop.startTime ?? `#${index + 1}`}</Text>
+          <View style={[styles.stopDot, { backgroundColor: momentColor }]}>
+            <Icon name={momentIcon as any} size={13} color={colors.white} />
           </View>
           <View style={styles.timelineLine} />
         </View>
@@ -176,9 +183,9 @@ export function StopCard({
 
           <View style={styles.stopBody}>
             <View style={styles.stopHeader}>
-              <View style={[styles.daypartPill, { backgroundColor: daypart.color + "22" }]}>
-                <Icon name={daypart.icon as any} size={11} color={daypart.color} />
-                <Text style={[styles.daypartText, { color: daypart.color }]}>{daypart.label}</Text>
+              <View style={[styles.daypartPill, { backgroundColor: momentColor + "22" }]}>
+                <Icon name={momentIcon as any} size={11} color={momentColor} />
+                <Text style={[styles.daypartText, { color: momentColor }]}>{momentLabel}</Text>
               </View>
               <View style={styles.badgeRow}>
                 {stop.place.hiddenGem && (
@@ -209,6 +216,13 @@ export function StopCard({
                 <>
                   <Text style={styles.stopDot2}>·</Text>
                   <Text style={styles.stopMeta}>{currencySymbol(currency)}{stop.estimatedCost}</Text>
+                </>
+              ) : null}
+              {stop.place.bestTime ? (
+                <>
+                  <Text style={styles.stopDot2}>·</Text>
+                  <Icon name="sunny-outline" size={12} color={colors.accent} />
+                  <Text style={[styles.stopMeta, { color: colors.accent }]}>{stop.place.bestTime}</Text>
                 </>
               ) : null}
             </View>
@@ -337,11 +351,12 @@ const styles = StyleSheet.create({
   miniScore: { color: colors.accent, fontSize: font.tiny, fontWeight: "700", marginTop: 2 },
 
   stop: { flexDirection: "row", gap: spacing.md },
-  timeline: { alignItems: "center", width: 28 },
+  timeline: { alignItems: "center", width: 44 },
+  stopTime: { color: colors.text, fontWeight: "800", fontSize: font.small, marginBottom: 4 },
   stopDot: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 2,
@@ -365,7 +380,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    marginLeft: 40,
+    marginLeft: 56,
     marginBottom: spacing.sm,
     marginTop: -spacing.xs,
   },

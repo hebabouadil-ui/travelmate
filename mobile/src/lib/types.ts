@@ -100,10 +100,29 @@ export type PlaceCategory =
 
 export type Daypart = "morning" | "lunch" | "afternoon" | "dinner" | "evening";
 
+/**
+ * The fixed skeleton of a guided local-expert day. Each slot answers a moment
+ * of the day ("what do I do now?"), in order from waking up to night.
+ */
+export type GuideSlot =
+  | "breakfast"
+  | "morning_activity"
+  | "main_attraction"
+  | "lunch"
+  | "afternoon_activity"
+  | "coffee_break"
+  | "sunset"
+  | "dinner"
+  | "night";
+
 export type TravelMode = "walk" | "transit" | "taxi" | "car";
 
 export interface ItineraryStop {
   daypart: Daypart;
+  /** Which moment of the guided day this is (breakfast → night). */
+  slot?: GuideSlot;
+  /** Clock time the guide suggests arriving, e.g. "08:00". */
+  startTime?: string;
   place: Place;
   /** Minutes recommended at this stop. */
   durationMin: number;
