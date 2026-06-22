@@ -6,6 +6,24 @@ produce this report. It is a white-box audit of the actual code in
 measured against the v2 spec's required pipeline, tier system, interest
 engine, validation pipeline, photo engine, and Definition of Done._
 
+> **Phase 2 status: shipped.** The §13/§14 "highest risk / highest value"
+> finding — AI selecting stops directly (`itineraryAI.ts` → `buildDaysFromAI`
+> → `groundDaysToPool`) instead of only narrating an already-built plan — has
+> been fixed. `itineraryAI.ts`, `buildDaysFromAI`, `groundDaysToPool` and the
+> whole AI-grounding code path are deleted. Every itinerary now goes through
+> the single deterministic pipeline (`buildDeterministicDays`: discover →
+> score → cluster → route from real OSM/pack data only), and AI is invoked
+> exactly once, at the end, strictly to narrate (`narrate()` in `engine.ts`,
+> using the existing `CONCIERGE_SYSTEM`/`buildEnrichmentPrompt` contract that
+> already forbade reordering/adding/removing stops). `Itinerary.engine`
+> now reports which narrator actually ran (`gemini`/`openai`/`claude`/`mock`)
+> instead of which engine *planned* the trip. The §13 "Day 1 overload" bug in
+> `injectMustSees` is also fixed: a new `leastLoadedOrder()` helper
+> (`dayflow.ts`) spreads must-see injections across the least-loaded day
+> first instead of always scanning day 1 first. 32/32 offline assertions
+> pass (`npm run validate`); `npm run typecheck` is clean. See
+> `VALIDATION.md` for the updated report. Phases 3-12 remain open.
+
 ---
 
 ## 1. Repository Overview

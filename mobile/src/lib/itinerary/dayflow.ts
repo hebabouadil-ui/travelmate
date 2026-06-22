@@ -115,4 +115,13 @@ export function scheduleDay(stops: ItineraryStop[], sunsetTime?: string): void {
   });
 }
 
+/**
+ * Day indices 0..n-1 sorted by ascending load, ties keeping original order.
+ * Used to spread injected must-sees evenly across days instead of stacking
+ * them all into the first day that has room (the "Day 1 overload" bug).
+ */
+export function leastLoadedOrder(load: number[]): number[] {
+  return load.map((_, i) => i).sort((a, b) => load[a] - load[b]);
+}
+
 export type { GuideSlot };

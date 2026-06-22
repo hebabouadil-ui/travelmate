@@ -2,7 +2,7 @@
 
 **Phase:** Quality Validation (no new features until quality is proven)
 **Method:** White-box pipeline audit + a runnable offline harness that exercises
-the **real compiled algorithms** (`npm run validate`, 29 assertions).
+the **real compiled algorithms** (`npm run validate`, 32 assertions).
 
 ## Important honesty note on scope
 
@@ -138,7 +138,37 @@ date-correct (e.g. Marrakech in June ≈ 19:30 vs. Tokyo in December ≈ 16:30).
 Harness §1d asserts the override (`scheduleDay` given `sunsetTime: "21:34"` →
 sunset stop scheduled at `21:34`, not the default). 30/30 pass.
 
+## v2 Phase 2 — shipped: architecture inversion (AI is narrator-only)
+**Finding (v2 audit, §13/§14):** the AI was selecting/designing stops directly
+(`itineraryAI.ts#aiPlanItinerary` → `buildDaysFromAI` → `groundDaysToPool`
+snapping AI guesses onto the nearest real OSM place after the fact) — a
+violation of the spec's core rule that AI must never choose attractions, only
+narrate an already-verified plan.
+**Fix:** `itineraryAI.ts` and the entire AI-grounding path
+(`buildDaysFromAI`, `groundDaysToPool`, `bestPoolMatch`, `nameSimilarity`,
+`placeFromAIStop`) are deleted. Every trip — with or without an AI key — now
+goes through one pipeline: real OSM places + the curated Knowledge Pack are
+discovered, scored, clustered and routed first (`buildDeterministicDays`);
+AI is invoked exactly once at the end, only to narrate the finished plan
+(`narrate()`, using the pre-existing `CONCIERGE_SYSTEM` /
+`buildEnrichmentPrompt` contract, which already instructed the model "do NOT
+reorder, do NOT add or remove stops" — that contract simply wasn't the only
+code path before). `Itinerary.engine` now reflects which narrator produced
+the copy (`gemini`/`openai`/`claude`/`mock`), not which engine picked the
+stops, since picking stops is no longer the AI's job.
+
+**Also fixed in this phase — Day 1 must-see overload:** `injectMustSees`
+previously scanned days in original array order when looking for a weak
+anchor to replace with a missing must-see, so multiple missing must-sees
+could all land on Day 1. New `leastLoadedOrder()` (`dayflow.ts`) always tries
+the least-loaded day first, spreading injections evenly across the trip.
+Harness §11 asserts the ordering (`[2,0,1]` load → `[1,2,0]` day order, i.e.
+day 1 is never forced first).
+
+32/32 assertions pass; `npm run typecheck` is clean.
+
 ## How to reproduce
 ```
-cd mobile && npm run validate   # 30/30 assertions on the real algorithms
+cd mobile && npm run validate   # 32/32 assertions on the real algorithms
+cd mobile && npm run typecheck  # clean compile
 ```

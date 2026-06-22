@@ -1,4 +1,4 @@
-import type { Place, TripRequest } from "../types";
+import type { TripRequest } from "../types";
 
 /** System prompt that defines the concierge persona. */
 export const CONCIERGE_SYSTEM = `You are Voyage AI, a world-class travel concierge and local guide.
@@ -57,11 +57,4 @@ Return STRICT JSON with this exact shape:
   ]
 }
 Make notes specific and practical (not generic). Keep each note under 26 words. Match every stop name exactly. Output only JSON.`;
-}
-
-/** A compact catalog string used when asking the model to surface hidden gems. */
-export function describePlaces(places: Place[]): string {
-  return places
-    .map((p) => `- ${p.name} (${p.category}${p.hiddenGem ? ", hidden gem" : ""})`)
-    .join("\n");
 }

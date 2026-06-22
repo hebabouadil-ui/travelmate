@@ -93,5 +93,11 @@ const sunsetDay = [
 F.scheduleDay(sunsetDay, "21:34");
 ok(sunsetDay[1].startTime === "21:34", `sunset slot uses real local sunset (21:34) over generic default, got ${sunsetDay[1].startTime}`);
 
+console.log("\n=== 11. Multi-day balancing: must-see injection spreads across days ===");
+const order1 = F.leastLoadedOrder([0, 0, 0]);
+ok(JSON.stringify(order1) === JSON.stringify([0, 1, 2]), `even load -> stable original order [${order1.join(",")}]`);
+const order2 = F.leastLoadedOrder([2, 0, 1]);
+ok(JSON.stringify(order2) === JSON.stringify([1, 2, 0]), `uneven load -> ascending by load [${order2.join(",")}] (Day 1 never forced first)`);
+
 console.log(`\n========== ${pass} passed, ${fail} failed ==========`);
 process.exit(fail ? 1 : 0);

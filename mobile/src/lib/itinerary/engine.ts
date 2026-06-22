@@ -25,10 +25,9 @@ import { confidenceScore, isConfidentGem, selectionValue } from "./scoring";
 import { dailyTransport, stopCost } from "./budget";
 import { getProvider, extractJson } from "../ai/provider";
 import { CONCIERGE_SYSTEM, buildEnrichmentPrompt } from "../ai/prompts";
-import { aiPlanItinerary, type AIPlan, type AIStop } from "../ai/itineraryAI";
 import type { GuideSlot } from "../types";
 import { SLOTS, SLOT_DAYPART, SLOT_DEFAULT_TIME } from "./slots";
-import { optimizeDayFlow, scheduleDay, sortBySlot } from "./dayflow";
+import { leastLoadedOrder, optimizeDayFlow, scheduleDay, sortBySlot } from "./dayflow";
 
 const FOOD_CATEGORIES: PlaceCategory[] = ["restaurant", "cafe"];
 
@@ -69,10 +68,12 @@ function maxSightsPerDay(activity?: string): number {
 }
 
 /**
- * Main entry point. AI-first: when Gemini is configured it designs a real,
- * varied, category-aware itinerary for ANY city worldwide; we then add accurate
- * street routing (OSRM) + photos. Without a key it falls back to the on-device
- * engine (free, offline). Either way the result is routed and image-rich.
+ * Main entry point. Data-first, always: real places come from the OSM POI pool
+ * and the curated destination Knowledge Pack — never from a model guess. AI is
+ * consulted only at the very last stage, to NARRATE the already-chosen, already-
+ * routed plan (titles, summaries, per-stop notes); it cannot add, remove, rename
+ * or relocate a single stop. Without a configured AI key the same real itinerary
+ * is produced with template narration instead.
  */
 export async function generateItinerary(req: TripRequest): Promise<Itinerary> {
   // Use the exact picked coordinates when available (avoids ambiguous
@@ -86,15 +87,9 @@ export async function generateItinerary(req: TripRequest): Promise<Itinerary> {
       }
     : await geocode(req.destination);
 
-  // Fetch the real OSM POI pool IN PARALLEL with the AI call (which is the long
-  // pole), so we can VERIFY the AI's places against real mapped locations
-  // without adding much wall-clock time. This is the core "real, not fake" step.
-  // The pool is also enriched with a REAL popularity signal (Wikidata sitelink
-  // counts) so ranking reflects global fame, not just category/proximity. All of
-  // this overlaps with the AI call, so it adds little wall-clock time.
-  // Destination knowledge pack — curated expert data. Fed to the AI so it
-  // ORGANISES around real, verified must-sees instead of inventing, and used to
-  // tier/guarantee them afterward. This is the "knowledge first" principle.
+  // Destination knowledge pack — curated expert data. Used to tier/guarantee
+  // real must-sees. This is the "knowledge first" principle: AI never sees a
+  // place until it has already been selected from real data.
   const pack = getKnowledgePack(req.destination);
 
   const poolPromise = discoverPlaces(req.destination, geo.center)
@@ -103,41 +98,21 @@ export async function generateItinerary(req: TripRequest): Promise<Itinerary> {
       return pl;
     })
     .catch(() => [] as Place[]);
-  const [aiPlan, weather, heroImage, pool] = await Promise.all([
-    aiPlanItinerary(req, req.destination, pack).catch(() => null),
+  const [weather, heroImage, pool] = await Promise.all([
     getWeather(geo.center, req.startDate, req.days),
     cityImageFor(geo.name).catch(() => undefined),
     poolPromise,
   ]);
 
-  let days: ItineraryDay[];
-  let overview: string;
-  let highlights: string[];
-  let country: string | undefined;
-  let engine: Itinerary["engine"];
-
   if (pack) pool.forEach((p) => (p.tier = tierOf(p, pack)));
 
-  if (aiPlan) {
-    days = buildDaysFromAI(aiPlan, geo, req, weather);
-    // Ground each AI stop to a real OSM POI (snap coords/name/hours) and flag
-    // any that can't be verified — so we never present invented data as fact.
-    groundDaysToPool(days, pool);
-    overview = aiPlan.overview || buildOverview(req).overview;
-    highlights = aiPlan.highlights?.length ? aiPlan.highlights : buildOverview(req).highlights;
-    country = aiPlan.country;
-    engine = "gemini";
-  } else {
-    days = await buildDeterministicDays(req, geo, weather, pool);
-    const ov = buildOverview(req);
-    overview = ov.overview;
-    highlights = ov.highlights;
-    // Honest label: this came from the on-device engine, not the AI.
-    engine = "mock";
-  }
+  // Select, cluster and route the day from REAL candidates only (pool + pack).
+  // AI is invoked inside this step strictly to narrate the result.
+  const { days, overview, highlights, engine } = await buildDeterministicDays(req, geo, weather, pool);
 
   // Knowledge-first quality pass: tier every stop, guarantee Tier-1 must-sees
-  // appear (replacing weak anchors), then drop low-confidence attractions.
+  // appear (replacing weak anchors, spread across days — never stacked into
+  // Day 1), then drop low-confidence attractions.
   applyTiers(days, pack);
   if (pack) injectMustSees(days, pool, pack, geo.name);
   applyTiers(days, pack);
@@ -159,10 +134,9 @@ export async function generateItinerary(req: TripRequest): Promise<Itinerary> {
   const audit = buildAudit(days, pack);
 
   const totalEstimatedCost = days.reduce((s, d) => s + d.estimatedCost, 0);
-  // Prefer an explicitly picked country, then the AI's, then the geocoder's,
+  // Prefer an explicitly picked country, then the geocoder's resolved country,
   // then the display-name tail — so currency/locale is rarely wrong.
-  const resolvedCountry =
-    req.country ?? country ?? geo.country ?? lastSegment(geo.displayName);
+  const resolvedCountry = req.country ?? geo.country ?? lastSegment(geo.displayName);
 
   return {
     id: makeId("trip"),
@@ -222,139 +196,6 @@ function lastSegment(displayName?: string): string | undefined {
   return parts[parts.length - 1];
 }
 
-/** Is a coordinate plausible (near the destination, not a hallucination)? */
-function validCoord(lat: unknown, lng: unknown, center: GeoPoint): boolean {
-  if (typeof lat !== "number" || typeof lng !== "number") return false;
-  if (Number.isNaN(lat) || Number.isNaN(lng)) return false;
-  if (Math.abs(lat) > 90 || Math.abs(lng) > 180) return false;
-  return haversineKm(center, { lat, lng }) <= 150; // within ~150km of the city
-}
-
-function placeFromAIStop(s: AIStop, geo: GeocodeResult, seed: number): Place {
-  const center = geo.center;
-  const coord = validCoord(s.lat, s.lng, center)
-    ? { lat: s.lat as number, lng: s.lng as number }
-    : {
-        // keep it on-map near the centre with a small deterministic jitter
-        lat: center.lat + ((seed % 7) - 3) * 0.004,
-        lng: center.lng + (((seed * 3) % 7) - 3) * 0.004,
-      };
-  const gem =
-    /hidden|local favou?rite|off the beaten|secret|tucked/i.test(
-      `${s.whyVisit ?? ""} ${s.description ?? ""}`
-    );
-  return {
-    id: makeId("ai"),
-    name: s.name,
-    category: s.category,
-    lat: coord.lat,
-    lng: coord.lng,
-    description: s.description,
-    whyVisit: s.whyVisit,
-    neighborhood: s.neighborhood,
-    bestTime: s.bestTime,
-    cuisine: s.cuisine,
-    hiddenGem: gem,
-    tags: s.cuisine ? [s.cuisine] : [],
-    score: 0.9,
-    source: "ai",
-    imageUrl: categoryImage(s.category, s.name),
-  };
-}
-
-const NAME_STOPWORDS = new Set([
-  "the", "a", "an", "of", "and", "de", "la", "le", "el", "du", "des", "da",
-  "di", "do", "las", "los", "al", "san", "santa", "st", "cafe", "restaurant",
-  "museum", "park", "bar", "place", "plaza",
-]);
-
-function nameTokens(s: string): string[] {
-  return (s.toLowerCase().match(/[a-z0-9]+/g) ?? []).filter(
-    (t) => t.length > 2 && !NAME_STOPWORDS.has(t)
-  );
-}
-
-/** Tokens match if equal or one is a ≥4-char prefix of the other. */
-function tokensClose(a: string, b: string): boolean {
-  if (a === b) return true;
-  return Math.min(a.length, b.length) >= 4 && (a.startsWith(b) || b.startsWith(a));
-}
-
-/** 0..1 similarity between two place names (exact > substring > token overlap). */
-function nameSimilarity(a: string, b: string): number {
-  const na = norm(a);
-  const nb = norm(b);
-  if (!na || !nb) return 0;
-  if (na === nb) return 1;
-  if (na.length >= 4 && nb.length >= 4 && (na.includes(nb) || nb.includes(na))) return 0.85;
-  const ta = nameTokens(a);
-  const tb = nameTokens(b);
-  if (!ta.length || !tb.length) return 0;
-  let inter = 0;
-  for (const t of ta) if (tb.some((u) => tokensClose(t, u))) inter++;
-  return inter / Math.max(ta.length, tb.length);
-}
-
-/** Find the best real OSM POI for an AI place (by name, guarded by distance). */
-function bestPoolMatch(place: Place, pool: Place[], used: Set<string>): Place | null {
-  if (norm(place.name).length < 3) return null;
-  const aiCoordValid = Number.isFinite(place.lat) && Number.isFinite(place.lng);
-  let best: Place | null = null;
-  let bestScore = 0;
-  for (const p of pool) {
-    if (used.has(p.id)) continue;
-    const sim = nameSimilarity(place.name, p.name);
-    if (sim < 0.55) continue;
-    // If the AI gave a usable coordinate, the real POI must be plausibly close.
-    if (aiCoordValid && haversineKm(place, p) > 5) continue;
-    const score = sim + (p.category === place.category ? 0.1 : 0);
-    if (score > bestScore) {
-      bestScore = score;
-      best = p;
-    }
-  }
-  return best;
-}
-
-/**
- * Ground every AI-suggested stop against the real OSM pool: when a confident
- * match exists, snap the coordinates/name to the real place and attach its real
- * opening hours; otherwise mark the stop unverified so the UI never presents an
- * AI approximation as a hard fact.
- */
-function groundDaysToPool(days: ItineraryDay[], pool: Place[]): void {
-  if (!pool.length) {
-    days.forEach((d) => d.stops.forEach((s) => (s.place.verified = false)));
-    return;
-  }
-  const used = new Set<string>();
-  for (const day of days) {
-    for (const stop of day.stops) {
-      const match = bestPoolMatch(stop.place, pool, used);
-      if (match) {
-        used.add(match.id);
-        const p = stop.place;
-        p.name = match.name; // canonical, correctly-spelled OSM name
-        p.lat = match.lat;
-        p.lng = match.lng;
-        p.verified = true;
-        p.openingHours = p.openingHours ?? match.openingHours;
-        p.wikipediaUrl = p.wikipediaUrl ?? match.wikipediaUrl;
-        p.wikidataId = p.wikidataId ?? match.wikidataId;
-        p.wikipediaTitle = p.wikipediaTitle ?? match.wikipediaTitle;
-        p.popularity = match.popularity ?? p.popularity; // real fame signal
-        p.neighborhood = p.neighborhood ?? match.neighborhood;
-        if (match.cuisine && !p.cuisine) p.cuisine = match.cuisine;
-      } else {
-        stop.place.verified = false;
-      }
-      // Hidden-gem is now a confidence decision on real data, not a keyword
-      // guess — so the badge only appears on authentic, lower-traffic spots.
-      stop.place.hiddenGem = isConfidentGem(stop.place);
-    }
-  }
-}
-
 // ── Knowledge-pack pipeline: tiering, guaranteed must-sees, confidence gate ──
 
 const ATTRACTION_SLOTS = new Set<GuideSlot>([
@@ -378,17 +219,13 @@ function applyTiers(days: ItineraryDay[], pack?: KnowledgePack): void {
   for (const d of days) for (const s of d.stops) s.place.tier = tierOf(s.place, pack);
 }
 
-/** Best verified pool place matching a known name (≥0.7 similarity). */
+/** Best verified pool place matching a known name (tolerant token match). */
 function bestPoolByName(name: string, pool: Place[], used: Set<string>): Place | null {
   let best: Place | null = null;
-  let bestSim = 0;
   for (const p of pool) {
     if (used.has(p.id)) continue;
-    const sim = nameSimilarity(name, p.name);
-    if (sim >= 0.7 && sim > bestSim) {
-      bestSim = sim;
-      best = p;
-    }
+    if (!looseMatch(name, p.name)) continue;
+    if (!best || (p.popularity ?? 0) > (best.popularity ?? 0)) best = p;
   }
   return best;
 }
@@ -402,6 +239,10 @@ function nameIsPresent(name: string, presentNames: string[]): boolean {
  * can verify against the real OSM pool REPLACES the weakest (Tier-3) anchor, so
  * a world-famous sight is never absent because a smaller place was closer. We
  * never inject a must-see we can't verify (no invented coordinates).
+ *
+ * Injections are spread across days by always picking the least-loaded day
+ * with an available weak anchor first — never stacking every missing must-see
+ * into Day 1 just because it's scanned first (multi-day balancing).
  */
 function injectMustSees(
   days: ItineraryDay[],
@@ -412,22 +253,27 @@ function injectMustSees(
   const presentNames: string[] = [];
   days.forEach((d) => d.stops.forEach((s) => presentNames.push(s.place.name)));
   const usedPool = new Set<string>();
+  const injectedPerDay = new Array(days.length).fill(0);
 
   for (const name of pack.mustSee) {
     if (nameIsPresent(name, presentNames)) continue;
     const match = bestPoolByName(name, pool, usedPool);
     if (!match) continue; // can't verify it → never invent; skip
 
-    // Find a weak anchor to replace (Tier-3 main attraction, else Tier-3 activity).
+    const order = leastLoadedOrder(injectedPerDay).map((i) => ({ d: days[i], i }));
+
+    // Find a weak anchor to replace (Tier-3 main attraction, else Tier-3 activity),
+    // preferring the day with the fewest must-sees injected so far.
     let target: ItineraryStop | undefined;
-    for (const d of days) {
+    let targetDayIdx = -1;
+    for (const { d, i } of order) {
       target = d.stops.find((s) => s.slot === "main_attraction" && (s.place.tier ?? 3) >= 3);
-      if (target) break;
+      if (target) { targetDayIdx = i; break; }
     }
     if (!target) {
-      for (const d of days) {
+      for (const { d, i } of order) {
         target = d.stops.find((s) => ATTRACTION_SLOTS.has(s.slot as GuideSlot) && (s.place.tier ?? 3) >= 3);
-        if (target) break;
+        if (target) { targetDayIdx = i; break; }
       }
     }
     if (!target) continue;
@@ -438,6 +284,7 @@ function injectMustSees(
     presentNames.push(p.name);
     target.place = p;
     target.note = `A must-see of ${city} — one of its defining sights; arrive early to beat the crowds.`;
+    injectedPerDay[targetDayIdx]++;
   }
 }
 
@@ -534,39 +381,6 @@ function weatherAdapt(days: ItineraryDay[], pool: Place[], req: TripRequest): vo
       }
     }
   }
-}
-
-/** Build itinerary days from the AI plan (routing/images added in finalize). */
-function buildDaysFromAI(
-  plan: AIPlan,
-  geo: GeocodeResult,
-  req: TripRequest,
-  weather: ItineraryDay["weather"][]
-): ItineraryDay[] {
-  return plan.days.map((aiDay, idx) => {
-    const stops: ItineraryStop[] = aiDay.stops.map((s, j) => {
-      const place = placeFromAIStop(s, geo, idx * 13 + j);
-      return {
-        daypart: s.daypart,
-        slot: s.slot,
-        startTime: s.startTime,
-        place,
-        durationMin: s.durationMin ?? DURATION[place.category] ?? 60,
-        note: s.whyVisit || s.description,
-        estimatedCost: stopCost(place.category, req.budget),
-      };
-    });
-    return {
-      day: idx + 1,
-      date: addDays(req.startDate, idx),
-      title: aiDay.title || `Day ${idx + 1}`,
-      summary: aiDay.summary || "",
-      area: aiDay.area,
-      stops,
-      estimatedCost: 0,
-      weather: weather[idx],
-    };
-  });
 }
 
 const MIN_STOPS_PER_DAY = 4;
@@ -674,22 +488,21 @@ async function enrichStopPhotos(stops: ItineraryStop[], city: string): Promise<v
   ]);
 }
 
-function pickDaypart(index: number): ItineraryStop["daypart"] {
-  const order: ItineraryStop["daypart"][] = ["morning", "lunch", "afternoon", "dinner", "evening"];
-  return order[Math.min(index, order.length - 1)];
-}
-
 function norm(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
-/** On-device fallback (no AI key): discovery + clustering. */
+/**
+ * Build the real, data-first plan: discover + score + cluster + route real
+ * places into days, then hand the finished structure to the AI narrator
+ * (titles/summaries/notes only — it cannot add, remove or move a stop).
+ */
 async function buildDeterministicDays(
   req: TripRequest,
   geo: GeocodeResult,
   weather: ItineraryDay["weather"][],
   pool: Place[]
-): Promise<ItineraryDay[]> {
+): Promise<{ days: ItineraryDay[]; overview: string; highlights: string[]; engine: Itinerary["engine"] }> {
   const center = geo.center;
   const allPlaces = pool.length ? pool : await discoverPlaces(req.destination, center);
   const scored = scorePlaces(allPlaces, req.interests, req.profile?.foodPreference);
@@ -729,8 +542,8 @@ async function buildDeterministicDays(
   });
 
   const fallbackOverview = buildOverview(req);
-  await narrate(req, days, fallbackOverview);
-  return days;
+  const engine = await narrate(req, days, fallbackOverview);
+  return { days, overview: fallbackOverview.overview, highlights: fallbackOverview.highlights, engine };
 }
 
 function isFood(p: Place): boolean {
@@ -866,13 +679,14 @@ function buildStops(
  * Enrich the structural plan with concierge narration + a destination overview.
  * Uses the live AI provider when available; otherwise falls back to grounded
  * templates so the output is always polished and free. The `overview` object is
- * mutated in place when the model returns better copy.
+ * mutated in place when the model returns better copy. Returns which engine
+ * actually produced the narration, for the plan's `engine` field.
  */
 async function narrate(
   req: TripRequest,
   days: ItineraryDay[],
   overview: { overview: string; highlights: string[] }
-): Promise<void> {
+): Promise<Itinerary["engine"]> {
   const provider = getProvider();
 
   if (provider.isLive) {
@@ -910,7 +724,7 @@ async function narrate(
         if (parsed.highlights?.length) overview.highlights = parsed.highlights.slice(0, 5);
         // Still backfill any notes the model skipped.
         backfillNotes(req, days);
-        return;
+        return provider.name;
       }
     } catch {
       // fall through to templates
@@ -918,6 +732,7 @@ async function narrate(
   }
 
   templateNarration(req, days);
+  return "mock";
 }
 
 /** Ensure every stop has a note even if the model missed some. */

@@ -58,21 +58,25 @@ optimized · supported by a real photo.**
 1. **Resolve city** (picked coords or geocode).
 2. **Fetch in parallel:** OSM pool (+ Wikidata popularity), weather, hero image,
    and load the **Knowledge Pack**.
-3. **Plan:** AI designs the guided day **around the pack's real picks** (pack is
-   injected into the prompt); falls back to the on-device deterministic builder
-   with no key.
-4. **Ground:** every AI stop is matched to a real OSM POI — coordinates, name
-   and opening hours snapped to reality; unmatched stops flagged unverified.
-5. **Tier:** every place tiered 1/2/3 (pack membership, else fame).
-6. **Guarantee must-sees:** missing Tier-1 sights replace the weakest anchors
-   (verified against OSM, never invented).
-7. **Confidence + gate:** score each stop; drop attractions below **70%** while
+3. **Plan (deterministic, always):** discover → score → cluster → route real
+   places only, from the OSM pool and the pack — never from a model guess.
+   This is the *only* path; there is no separate AI-planning branch to fall
+   back from.
+4. **Tier:** every place tiered 1/2/3 (pack membership, else fame).
+5. **Guarantee must-sees:** missing Tier-1 sights replace the weakest anchors
+   (verified against OSM, never invented), spread across days by
+   `leastLoadedOrder` so injections never stack onto Day 1.
+6. **Confidence + gate:** score each stop; drop attractions below **70%** while
    keeping the day complete.
-8. **Weather-adapt:** swap flexible outdoor activities for indoor options on
+7. **Weather-adapt:** swap flexible outdoor activities for indoor options on
    rainy/hot/cold/windy days (must-sees re-timed, not swapped).
-9. **Route + schedule:** `sortBySlot` → constrained **2-opt** day-flow → OSRM
+8. **Route + schedule:** `sortBySlot` → constrained **2-opt** day-flow → OSRM
    legs → clock times (respecting opening hours).
-10. **Photos:** resolve real per-place photos (day 1 up-front, rest lazily).
+9. **Photos:** resolve real per-place photos (day 1 up-front, rest lazily).
+10. **Narrate:** AI is consulted for the first and only time here — given the
+    finished, routed plan and asked only to write titles/summaries/per-stop
+    notes (`narrate()`); it cannot add, remove, rename or relocate a stop.
+    Without a configured AI key, grounded templates produce the same effect.
 11. **Audit:** per-stop confidence + plan-level provenance summary.
 
 ---
@@ -143,7 +147,7 @@ expertise %.
 
 ## 10. Quality bar & validation
 
-`npm run validate` runs 29 assertions against the real algorithms offline
+`npm run validate` runs 32 assertions against the real algorithms offline
 (tiering, must-see matching, confidence, route flow, scheduling, opening-hours
 guard). See `VALIDATION.md` for the full report and the 10-point checklist.
 
@@ -175,5 +179,5 @@ itinerary quality trustworthy enough for a real traveler to follow.
 | Scoring / confidence | `src/lib/itinerary/scoring.ts` |
 | Knowledge packs | `src/lib/data/knowledge.ts` |
 | OSM / fame / weather | `src/lib/data/overpass.ts`, `popularity.ts`, `weather.ts` |
-| AI planning prompt | `src/lib/ai/itineraryAI.ts` |
+| AI narration prompt (narrator-only — never plans) | `src/lib/ai/prompts.ts` |
 | Validation harness | `mobile/scripts/validate-itinerary.cjs` |
