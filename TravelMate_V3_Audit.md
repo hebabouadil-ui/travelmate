@@ -170,3 +170,21 @@ regressions, update docs, commit, only then continue.
 > (deduped) rather than replacing — so the app exhausts what it already has
 > first. New harness §28 (6 assertions). 117/117 offline assertions pass;
 > `npm run typecheck` is clean. Phases V3-6…V3-10 remain open.
+
+---
+
+> **Phase V3-6 status: shipped.** The interest-engine completeness (§8) and
+> the knowledge-pack→global fallback (§16) are done. New in
+> `itinerary/interests.ts`: `TRAVELER_CATEGORIES` + `travelerBoostCategories()`
+> add the per-traveller-type personalization explicit interests don't capture
+> (Family → parks & kid-friendly attractions; Romantic couples → sunset
+> viewpoints + evening dining; Luxury/Backpacker/Digital-nomad/Solo each lean
+> their own way; `explorer` is the no-lean Balanced Explorer). `engine.ts`'s
+> `scorePlaces()` now applies a gentle traveller-type lean (+0.12) below the
+> dominant explicit-interest boost (+0.35). `isBalancedDefault()` recognizes
+> the default posture — no interests, no lean — so a Balanced Explorer gets an
+> even mix. For §16, `destinationConfidence()` + `GLOBAL_ENGINE_CONFIDENCE`
+> return a curated pack's confidence when present (the premium layer) else an
+> honest 55 baseline, reported for any city — packs improve quality but never
+> gate global coverage. New harness §29 (8 assertions). 125/125 offline
+> assertions pass; `npm run typecheck` is clean. Phases V3-7…V3-10 remain open.

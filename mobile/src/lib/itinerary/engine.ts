@@ -7,6 +7,7 @@ import type {
   ItineraryStop,
   Place,
   PlaceCategory,
+  TravelerType,
   TripRequest,
 } from "../types";
 import { addDays, haversineKm, makeId } from "../utils";
@@ -31,7 +32,14 @@ import {
   planPerDay,
 } from "./optimize";
 import { confidenceScore, isConfidentGem, recommendationReason, selectionValue, shouldFetchMore } from "./scoring";
-import { categoriesForInterests, dayTheme, INTEREST_CATEGORIES, interestCoverageScore } from "./interests";
+import {
+  categoriesForInterests,
+  dayTheme,
+  destinationConfidence,
+  INTEREST_CATEGORIES,
+  interestCoverageScore,
+  travelerBoostCategories,
+} from "./interests";
 import {
   capFoodStops,
   confidenceBand,
@@ -234,7 +242,9 @@ function buildAudit(
     fromOSM,
     fromWikidata,
     avgConfidence: total ? Math.round((confidenceSum / total) * 100) / 100 : 0,
-    destinationConfidence: pack?.confidence,
+    // Pack confidence when curated (premium layer); else an honest global
+    // baseline so any city worldwide is still scored truthfully (§16).
+    destinationConfidence: destinationConfidence(pack?.confidence),
     interestCoverage: Math.round(inputs.interestCoverage * 100),
     qualityScore: quality,
     qualityLabel: qualityLabel(quality),
@@ -644,7 +654,12 @@ async function buildDeterministicDays(
     const seen = new Set(allPlaces.map((p) => p.id));
     allPlaces = [...allPlaces, ...fetched.filter((p) => !seen.has(p.id))];
   }
-  const scored = scorePlaces(allPlaces, req.interests, req.profile?.foodPreference);
+  const scored = scorePlaces(
+    allPlaces,
+    req.interests,
+    req.profile?.foodPreference,
+    req.profile?.travelerType
+  );
   const sights = scored.filter((p) => !isFood(p) && p.category !== "nightlife");
   const food = scored.filter((p) => isFood(p));
 
@@ -710,18 +725,24 @@ function isFood(p: Place): boolean {
   return FOOD_CATEGORIES.includes(p.category);
 }
 
-/** Boost places matching the traveller's interests + food preference. */
+/** Boost places matching the traveller's interests, traveller type + food
+ *  preference. Explicit interests dominate; the traveller-type lean is a gentle
+ *  secondary nudge (Family → kid-friendly, Romantic couples → sunsets/dining),
+ *  and a Balanced Explorer (no interests, no lean) gets an even mix. */
 function scorePlaces(
   places: Place[],
   interests: Interest[],
-  foodPref?: string
+  foodPref?: string,
+  travelerType?: TravelerType
 ): Place[] {
   const boosted = categoriesForInterests(interests);
+  const typeLean = travelerBoostCategories(travelerType);
 
   return places
     .map((p) => {
       let score = p.score ?? 0.5;
       if (boosted.has(p.category)) score += 0.35;
+      if (typeLean.has(p.category)) score += 0.12; // gentle traveller-type lean
       if (p.hiddenGem) score += 0.08; // gentle nudge toward authentic spots
       if (
         isFood(p) &&

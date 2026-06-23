@@ -423,8 +423,21 @@ new ones; rank by tier, confidence, interest, distance and opening hours.
 (`shouldFetchMore(pool, days × maxSightsPerDay)`), merging deduped rather than
 replacing. Harness §28 (6 assertions).
 
+## v3 Phase 6 — shipped: interest-engine completeness & pack→global fallback
+**Finding (V3 directive §8/§16):** personalization for traveller types
+(Family, Romantic, etc.), Balanced Explorer as the default, and a knowledge
+pack that improves quality without limiting global coverage.
+
+**Fix:** `TRAVELER_CATEGORIES`/`travelerBoostCategories()` and
+`isBalancedDefault()` (`itinerary/interests.ts`) add per-type leans (wired as
+a gentle +0.12 in `scorePlaces`, below the +0.35 interest boost), with
+`explorer` as the no-lean default. `destinationConfidence()` +
+`GLOBAL_ENGINE_CONFIDENCE` return a pack's confidence when present else an
+honest 55 baseline, so any city worldwide is still scored. Harness §29 (8
+assertions).
+
 ## How to reproduce
 ```
-cd mobile && npm run validate   # 117/117 assertions on the real algorithms
+cd mobile && npm run validate   # 125/125 assertions on the real algorithms
 cd mobile && npm run typecheck  # clean compile
 ```

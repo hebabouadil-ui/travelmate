@@ -1,4 +1,4 @@
-import type { Interest, PlaceCategory } from "../types";
+import type { Interest, PlaceCategory, TravelerType } from "../types";
 
 /**
  * Single source of truth for which place categories satisfy a traveller
@@ -65,6 +65,53 @@ export function categoriesForInterests(interests: Interest[]): Set<PlaceCategory
   const set = new Set<PlaceCategory>();
   interests.forEach((i) => INTEREST_CATEGORIES[i]?.forEach((c) => set.add(c)));
   return set;
+}
+
+// ── Traveler-type personalization & Balanced Explorer default (V3 §8) ───────
+
+/**
+ * Categories each traveller TYPE leans toward — the V3 §8 personalization that
+ * isn't captured by explicit interests (Family → kid-friendly attractions,
+ * Romantic couples → sunset viewpoints + dining, etc.). `explorer` is the
+ * Balanced Explorer: no lean, an even mix — the default when nothing stronger
+ * is expressed.
+ */
+export const TRAVELER_CATEGORIES: Record<TravelerType, PlaceCategory[]> = {
+  explorer: [], // Balanced Explorer — no category lean
+  food_lover: ["restaurant", "cafe"],
+  luxury: ["restaurant", "museum", "monument"],
+  backpacker: ["viewpoint", "park", "landmark"],
+  family: ["park", "beach", "museum", "attraction"],
+  couple: ["viewpoint", "restaurant", "nightlife"], // romantic: sunsets + dining
+  digital_nomad: ["cafe", "viewpoint", "park"],
+  solo: ["museum", "landmark", "cafe"],
+};
+
+/** Categories this traveller type leans toward (empty for Balanced Explorer). */
+export function travelerBoostCategories(travelerType?: TravelerType): Set<PlaceCategory> {
+  return new Set(travelerType ? TRAVELER_CATEGORIES[travelerType] ?? [] : []);
+}
+
+/**
+ * Is this effectively a "Balanced Explorer" trip — no explicit interests and no
+ * category-leaning traveller type — so the engine should deliver an even mix
+ * rather than over-indexing one category? This is the default posture.
+ */
+export function isBalancedDefault(interests: Interest[], travelerType?: TravelerType): boolean {
+  const leans = travelerBoostCategories(travelerType).size > 0;
+  return interests.length === 0 && !leans;
+}
+
+/**
+ * Destination confidence (0..100): a real Knowledge Pack's curated coverage
+ * confidence when one exists (the premium layer), else an honest global-engine
+ * baseline so any city worldwide still gets a plan and a truthful score — packs
+ * improve quality, they never gate coverage (§16).
+ */
+export const GLOBAL_ENGINE_CONFIDENCE = 55;
+
+export function destinationConfidence(packConfidence?: number): number {
+  return typeof packConfidence === "number" ? packConfidence : GLOBAL_ENGINE_CONFIDENCE;
 }
 
 /**

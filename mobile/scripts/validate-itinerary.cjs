@@ -300,5 +300,17 @@ ok(S.shouldFetchMore([place({}), place({})], 5) === true, `a thin 2-place pool f
 ok(S.shouldFetchMore([place({}), place({}), place({}), place({}), place({}), place({})], 5) === false, `an ample pool -> use existing, no fetch`);
 ok(S.shouldFetchMore([place({ name: "" }), place({})], 2) === true, `unusable (nameless) candidates don't count toward "enough"`);
 
+console.log("\n=== 29. Interest engine: traveler types, Balanced Explorer default, pack->global ===");
+ok(I.travelerBoostCategories("family").has("park") && I.travelerBoostCategories("family").has("attraction"),
+  `Family leans toward parks & kid-friendly attractions`);
+ok(I.travelerBoostCategories("couple").has("viewpoint") && I.travelerBoostCategories("couple").has("nightlife"),
+  `Romantic couples lean toward sunset viewpoints & evening dining`);
+ok(I.travelerBoostCategories("explorer").size === 0, `Balanced Explorer has no category lean (even mix)`);
+ok(I.isBalancedDefault([], "explorer") === true, `no interests + explorer -> Balanced Explorer default`);
+ok(I.isBalancedDefault([], "family") === false, `a family traveller is not the no-lean balanced default`);
+ok(I.isBalancedDefault(["food"], "explorer") === false, `an explicit interest is not the balanced default`);
+ok(I.destinationConfidence(92) === 92, `a curated pack's confidence is used when present`);
+ok(I.destinationConfidence(undefined) === I.GLOBAL_ENGINE_CONFIDENCE, `no pack -> honest global-engine baseline (any city still works)`);
+
 console.log(`\n========== ${pass} passed, ${fail} failed ==========`);
 process.exit(fail ? 1 : 0);
