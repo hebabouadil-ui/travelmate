@@ -901,13 +901,18 @@ async function narrate(
           cuisine: s.place.cuisine,
         })),
       }));
-      const raw = await provider.complete(
-        [
-          { role: "system", content: CONCIERGE_SYSTEM },
-          { role: "user", content: buildEnrichmentPrompt(req, input) },
-        ],
-        { json: true, temperature: 0.85 }
-      );
+      // Timebox narration so a slow model never dominates generation — fall
+      // back to instant grounded templates past the budget (perf target).
+      const raw = await Promise.race([
+        provider.complete(
+          [
+            { role: "system", content: CONCIERGE_SYSTEM },
+            { role: "user", content: buildEnrichmentPrompt(req, input) },
+          ],
+          { json: true, temperature: 0.85 }
+        ),
+        new Promise<string>((_, rej) => setTimeout(() => rej(new Error("narrate timeout")), 5000)),
+      ]);
       const parsed = extractJson<{
         overview?: string;
         highlights?: string[];
