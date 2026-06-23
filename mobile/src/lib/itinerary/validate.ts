@@ -374,6 +374,22 @@ export function hasExactPhoto(p: Place): boolean {
   return Boolean(p.photoResolved && p.imageUrl);
 }
 
+// ── Display confidence gate (V3 §15) ───────────────────────────────────────
+
+/** V3 §15: an attraction shown to the traveller must clear 70% confidence —
+ *  below that it is not displayed (vs the looser <50% reject band). */
+export const DISPLAY_CONFIDENCE_FLOOR = 0.7;
+
+/**
+ * Should this stop be displayed under the V3 70% rule? Attractions/sights must
+ * reach `DISPLAY_CONFIDENCE_FLOOR`; structural functional stops (meals, coffee,
+ * sunset, nightlife) are exempt — they have no ratings source and exist to make
+ * the day complete, so they're kept and honestly labeled, never hidden.
+ */
+export function passesDisplayConfidence(isAttraction: boolean, confidence: number): boolean {
+  return !isAttraction || confidence >= DISPLAY_CONFIDENCE_FLOOR;
+}
+
 /** Build a single display address from OSM addr:* parts; undefined if empty so
  *  the UI shows nothing rather than stray commas. */
 export function formatAddress(parts: {

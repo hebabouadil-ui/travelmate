@@ -79,14 +79,14 @@ ok(F.pathDistance(after) <= before && mono, `distance ${before.toFixed(3)} -> ${
 console.log("\n=== 5/6. Scheduling: increasing times + opening-hours guard ===");
 const day = [
   stop({ slot: "breakfast", startTime: "08:00", durationMin: 30, place: { lat: 0, lng: 0 } }),
-  stop({ slot: "morning_activity", durationMin: 90, travelFromPrevMin: 10, place: { lat: 0, lng: 0.01, openingHours: "Tu-Su 10:00-18:00" } }),
+  stop({ slot: "morning_activity", durationMin: 90, travelFromPrevMin: 10, place: { lat: 0, lng: 0.01, openingHours: "Tu-Su 12:00-18:00" } }),
   stop({ slot: "lunch", durationMin: 60, travelFromPrevMin: 10, place: { lat: 0, lng: 0.012 } }),
 ];
 F.scheduleDay(day);
 const times = day.map((s) => s.startTime);
 let inc = true; for (let i = 1; i < day.length; i++) if (F.parseHM(times[i]) <= F.parseHM(times[i-1])) inc = false;
 ok(inc, `times strictly increasing: ${times.join(" → ")}`);
-ok(times[1] === "10:00", `place opening 10:00 (desired 09:00) bumped to ${times[1]}`);
+ok(times[1] === "12:00", `place opening 12:00 (desired 11:00) bumped to ${times[1]}`);
 
 console.log("\n=== 1d. Sunset slot anchors to the real local sunset time ===");
 const sunsetDay = [
@@ -311,6 +311,26 @@ ok(I.isBalancedDefault([], "family") === false, `a family traveller is not the n
 ok(I.isBalancedDefault(["food"], "explorer") === false, `an explicit interest is not the balanced default`);
 ok(I.destinationConfidence(92) === 92, `a curated pack's confidence is used when present`);
 ok(I.destinationConfidence(undefined) === I.GLOBAL_ENGINE_CONFIDENCE, `no pack -> honest global-engine baseline (any city still works)`);
+
+console.log("\n=== 30. Advanced day structure + 70% confidence display gate ===");
+// The day template lays out main landmark early, cultural mid-morning, sunset evening.
+const templateDay = [
+  stop({ slot: "breakfast", place: { lat: 0, lng: 0 } }),
+  stop({ slot: "main_attraction", durationMin: 90, travelFromPrevMin: 10, place: { lat: 0, lng: 0.005 } }),
+  stop({ slot: "morning_activity", durationMin: 60, travelFromPrevMin: 10, place: { lat: 0, lng: 0.01 } }),
+  stop({ slot: "lunch", durationMin: 60, travelFromPrevMin: 10, place: { lat: 0, lng: 0.012 } }),
+];
+const ordered30 = F.sortBySlot(templateDay).map((s) => s.slot);
+ok(JSON.stringify(ordered30) === JSON.stringify(["breakfast","main_attraction","morning_activity","lunch"]),
+  `main landmark is scheduled before the cultural/morning activity -> ${ordered30.join(" → ")}`);
+F.scheduleDay(templateDay);
+ok(templateDay[0].startTime === "08:00" && F.parseHM(templateDay[1].startTime) >= F.parseHM("09:00"),
+  `breakfast 08:00, main landmark ~09:00 (got ${templateDay[1].startTime})`);
+// 70% display gate (V3 §15)
+ok(V.passesDisplayConfidence(true, 0.72) === true, `a 72% attraction is shown`);
+ok(V.passesDisplayConfidence(true, 0.6) === false, `a 60% attraction is NOT shown (below the 70% floor)`);
+ok(V.passesDisplayConfidence(false, 0.45) === true, `a 45% restaurant (functional, no ratings source) is exempt and kept`);
+ok(V.DISPLAY_CONFIDENCE_FLOOR === 0.7, `the display floor is exactly 70%`);
 
 console.log(`\n========== ${pass} passed, ${fail} failed ==========`);
 process.exit(fail ? 1 : 0);

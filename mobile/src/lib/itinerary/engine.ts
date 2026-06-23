@@ -42,7 +42,7 @@ import {
 } from "./interests";
 import {
   capFoodStops,
-  confidenceBand,
+  passesDisplayConfidence,
   isVerified,
   landmarkCoverageScore,
   normName,
@@ -427,20 +427,21 @@ function ensureInterestCoverage(days: ItineraryDay[], pool: Place[], interests: 
 }
 
 /**
- * Drop only REJECT-band ATTRACTION stops (<50% confidence, per the spec's
- * confidence bands), while keeping every day complete (≥3 stops and a main
- * attraction). 50-69% ("Fallback") stops are kept and shown, just honestly
- * labeled as less certain — they're no longer treated as equally trustworthy
- * as a 90%+ verified must-see, but they're not silently discarded either.
- * Backfill then refills from the tier-preferred pool. Meals/coffee/sunset/
- * night are structural and never gated.
+ * V3 §15 display gate: drop ATTRACTION stops below 70% confidence (not just the
+ * <50% reject band), while keeping every day complete (≥3 stops and a main
+ * attraction). Backfill then refills from the tier-preferred pool with stronger
+ * candidates. Meals/coffee/sunset/night are structural functional stops with no
+ * ratings source — they're exempt, kept and honestly labeled, never hidden.
+ * When dropping to the 70% bar would break a day's completeness (or remove its
+ * only main attraction), the day is left intact rather than emptied — an honest
+ * fallback when the destination's real data simply has nothing stronger.
  */
 function gateLowConfidence(days: ItineraryDay[]): void {
   for (const d of days) {
     d.stops.forEach((s) => (s.place.confidence = confidenceScore(s.place)));
     const kept = d.stops.filter((s) => {
       const isAttraction = ATTRACTION_SLOTS.has(s.slot as GuideSlot);
-      return !(isAttraction && confidenceBand(s.place.confidence ?? 0) === "reject");
+      return passesDisplayConfidence(isAttraction, s.place.confidence ?? 0);
     });
     const hadMain = d.stops.some((s) => s.slot === "main_attraction");
     const keepsMain = kept.some((s) => s.slot === "main_attraction");

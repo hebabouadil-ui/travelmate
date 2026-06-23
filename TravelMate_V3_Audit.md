@@ -188,3 +188,23 @@ regressions, update docs, commit, only then continue.
 > honest 55 baseline, reported for any city — packs improve quality but never
 > gate global coverage. New harness §29 (8 assertions). 125/125 offline
 > assertions pass; `npm run typecheck` is clean. Phases V3-7…V3-10 remain open.
+
+---
+
+> **Phase V3-7 status: shipped.** The advanced day structure (§11) and the
+> 70% confidence display gate (§15) are done. `slots.ts` now lays the day out
+> on the V3 clock — 08:00 breakfast, 09:00 main landmark (moved early, before
+> the cultural/morning activity), 11:00 cultural attraction, 13:00 lunch, 14:30
+> neighborhood, 16:30 activity, 18:30 sunset, 20:00 dinner, 21:30 night — and
+> the `SLOTS` order now matches (main attraction before morning activity), so
+> the schedule reads like a real local-expert day; `scheduleDay()` still treats
+> these as desired anchors and enforces increasing time + real travel/opening
+> hours. For §15, new `DISPLAY_CONFIDENCE_FLOOR` (0.7) +
+> `passesDisplayConfidence()` (`validate.ts`) raise the bar: `gateLowConfidence`
+> now drops ATTRACTION stops below 70% (not just the <50% reject band), with
+> backfill refilling stronger picks and the completeness guard (≥3 stops + a
+> main attraction) preventing an emptied day. Meals/coffee/sunset/night are
+> exempt — functional, no ratings source, kept and labeled. New harness §30 (6
+> assertions); the existing opening-hours test was retuned to the new template.
+> 131/131 offline assertions pass; `npm run typecheck` is clean. Phases
+> V3-8…V3-10 remain open.

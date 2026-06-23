@@ -101,9 +101,13 @@ Each day is a sequence of **moments**, each with a clock time, a reason, a
 duration, travel-from-previous, and a confidence score:
 
 ```
-Breakfast → Morning activity → Main attraction → Lunch →
-Afternoon activity → Coffee break → Sunset → Dinner → Night
+08:00 Breakfast → 09:00 Main landmark → 11:00 Cultural attraction →
+13:00 Lunch → 14:30 Neighborhood → 16:30 Activity → 18:30 Sunset →
+20:00 Dinner → 21:30 Night
 ```
+The main landmark is placed early; clock times are realistic anchors
+(`SLOT_DEFAULT_TIME`) that `scheduleDay` adjusts for real travel and opening
+hours.
 
 Slot model lives in `src/lib/itinerary/slots.ts`; flow/scheduling in
 `dayflow.ts`.
@@ -157,8 +161,11 @@ trip — a measurement of the result, reported on `Itinerary.audit.interestCover
 | Attraction importance (fame) | up to 0.20 |
 
 Bands: **90 Excellent / 70 Trusted / 50 Fallback / below 50 Reject.**
-Only Reject-band attractions are removed (days stay complete via backfill);
-Fallback stops are kept and clearly labeled, never hidden.
+**Attractions are gated for display at 70%** (`DISPLAY_CONFIDENCE_FLOOR`):
+sights below 70% are dropped and backfilled with stronger picks, subject to a
+completeness guard (≥3 stops + a main attraction) so a day is never emptied.
+Functional stops — meals, coffee, sunset, nightlife — have no ratings source
+and are exempt: kept and clearly labeled, never hidden.
 
 ---
 

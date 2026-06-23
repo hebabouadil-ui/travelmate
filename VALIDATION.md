@@ -436,8 +436,22 @@ a gentle +0.12 in `scorePlaces`, below the +0.35 interest boost), with
 honest 55 baseline, so any city worldwide is still scored. Harness §29 (8
 assertions).
 
+## v3 Phase 7 — shipped: advanced day structure + 70% confidence display gate
+**Finding (V3 directive §11/§15):** the day should follow an intentional
+08:00→21:30 clock with the main landmark early; and attractions below 70%
+confidence should not be shown.
+
+**Fix:** `slots.ts` reorders the skeleton (main attraction before the
+morning/cultural activity) and sets the V3 clock template (anchors, with
+`scheduleDay` still enforcing increasing time + travel/opening hours).
+`DISPLAY_CONFIDENCE_FLOOR` (0.7) + `passesDisplayConfidence()`
+(`itinerary/validate.ts`) raise the gate: `gateLowConfidence` drops attractions
+below 70% with backfill + a completeness guard; functional food/coffee/sunset/
+night stops are exempt. Harness §30 (6 assertions); §5/6 opening-hours test
+retuned to the new template.
+
 ## How to reproduce
 ```
-cd mobile && npm run validate   # 125/125 assertions on the real algorithms
+cd mobile && npm run validate   # 131/131 assertions on the real algorithms
 cd mobile && npm run typecheck  # clean compile
 ```
