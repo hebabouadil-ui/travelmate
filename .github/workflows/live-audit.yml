@@ -1,0 +1,34 @@
+name: Live Provider Audit
+
+# Runs the REAL provider requests (OSM/Overpass, Foursquare, Open-Meteo) against
+# the live third-party APIs from a GitHub-hosted runner (which, unlike the dev
+# sandbox, has open outbound internet) and prints actual runtime evidence:
+# candidate counts per source/category, which provider can fill each field,
+# Foursquare field availability, and timings.
+#
+# This is the V4 "reality check" evidence mechanism — proof from real API
+# responses, not unit tests. Trigger manually from the Actions tab.
+
+on:
+  workflow_dispatch:
+    inputs:
+      cities:
+        description: "Space-separated city list (blank = all 9 acceptance cities)"
+        required: false
+        default: ""
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    env:
+      EXPO_PUBLIC_FOURSQUARE_API_KEY: ${{ secrets.EXPO_PUBLIC_FOURSQUARE_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Run live provider audit
+        run: node scripts/live-audit.mjs ${{ github.event.inputs.cities }}
