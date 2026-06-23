@@ -85,7 +85,11 @@ async function overpass(center) {
       const res = await fetch(ep, {
         method: "POST",
         body: "data=" + encodeURIComponent(query),
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          Accept: "application/json",
+          "User-Agent": "VoyageAI-Mobile/1.0 (contact@voyage.ai)",
+        },
         signal: AbortSignal.timeout(25000),
       });
       if (!res.ok) { attempts.push(`${ep} -> HTTP ${res.status}`); continue; }

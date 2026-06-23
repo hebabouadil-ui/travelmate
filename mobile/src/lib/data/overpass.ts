@@ -1,6 +1,17 @@
 import type { GeoPoint, Place, PlaceCategory } from "../types";
 import { makeId } from "../utils";
 import { formatAddress } from "../itinerary/validate";
+import { ENV } from "../env";
+
+// Overpass/Nominatim throttle or 406-reject anonymous requests. Identifying the
+// client with a descriptive User-Agent (etiquette requirement) and asking for
+// JSON markedly reduces 406/429 rejections — the live audit showed every mirror
+// rejecting the header-less request.
+const OSM_HEADERS = {
+  "Content-Type": "application/x-www-form-urlencoded",
+  Accept: "application/json",
+  "User-Agent": `VoyageAI-Mobile/1.0 (${ENV.osmContactEmail})`,
+};
 
 const ENDPOINTS = [
   "https://overpass-api.de/api/interpreter",
@@ -45,7 +56,7 @@ export async function overpassPlaces(
         fetch(endpoint, {
           method: "POST",
           body: "data=" + encodeURIComponent(query),
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          headers: OSM_HEADERS,
           signal: controller.signal,
         })
           .then(async (res) => {
