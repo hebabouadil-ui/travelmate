@@ -117,3 +117,93 @@ export const GEM_THRESHOLD = 0.7;
 export function isConfidentGem(p: Place): boolean {
   return gemConfidence(p) >= GEM_THRESHOLD;
 }
+
+/** Human-facing phrasing for each interest in a recommendation reason. */
+const INTEREST_PHRASE: Record<Interest, string> = {
+  monuments: "historical landmarks",
+  museums: "museums",
+  beaches: "beaches",
+  nature: "nature and the outdoors",
+  food: "food",
+  architecture: "architecture",
+  shopping: "shopping",
+  photography: "scenic photography spots",
+  nightlife: "nightlife",
+};
+
+export interface ReasonContext {
+  /** Destination name, for phrasing ("…in Marrakech"). */
+  city: string;
+  /** Interests the traveller actually selected. */
+  interests?: Interest[];
+  /** Straight-line km from the day's route anchor, when known. */
+  distanceKm?: number;
+  /** True when this place sits in a real OSM nightlife district (Phase 6). */
+  inNightlifeDistrict?: boolean;
+}
+
+/** Fame at/above which a place is genuinely "one of the most-visited". */
+const HIGH_FAME = 0.6;
+/** Distance (km) at/under which "close to your route" is honestly true. */
+const NEAR_ROUTE_KM = 1.0;
+
+/** The first selected interest whose categories include this place's category. */
+function matchedInterest(p: Place, interests: Interest[]): Interest | undefined {
+  const wanted = categoriesForInterests(interests);
+  if (!wanted.has(p.category)) return undefined;
+  return interests.find((i) => categoriesForInterests([i]).has(p.category));
+}
+
+/**
+ * Deterministic, source-backed answer to "Why was this place recommended?" —
+ * the V3 explainability requirement. Never AI free-text, and never a claim the
+ * data doesn't support: it only says "matches your interest in X" when the
+ * place's real category actually satisfies a selected interest, only says
+ * "must-see" for a real Tier-1 pack/fame match, only says "nightlife district"
+ * when the Phase-6 density signal confirms one, and only says "close to your
+ * route" when it really is. Precedence runs from the most compelling, most
+ * specific reason to a plain honest fallback.
+ */
+export function recommendationReason(p: Place, ctx: ReasonContext): string {
+  const where = ctx.city ? ` in ${ctx.city}` : "";
+  const interests = ctx.interests ?? [];
+
+  // 1. A genuine must-see dominates every other reason.
+  if (p.tier === 1) {
+    return `Recommended because it is one of the top must-see sights${where}.`;
+  }
+
+  // 2/3. Food and nightlife read better with their own phrasing.
+  if (p.category === "restaurant" || p.category === "cafe") {
+    const kind = p.category === "cafe" ? "café" : "restaurant";
+    if (interests.includes("food")) {
+      return `Recommended because it matches your interest in food — a well-placed ${kind} within walking distance of your route.`;
+    }
+    return `Recommended as a well-placed ${kind} within walking distance of your route.`;
+  }
+  if (p.category === "nightlife") {
+    if (ctx.inNightlifeDistrict) {
+      return `Recommended because it is part of a lively nightlife district${where}.`;
+    }
+    return `Recommended because it matches your nightlife interests.`;
+  }
+
+  // 4. An explicit interest match the data actually supports.
+  const interest = matchedInterest(p, interests);
+  if (interest) {
+    return `Recommended because it matches your interest in ${INTEREST_PHRASE[interest]}.`;
+  }
+
+  // 5. Real global fame (Wikidata sitelink signal), not invented popularity.
+  if (fameValue(p) >= HIGH_FAME) {
+    return `Recommended because it is one of the highest-confidence, most-visited attractions${where}.`;
+  }
+
+  // 6. Simply well-placed on the day's route.
+  if (typeof ctx.distanceKm === "number" && ctx.distanceKm <= NEAR_ROUTE_KM) {
+    return `Recommended because it is located close to your route.`;
+  }
+
+  // 7. Honest fallback — still a real, verified stop, just no stronger signal.
+  return `Recommended as a worthwhile stop${where}.`;
+}

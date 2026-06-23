@@ -30,7 +30,7 @@ import {
   optimizeRoute,
   planPerDay,
 } from "./optimize";
-import { confidenceScore, isConfidentGem, selectionValue } from "./scoring";
+import { confidenceScore, isConfidentGem, recommendationReason, selectionValue } from "./scoring";
 import { categoriesForInterests, dayTheme, INTEREST_CATEGORIES, interestCoverageScore } from "./interests";
 import {
   confidenceBand,
@@ -653,11 +653,25 @@ async function buildDeterministicDays(
   const usedFood = new Set<string>();
   const usedExtra = new Set<string>();
 
+  // Real nightlife-district membership (Phase 6 density signal), so a stop's
+  // recommendation reason only claims "nightlife district" when one exists.
+  const nightlifeAll = scored.filter((p) => p.category === "nightlife");
+  const inNightlifeDistrict = (p: Place) =>
+    nightlifeAll.some((o) => o.id !== p.id && haversineKm(p, o) <= 0.3);
+
   const days: ItineraryDay[] = clusters.map((group, idx) => {
     const ordered = optimizeRoute(group, center);
     const stops = buildStops(ordered, food, scored, center, usedFood, usedExtra, req, wantsEvening);
     stops.forEach((st) => {
       if (!st.place.imageUrl) st.place.imageUrl = categoryImage(st.place.category, st.place.name);
+      // Deterministic "Recommended because…" — the V3 explainability rule.
+      st.place.recommendationReason = recommendationReason(st.place, {
+        city: req.destination,
+        interests: req.interests,
+        distanceKm: haversineKm(center, st.place),
+        inNightlifeDistrict:
+          st.place.category === "nightlife" && inNightlifeDistrict(st.place),
+      });
     });
     return {
       day: idx + 1,

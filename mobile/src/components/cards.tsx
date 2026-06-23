@@ -258,6 +258,13 @@ export function StopCard({
 
             {stop.note ? <Text style={styles.stopNote} numberOfLines={2}>{stop.note}</Text> : null}
 
+            {stop.place.recommendationReason ? (
+              <View style={styles.reasonRow}>
+                <Icon name="checkmark-circle" size={13} color={colors.success} />
+                <Text style={styles.reasonText} numberOfLines={2}>{stop.place.recommendationReason}</Text>
+              </View>
+            ) : null}
+
             <View style={styles.stopActions}>
               <View style={styles.stopAction}>
                 <Icon name="information-circle-outline" size={14} color={colors.primary} />
@@ -438,6 +445,8 @@ const styles = StyleSheet.create({
   stopMeta: { color: colors.textMuted, fontSize: font.small },
   stopDot2: { color: colors.textFaint, fontSize: font.small },
   stopNote: { color: colors.textMuted, fontSize: font.small, lineHeight: 19, marginTop: spacing.sm, fontStyle: "italic" },
+  reasonRow: { flexDirection: "row", alignItems: "flex-start", gap: 5, marginTop: spacing.sm },
+  reasonText: { color: colors.success, fontSize: font.tiny, lineHeight: 17, flex: 1, fontWeight: "600" },
   travelRow: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: spacing.sm },
   travelText: { color: colors.textFaint, fontSize: font.tiny },
   stopActions: { flexDirection: "row", gap: spacing.lg, marginTop: spacing.md },

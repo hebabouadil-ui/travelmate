@@ -200,5 +200,22 @@ ok(I.dayTheme([{ category: "restaurant" }, { category: "cafe" }, { category: "ni
 ok(I.dayTheme([{ category: "shopping" }, { category: "shopping" }, { category: "museum" }]) === "Markets & Shopping",
   `2 of 3 sightseeing stops are shopping (67%) -> "${I.dayTheme([{ category: "shopping" }, { category: "shopping" }, { category: "museum" }])}"`);
 
+console.log("\n=== 23. Recommendation Reason: deterministic, never an unsupported claim ===");
+const reasonCtx = { city: "Marrakech", interests: ["nightlife"], distanceKm: 5 };
+ok(/must-see/i.test(S.recommendationReason(place({ tier: 1, category: "monument" }), reasonCtx)),
+  `a Tier-1 sight -> must-see reason`);
+ok(/interest in food/i.test(S.recommendationReason(place({ category: "restaurant" }), { city: "Madrid", interests: ["food"] })),
+  `a restaurant on a food trip -> interest-in-food reason`);
+ok(/walking distance/i.test(S.recommendationReason(place({ category: "cafe" }), { city: "Madrid", interests: [] })),
+  `a café with no food interest -> walking-distance reason (no false interest claim)`);
+ok(/nightlife district/i.test(S.recommendationReason(place({ category: "nightlife" }), { city: "Madrid", inNightlifeDistrict: true })),
+  `a nightlife venue in a real district -> district reason`);
+ok(/matches your interest in historical/i.test(S.recommendationReason(place({ category: "monument", tier: 2 }), { city: "Rome", interests: ["monuments"] })),
+  `a monument matching a selected interest -> interest reason`);
+ok(/most-visited/i.test(S.recommendationReason(place({ category: "attraction", popularity: 0.9 }), { city: "Paris", interests: [] })),
+  `a famous attraction, no matching interest -> fame reason`);
+ok(/worthwhile stop/i.test(S.recommendationReason(place({ category: "attraction", popularity: 0 }), { city: "Tangier", interests: [], distanceKm: 9 })),
+  `an obscure, far, off-interest stop -> honest worthwhile-stop fallback (no invented reason)`);
+
 console.log(`\n========== ${pass} passed, ${fail} failed ==========`);
 process.exit(fail ? 1 : 0);

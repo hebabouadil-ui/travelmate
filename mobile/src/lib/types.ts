@@ -59,6 +59,9 @@ export interface Place extends GeoPoint {
   description?: string;
   /** One inviting line on why this place is worth visiting. */
   whyVisit?: string;
+  /** Deterministic, source-backed "Recommended because…" line explaining why
+   *  this place is in the plan (see `recommendationReason` in scoring.ts). */
+  recommendationReason?: string;
   tags?: string[];
   /** 0..1 popularity / interest heuristic. */
   score?: number;
