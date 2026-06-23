@@ -16,6 +16,14 @@ on:
         description: "Space-separated city list (blank = all 9 acceptance cities)"
         required: false
         default: ""
+  # Also run on this branch when the audit harness changes, so evidence can be
+  # produced without the workflow being on the default branch yet.
+  push:
+    branches:
+      - "claude/**"
+    paths:
+      - "mobile/scripts/live-audit.mjs"
+      - ".github/workflows/live-audit.yml"
 
 jobs:
   audit:
