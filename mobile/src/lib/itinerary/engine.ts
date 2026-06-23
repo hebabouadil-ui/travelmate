@@ -9,7 +9,7 @@ import type {
   PlaceCategory,
   TripRequest,
 } from "../types";
-import { addDays, haversineKm, makeId, walkingMinutes } from "../utils";
+import { addDays, haversineKm, makeId } from "../utils";
 import { geocode, type GeocodeResult } from "../data/geocode";
 import { discoverPlaces } from "../data/places";
 import { enrichPopularity } from "../data/popularity";
@@ -23,13 +23,15 @@ import { dayRoute } from "../data/routing";
 import {
   bestNightlifeVenue,
   clusterIntoDays,
+  decideTravelMode,
+  legDurationMin,
   nearestWhere,
   nearestWithinRadius,
   optimizeRoute,
   planPerDay,
 } from "./optimize";
 import { confidenceScore, isConfidentGem, selectionValue } from "./scoring";
-import { categoriesForInterests, INTEREST_CATEGORIES, interestCoverageScore } from "./interests";
+import { categoriesForInterests, dayTheme, INTEREST_CATEGORIES, interestCoverageScore } from "./interests";
 import {
   confidenceBand,
   isVerified,
@@ -567,7 +569,7 @@ async function finalizeDays(
       // Guarantee morning→night order, then minimise back-and-forth within each
       // part of the day (constrained 2-opt) before computing the real route.
       day.stops = optimizeDayFlow(sortBySlot(day.stops));
-      const route = await dayRoute(day.stops.map((st) => st.place));
+      const route = await dayRoute(day.stops.map((st) => st.place), req.budget);
       day.stops.forEach((st, i) => {
         if (i === 0) return;
         const leg = route.legs[i - 1];
@@ -662,6 +664,7 @@ async function buildDeterministicDays(
       date: addDays(req.startDate, idx),
       title: `Day ${idx + 1}`,
       summary: "",
+      theme: dayTheme(stops.map((st) => st.place)),
       stops,
       estimatedCost: 0,
       weather: weather[idx],
@@ -715,24 +718,26 @@ function buildStops(
 ): ItineraryStop[] {
   const stops: ItineraryStop[] = [];
   const anchor = ordered[0] ?? center;
+  // Walking Fatigue model: cumulative walked km this day, used to push later
+  // legs toward transit even when individually short (see `decideTravelMode`).
+  // This placeholder is superseded once the real OSRM/haversine day route is
+  // computed (see `buildDeterministicDays`); kept consistent with it so a day
+  // that can't reach the routing step still has realistic estimates.
+  let walkedKm = 0;
 
   const push = (place: Place, daypart: Daypart, slot?: GuideSlot) => {
     const prev = stops[stops.length - 1]?.place;
     const km = prev ? haversineKm(prev, place) : 0;
-    const mode: ItineraryStop["travelMode"] =
-      km < 1.8 ? "walk" : km < 8 ? "transit" : "taxi";
+    const mode = prev ? decideTravelMode(km, req.budget, walkedKm) : undefined;
+    if (mode === "walk") walkedKm += km;
     stops.push({
       daypart,
       slot,
       startTime: slot ? SLOT_DEFAULT_TIME[slot] : undefined,
       place,
       durationMin: DURATION[place.category] ?? 60,
-      travelFromPrevMin: prev
-        ? mode === "walk"
-          ? walkingMinutes(km)
-          : Math.max(8, Math.round((km / (mode === "transit" ? 18 : 30)) * 60))
-        : 0,
-      travelMode: prev ? mode : undefined,
+      travelFromPrevMin: prev && mode ? legDurationMin(km, mode) : 0,
+      travelMode: mode,
       estimatedCost: stopCost(place.category, req.budget),
     });
   };
@@ -973,6 +978,7 @@ export function recomputeDay(
 ): ItineraryDay {
   // Keep daypart anchors (lunch/dinner) but re-derive travel legs in order.
   const stops = day.stops.map((s) => ({ ...s }));
+  let walkedKm = 0;
   for (let i = 0; i < stops.length; i++) {
     const prev = stops[i - 1]?.place;
     const cur = stops[i].place;
@@ -982,13 +988,10 @@ export function recomputeDay(
       continue;
     }
     const km = haversineKm(prev, cur);
-    const mode: ItineraryStop["travelMode"] =
-      km < 1.8 ? "walk" : km < 8 ? "transit" : "taxi";
+    const mode = decideTravelMode(km, budget, walkedKm);
+    if (mode === "walk") walkedKm += km;
     stops[i].travelMode = mode;
-    stops[i].travelFromPrevMin =
-      mode === "walk"
-        ? walkingMinutes(km)
-        : Math.max(8, Math.round((km / (mode === "transit" ? 18 : 30)) * 60));
+    stops[i].travelFromPrevMin = legDurationMin(km, mode);
   }
   const estimatedCost =
     stops.reduce((s, st) => s + (st.estimatedCost ?? 0), 0) +

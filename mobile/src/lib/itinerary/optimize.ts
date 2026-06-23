@@ -1,5 +1,5 @@
-import type { GeoPoint, Place } from "../types";
-import { haversineKm } from "../utils";
+import type { Budget, GeoPoint, Place, TravelMode } from "../types";
+import { haversineKm, walkingMinutes } from "../utils";
 
 /**
  * Order a set of stops to minimize walking using a nearest-neighbor route
@@ -190,4 +190,50 @@ export function bestNightlifeVenue(
 
   const unused = nightlife.filter((p) => !exclude.has(p.id));
   return pickBest(unused) ?? (allowReuse ? pickBest(nightlife) : undefined);
+}
+
+/** Route/Transport Engine: walk/transit distance ceilings per budget tier. The
+ *  `medium` row matches the original distance-only thresholds exactly, so a
+ *  caller that doesn't pass a budget sees no behavior change. */
+const MODE_CEILINGS_KM: Record<Budget, { walk: number; transit: number }> = {
+  economy: { walk: 2.5, transit: 15 },
+  medium: { walk: 1.8, transit: 12 },
+  luxury: { walk: 1.0, transit: 6 },
+};
+
+/** Walking Fatigue model: once a day's cumulative walked distance reaches
+ *  this, the walk ceiling collapses so further legs prefer transit even when
+ *  individually short — a real traveller doesn't keep walking 1.5km legs
+ *  back-to-back all day. */
+const FATIGUE_THRESHOLD_KM = 3;
+const FATIGUED_WALK_CEILING_KM = 0.3;
+
+/**
+ * Choose a realistic travel mode for a leg, tiered by budget (luxury
+ * travellers default to taxis sooner; economy travellers walk and transit
+ * further) and aware of how much the traveller has already walked today
+ * (`walkedSoFarKm`) so a day doesn't silently demand 5+ walking legs back to
+ * back. This is the single source of truth for mode decisions — previously
+ * `routing.ts` and two independent inline copies in `engine.ts` each
+ * reimplemented this with silently drifting thresholds.
+ */
+export function decideTravelMode(
+  distanceKm: number,
+  budget: Budget = "medium",
+  walkedSoFarKm = 0
+): TravelMode {
+  const ceilings = MODE_CEILINGS_KM[budget] ?? MODE_CEILINGS_KM.medium;
+  const walkCeiling =
+    walkedSoFarKm >= FATIGUE_THRESHOLD_KM ? FATIGUED_WALK_CEILING_KM : ceilings.walk;
+  if (distanceKm <= walkCeiling) return "walk";
+  if (distanceKm <= ceilings.transit) return "transit";
+  return "taxi";
+}
+
+/** Minutes for a leg of `distanceKm` at the given mode; `walkSec` (from a real
+ *  routing engine) is preferred over the haversine walking-speed estimate. */
+export function legDurationMin(distanceKm: number, mode: TravelMode, walkSec?: number): number {
+  if (mode === "walk") return walkSec ? Math.round(walkSec / 60) : walkingMinutes(distanceKm);
+  const speed = mode === "transit" ? 20 : 35; // km/h
+  return Math.max(6, Math.round((distanceKm / speed) * 60));
 }

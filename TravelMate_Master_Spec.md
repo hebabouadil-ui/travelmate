@@ -76,7 +76,12 @@ optimized · supported by a real photo.**
 7. **Weather-adapt:** swap flexible outdoor activities for indoor options on
    rainy/hot/cold/windy days (must-sees re-timed, not swapped).
 8. **Route + schedule:** `sortBySlot` → constrained **2-opt** day-flow → OSRM
-   legs → clock times (respecting opening hours).
+   legs → clock times (respecting opening hours). Travel mode for every leg
+   comes from one source of truth (`decideTravelMode`): budget-tiered
+   walk/transit/taxi ceilings plus a walking-fatigue model that pushes later
+   legs to transit once the day's cumulative walking passes 3km. Each day
+   also gets a closed-taxonomy `theme` (`dayTheme`) derived from its real
+   stop categories, never a free-text label the stops don't support.
 9. **Photos:** resolve real per-place photos (day 1 up-front, rest lazily).
 10. **Narrate:** AI is consulted for the first and only time here — given the
     finished, routed plan and asked only to write titles/summaries/per-stop
@@ -182,12 +187,13 @@ Data — never presenting a low-quality plan as high quality.
 
 ## 11. Quality bar & validation
 
-`npm run validate` runs 67 assertions against the real algorithms offline
+`npm run validate` runs 78 assertions against the real algorithms offline
 (tiering, must-see matching, interest coverage, confidence bands, candidate
 validation, Verified badge, Itinerary Quality Score, the photo subject-match
 validator, the meal walking-distance constraint, district-first nightlife,
-route flow, scheduling, opening-hours guard). See `VALIDATION.md` for the
-full report and the 10-point checklist.
+budget-tiered travel mode + walking fatigue, day-theme taxonomy, route flow,
+scheduling, opening-hours guard). See `VALIDATION.md` for the full report and
+the 10-point checklist.
 
 Live, on-device spot-checks remain for photo correctness and day-trip travel
 legs (cannot be verified in the network-restricted CI).

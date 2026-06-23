@@ -324,8 +324,44 @@ beats a closer lone bar, and picks the closest member of that district.
 
 67/67 assertions pass; `npm run typecheck` is clean.
 
+## v2 Phase 7 — shipped: Route/Transport engine (one mode source, budget tiers, walking fatigue, day themes)
+**Finding (v2 audit, §13):** the walk/transit/taxi decision was implemented
+three separate times — `routing.ts`'s `decideMode` and two inline copies in
+`engine.ts` (`buildStops()` and `recomputeDay()`) — and they had silently
+drifted: the inline copies used a 1.8/8km walk/transit split while
+`routing.ts` used 1.8/12, so the same leg could get a different mode
+depending on which code path produced it. The logic was also blind to budget
+(a luxury traveller and a backpacker got identical mode choices) and to
+walking fatigue (a day could demand many long walking legs in a row). The
+day "title" was AI free-text with no taxonomy guaranteeing it matched the
+day's stops.
+
+**Fix:** a single `decideTravelMode()` (`itinerary/optimize.ts`, the pure
+harness-testable module) is now the only place a mode is decided. It applies
+budget-tiered ceilings (economy walk≤2.5/transit≤15km; medium
+walk≤1.8/transit≤12km, byte-for-byte the old default so existing plans don't
+change; luxury walk≤1.0/transit≤6km) and a Walking Fatigue model — once a
+day's cumulative walked distance hits 3km, the walk ceiling collapses to
+0.3km so subsequent short legs still prefer transit. `routing.ts` imports
+and wraps it, threading `budget` and a per-day fatigue accumulator through
+`dayRoute()`/`haversineFallback()`; both `engine.ts` inline duplicates were
+deleted in favour of calls to `decideTravelMode()`/`legDurationMin()`. New
+`dayTheme()` (`interests.ts`) replaces the free-text day title with a closed
+taxonomy derived from the day's real non-food/non-nightlife categories with
+a ≥40% dominance rule, surfaced on `ItineraryDay.theme`. Multi-day balancing
+was already delivered by `leastLoadedOrder()` in Phase 2.
+
+Harness §21 asserts the budget tiers diverge correctly (economy walks a 2km
+leg, medium transits it, luxury transits a 1.2km leg; economy keeps a 13km
+leg on transit while medium taxis it) and that fatigue flips a short leg to
+transit after 3km walked. §22 asserts the theme taxonomy: a monument-heavy
+day → "Historic & Monuments", a no-majority day and a food-only day → honest
+"Mixed Highlights", a shopping-dominant day → "Markets & Shopping".
+
+78/78 assertions pass; `npm run typecheck` is clean.
+
 ## How to reproduce
 ```
-cd mobile && npm run validate   # 67/67 assertions on the real algorithms
+cd mobile && npm run validate   # 78/78 assertions on the real algorithms
 cd mobile && npm run typecheck  # clean compile
 ```

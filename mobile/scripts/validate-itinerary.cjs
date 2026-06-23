@@ -181,5 +181,24 @@ const clusterC = place({ id: "clusterC", lat: 0, lng: 0.021 }); // ~0.06km from 
 const districtPick = O.bestNightlifeVenue(anchor0, [isolatedBar, clusterA, clusterB, clusterC], new Set());
 ok(districtPick.id === "clusterA", `picks the nearest member of the real 3-bar district, not the closer lone bar -> "${districtPick.id}"`);
 
+console.log("\n=== 21. Route/Transport Engine: budget-tiered mode + walking fatigue ===");
+ok(O.decideTravelMode(2.0, "economy") === "walk", `economy walks a 2km leg (2.5km ceiling) -> "${O.decideTravelMode(2.0, "economy")}"`);
+ok(O.decideTravelMode(2.0, "medium") === "transit", `medium switches to transit past its 1.8km ceiling -> "${O.decideTravelMode(2.0, "medium")}"`);
+ok(O.decideTravelMode(1.2, "luxury") === "transit", `luxury's lower 1.0km walk ceiling pushes a 1.2km leg to transit -> "${O.decideTravelMode(1.2, "luxury")}"`);
+ok(O.decideTravelMode(13, "economy") === "transit", `economy's wider 15km transit ceiling keeps a 13km leg off taxi -> "${O.decideTravelMode(13, "economy")}"`);
+ok(O.decideTravelMode(13, "medium") === "taxi", `medium's 12km transit ceiling sends the same 13km leg to taxi -> "${O.decideTravelMode(13, "medium")}"`);
+ok(O.decideTravelMode(0.5, "medium", 3.5) === "transit", `3.5km already walked today -> even a short 0.5km leg prefers transit (fatigue)`);
+ok(O.decideTravelMode(0.5, "medium", 0) === "walk", `same 0.5km leg walks fine early in the day (no fatigue yet)`);
+
+console.log("\n=== 22. Day Theme: closed taxonomy backed by real stop categories ===");
+ok(I.dayTheme([{ category: "monument" }, { category: "monument" }, { category: "restaurant" }]) === "Historic & Monuments",
+  `2 of 2 sightseeing stops are monuments -> "${I.dayTheme([{ category: "monument" }, { category: "monument" }, { category: "restaurant" }])}"`);
+ok(I.dayTheme([{ category: "museum" }, { category: "monument" }, { category: "park" }]) === "Mixed Highlights",
+  `no category reaches 40% dominance -> honest "Mixed Highlights"`);
+ok(I.dayTheme([{ category: "restaurant" }, { category: "cafe" }, { category: "nightlife" }]) === "Mixed Highlights",
+  `only food/nightlife stops (nothing to theme) -> "Mixed Highlights"`);
+ok(I.dayTheme([{ category: "shopping" }, { category: "shopping" }, { category: "museum" }]) === "Markets & Shopping",
+  `2 of 3 sightseeing stops are shopping (67%) -> "${I.dayTheme([{ category: "shopping" }, { category: "shopping" }, { category: "museum" }])}"`);
+
 console.log(`\n========== ${pass} passed, ${fail} failed ==========`);
 process.exit(fail ? 1 : 0);

@@ -113,6 +113,34 @@ engine, validation pipeline, photo engine, and Definition of Done._
 
 ---
 
+> **Phase 7 status: shipped.** The §13 "Route/Transport" findings —
+> mode-decision logic was duplicated across three places (`routing.ts`'s
+> `decideMode` and two inline copies in `engine.ts`'s `buildStops()` and
+> `recomputeDay()`) that had *silently drifted* (the inline copies used a
+> 1.8/8km walk/transit split while `routing.ts` used 1.8/12), it was blind
+> to budget, blind to walking fatigue, and the day "title" was free-text
+> with no taxonomy guaranteeing it matched the day's stops — are fixed. A
+> single source of truth `decideTravelMode()` (`itinerary/optimize.ts`, the
+> pure/harness-testable module) now drives every mode decision: budget-tiered
+> ceilings (economy walk≤2.5/transit≤15km, medium walk≤1.8/transit≤12km —
+> identical to the old default so no regression, luxury walk≤1.0/transit≤6km)
+> plus a **Walking Fatigue** model — once a day's cumulative walked distance
+> reaches 3km the walk ceiling collapses to 0.3km, so a day never silently
+> demands five 1.5km walking legs back to back. `routing.ts` now imports and
+> wraps it (threading `budget` and a per-day fatigue accumulator through
+> `dayRoute()`); both `engine.ts` inline duplicates were deleted in favour of
+> calls to it. New `dayTheme()` (`interests.ts`) replaces the free-text day
+> title with a closed taxonomy ("Historic & Monuments", "Art & Museums",
+> "Nature & Outdoors", "Markets & Shopping", else "Mixed Highlights"),
+> derived deterministically from the day's real non-food/non-nightlife stop
+> categories with a ≥40% dominance rule — so a day can never be labeled with
+> a theme its actual stops don't support, surfaced on the new
+> `ItineraryDay.theme` field. Multi-day balancing was already satisfied by
+> `leastLoadedOrder()` (Phase 2). 78/78 offline assertions pass; `npm run
+> typecheck` is clean. Phases 8-12 remain open.
+
+---
+
 ## 1. Repository Overview
 
 ```

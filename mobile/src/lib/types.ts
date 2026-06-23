@@ -152,6 +152,10 @@ export interface ItineraryDay {
   summary: string;
   /** Main neighborhood/area for the day. */
   area?: string;
+  /** Closed-taxonomy theme derived from the day's actual stop categories
+   *  (e.g. "Historic & Monuments"), guaranteed to match real content — see
+   *  `dayTheme()` in `itinerary/interests.ts`. */
+  theme?: string;
   stops: ItineraryStop[];
   estimatedCost: number;
   weather?: DayWeather;

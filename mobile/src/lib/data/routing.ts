@@ -1,6 +1,7 @@
-import type { GeoPoint, TravelMode } from "../types";
+import type { Budget, GeoPoint, TravelMode } from "../types";
 import { withCache } from "../cache";
-import { haversineKm, walkingMinutes } from "../utils";
+import { haversineKm } from "../utils";
+import { decideTravelMode, legDurationMin } from "../itinerary/optimize";
 
 interface OSRMResponse {
   code: string;
@@ -26,17 +27,14 @@ export interface DayRoute {
 
 const OSRM = "https://router.project-osrm.org/route/v1";
 
-/** Choose a realistic travel mode from the road distance of a leg. */
-export function decideMode(distanceKm: number): TravelMode {
-  if (distanceKm <= 1.8) return "walk";
-  if (distanceKm <= 12) return "transit";
-  return "taxi";
-}
-
-function legDuration(distanceKm: number, mode: TravelMode, walkSec?: number): number {
-  if (mode === "walk") return walkSec ? Math.round(walkSec / 60) : walkingMinutes(distanceKm);
-  const speed = mode === "transit" ? 20 : 35; // km/h
-  return Math.max(6, Math.round((distanceKm / speed) * 60));
+/** Choose a realistic travel mode from the road distance of a leg, tiered by
+ *  budget and aware of cumulative walking fatigue (see `decideTravelMode`). */
+export function decideMode(
+  distanceKm: number,
+  budget: Budget = "medium",
+  walkedSoFarKm = 0
+): TravelMode {
+  return decideTravelMode(distanceKm, budget, walkedSoFarKm);
 }
 
 /**
@@ -45,12 +43,12 @@ function legDuration(distanceKm: number, mode: TravelMode, walkSec?: number): nu
  * no motorways/non-walkable bridges). One request per day; cached. Falls back to
  * straight-line haversine if the service is unavailable, so plans never break.
  */
-export async function dayRoute(points: GeoPoint[]): Promise<DayRoute> {
+export async function dayRoute(points: GeoPoint[], budget: Budget = "medium"): Promise<DayRoute> {
   if (points.length < 2) {
     return { legs: [], geometry: points };
   }
   const key =
-    "route:" + points.map((p) => `${p.lat.toFixed(4)},${p.lng.toFixed(4)}`).join("|");
+    `route:${budget}:` + points.map((p) => `${p.lat.toFixed(4)},${p.lng.toFixed(4)}`).join("|");
 
   return withCache<DayRoute>(
     key,
@@ -62,12 +60,14 @@ export async function dayRoute(points: GeoPoint[]): Promise<DayRoute> {
         const data = await fetchOSRM(url);
         const route = data.routes?.[0];
         if (route?.legs?.length) {
-          const legs: LegInfo[] = route.legs.map((leg, i) => {
+          let walkedKm = 0;
+          const legs: LegInfo[] = route.legs.map((leg) => {
             const km = leg.distance / 1000;
-            const mode = decideMode(km);
+            const mode = decideMode(km, budget, walkedKm);
+            if (mode === "walk") walkedKm += km;
             return {
               distanceKm: Math.round(km * 100) / 100,
-              durationMin: legDuration(km, mode, leg.duration),
+              durationMin: legDurationMin(km, mode, leg.duration),
               mode,
             };
           });
@@ -78,20 +78,22 @@ export async function dayRoute(points: GeoPoint[]): Promise<DayRoute> {
       } catch {
         // fall through to haversine
       }
-      return haversineFallback(points);
+      return haversineFallback(points, budget);
     },
     (v) => v.legs.length === 0
-  ).catch(() => haversineFallback(points));
+  ).catch(() => haversineFallback(points, budget));
 }
 
-function haversineFallback(points: GeoPoint[]): DayRoute {
+function haversineFallback(points: GeoPoint[], budget: Budget = "medium"): DayRoute {
   const legs: LegInfo[] = [];
+  let walkedKm = 0;
   for (let i = 1; i < points.length; i++) {
     const km = haversineKm(points[i - 1], points[i]);
-    const mode = decideMode(km);
+    const mode = decideMode(km, budget, walkedKm);
+    if (mode === "walk") walkedKm += km;
     legs.push({
       distanceKm: Math.round(km * 100) / 100,
-      durationMin: legDuration(km, mode),
+      durationMin: legDurationMin(km, mode),
       mode,
     });
   }
