@@ -223,3 +223,20 @@ regressions, update docs, commit, only then continue.
 > selected tier. New harness §31 (8 assertions, pack + global branches).
 > 139/139 offline assertions pass; `npm run typecheck` is clean. Phases
 > V3-9…V3-10 remain open.
+
+---
+
+> **Phase V3-9 status: shipped.** Performance (§18) — caching, prefetch and
+> request deduplication. Category switching was already instant: after V3-3 the
+> Nearby filter narrows the already-loaded list in memory (no refetch), so a
+> category change is a pure render, well under the 1s target. The new piece is
+> request deduplication: `createInflight()` (new pure `lib/inflight.ts`)
+> coalesces concurrent calls for the same key into a single in-flight promise,
+> and `cache.ts`'s `withCache()` now routes every fetch-through-cache call
+> through it — so N parts of the app asking for the same photo/weather/route at
+> once trigger ONE cache read + loader run + cache write instead of N duplicate
+> network requests (the "avoid repeated API calls" rule), on top of the
+> existing TTL + offline-stale cache. Settled keys clear immediately so later
+> calls still pick up fresh data, and different keys never coalesce. New harness
+> §32 (3 assertions, async). 142/142 offline assertions pass; `npm run
+> typecheck` is clean. Phase V3-10 remains open.

@@ -17,6 +17,7 @@ const F = require(path.join(base, "itinerary", "dayflow.js"));
 const I = require(path.join(base, "itinerary", "interests.js"));
 const V = require(path.join(base, "itinerary", "validate.js"));
 const O = require(path.join(base, "itinerary", "optimize.js"));
+const N = require(path.join(base, "inflight.js"));
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { (c ? pass++ : fail++); console.log(`${c ? "PASS" : "FAIL"}  ${m}`); };
@@ -344,5 +345,29 @@ ok(unknownSummary.hasPack === false && unknownSummary.attractionCount === null, 
 ok(unknownSummary.confidence === K.GLOBAL_ENGINE_CONFIDENCE, `unknown city: global-engine confidence baseline (still works worldwide)`);
 ok(unknownSummary.topExperiences.length === 0 && unknownSummary.weatherNote === null, `unknown city: no invented experiences or weather claims`);
 
-console.log(`\n========== ${pass} passed, ${fail} failed ==========`);
-process.exit(fail ? 1 : 0);
+console.log("\n=== 32. Request deduplication: concurrent same-key calls share one load ===");
+(async () => {
+  const dedupe = N.createInflight();
+  let runs = 0;
+  const slowLoad = () => new Promise((res) => { runs++; setTimeout(() => res("v"), 20); });
+  const [a, b, c] = await Promise.all([
+    dedupe("k", slowLoad), dedupe("k", slowLoad), dedupe("k", slowLoad),
+  ]);
+  ok(runs === 1 && a === "v" && b === "v" && c === "v", `3 concurrent same-key calls -> 1 loader run (ran ${runs})`);
+
+  let runs2 = 0;
+  const d = N.createInflight();
+  const load2 = () => Promise.resolve(++runs2);
+  await d("x", load2);
+  await d("x", load2); // settled between calls -> not coalesced, runs fresh
+  ok(runs2 === 2, `sequential (non-concurrent) calls run fresh -> ${runs2} runs (picks up new data)`);
+
+  let runs3 = 0;
+  const e = N.createInflight();
+  const load3 = () => new Promise((res) => { runs3++; setTimeout(() => res(1), 10); });
+  await Promise.all([e("a", load3), e("b", load3)]); // different keys -> not coalesced
+  ok(runs3 === 2, `different keys are not coalesced -> ${runs3} runs`);
+
+  console.log(`\n========== ${pass} passed, ${fail} failed ==========`);
+  process.exit(fail ? 1 : 0);
+})();

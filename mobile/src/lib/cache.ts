@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { createInflight } from "./inflight";
 
 /**
  * Tiny TTL cache on top of AsyncStorage. This is the backbone of OFFLINE
@@ -51,10 +52,16 @@ export async function cacheSet<T>(
   }
 }
 
+// Request deduplication: concurrent withCache() calls for the same key share a
+// single execution (one cache read, one loader run, one cache write) instead of
+// each firing its own network request (V3 §18).
+const inflight = createInflight<unknown>();
+
 /**
  * Fetch-through-cache helper: return fresh cache if present, else run the
  * loader, persist it, and return it. On loader failure, fall back to stale
- * cache so the app keeps working offline.
+ * cache so the app keeps working offline. Concurrent calls for the same key are
+ * deduplicated into one in-flight request.
  */
 export async function withCache<T>(
   key: string,
@@ -62,16 +69,18 @@ export async function withCache<T>(
   loader: () => Promise<T>,
   isEmpty?: (v: T) => boolean
 ): Promise<T> {
-  const fresh = await cacheGet<T>(key);
-  if (fresh !== undefined && !(isEmpty?.(fresh) ?? false)) return fresh;
+  return inflight(key, async () => {
+    const fresh = await cacheGet<T>(key);
+    if (fresh !== undefined && !(isEmpty?.(fresh) ?? false)) return fresh;
 
-  try {
-    const value = await loader();
-    if (!(isEmpty?.(value) ?? false)) await cacheSet(key, value, ttlMs);
-    return value;
-  } catch (err) {
-    const stale = await cacheGetStale<T>(key);
-    if (stale !== undefined) return stale;
-    throw err;
-  }
+    try {
+      const value = await loader();
+      if (!(isEmpty?.(value) ?? false)) await cacheSet(key, value, ttlMs);
+      return value;
+    } catch (err) {
+      const stale = await cacheGetStale<T>(key);
+      if (stale !== undefined) return stale;
+      throw err;
+    }
+  }) as Promise<T>;
 }

@@ -460,8 +460,19 @@ from the curated pack, and degrades honestly for any city (null count, global
 confidence baseline, no invented experiences). Surfaced on the Plan screen as
 a live facts card. Harness §31 (8 assertions, pack + global branches).
 
+## v3 Phase 9 — shipped: performance (request dedup, in-memory category switch)
+**Finding (V3 directive §18):** slow loading; avoid repeated API calls; fast
+category switching.
+
+**Fix:** `createInflight()` (`lib/inflight.ts`) coalesces concurrent same-key
+requests into one in-flight promise; `cache.ts`'s `withCache()` routes through
+it, so simultaneous callers for the same resource trigger one cache read +
+loader + write instead of N network calls. Category switching is already
+in-memory (Nearby filters the loaded list, no refetch). Harness §32 (3 async
+assertions).
+
 ## How to reproduce
 ```
-cd mobile && npm run validate   # 139/139 assertions on the real algorithms
+cd mobile && npm run validate   # 142/142 assertions on the real algorithms
 cd mobile && npm run typecheck  # clean compile
 ```
