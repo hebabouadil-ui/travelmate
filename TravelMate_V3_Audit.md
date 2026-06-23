@@ -84,3 +84,24 @@ regressions, update docs, commit, only then continue.
 > never chase by deleting a traveller's lunch. New harness §24 (8 assertions).
 > 93/93 offline assertions pass; `npm run typecheck` is clean. Phases
 > V3-3…V3-6 remain open.
+
+---
+
+> **Phase V3-3 status: shipped.** The "overlapping categories / each category
+> must return different recommendations" and "repeated places" complaints are
+> fixed. The Nearby category filter was the concrete bug: its chips mapped to
+> single raw categories (`restaurant`, `attraction`, `park`), so cafés,
+> monuments, museums, beaches, viewpoints and shopping never appeared under a
+> dedicated category — they were reachable only under "All". New
+> `BROWSE_GROUPS` (`itinerary/interests.ts`) is a strict PARTITION of all 11
+> place categories into the seven V3 browse buckets (food, nightlife, history,
+> museums, nature, shopping, culture) — each category in exactly one group, no
+> overlap, nothing hidden — with `browseGroupFor()`/`inBrowseGroup()` helpers,
+> kept deliberately separate from the (intentionally overlapping)
+> `INTEREST_CATEGORIES` scoring map. The Nearby screen now filters by group.
+> New `duplicatePlaceNames()` and `experienceDiversity()`
+> (`itinerary/validate.ts`) make the repeated-places guard and a
+> monotonous-day signal measurable. New harness §25 (5 assertions, partition
+> completeness/disjointness) and §26 (4 assertions, dedup + diversity).
+> 102/102 offline assertions pass; `npm run typecheck` is clean. Phases
+> V3-4…V3-6 remain open.

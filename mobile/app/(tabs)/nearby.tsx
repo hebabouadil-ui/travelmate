@@ -16,15 +16,21 @@ import { TripMap } from "@/components/TripMap";
 import { useLocation } from "@/hooks/useLocation";
 import { nearbyPlaces } from "@/lib/nearby";
 import { openInMaps, openDirections } from "@/lib/navigation";
-import type { GeoPoint, Place, PlaceCategory } from "@/lib/types";
+import type { GeoPoint, Place } from "@/lib/types";
+import { browseGroupFor, type BrowseCategory } from "@/lib/itinerary/interests";
 
-const FILTERS: { key: PlaceCategory | "all"; label: string; icon: string }[] = [
+// V3 category separation: each chip is a real browse GROUP that partitions
+// every place category, so no place is hidden under "All" only and none shows
+// under two buckets (see BROWSE_GROUPS in itinerary/interests.ts).
+const FILTERS: { key: BrowseCategory | "all"; label: string; icon: string }[] = [
   { key: "all", label: "All", icon: "compass" },
-  { key: "restaurant", label: "Food", icon: "utensils" },
-  { key: "cafe", label: "Cafés", icon: "coffee" },
-  { key: "attraction", label: "Sights", icon: "sparkles" },
-  { key: "park", label: "Parks", icon: "trees" },
+  { key: "food", label: "Food", icon: "utensils" },
+  { key: "history", label: "History", icon: "sparkles" },
+  { key: "museums", label: "Museums", icon: "sparkles" },
+  { key: "nature", label: "Nature", icon: "trees" },
+  { key: "shopping", label: "Shopping", icon: "compass" },
   { key: "nightlife", label: "Nightlife", icon: "wine" },
+  { key: "culture", label: "Culture", icon: "sparkles" },
 ];
 
 export default function Nearby() {
@@ -32,7 +38,7 @@ export default function Nearby() {
   const [coords, setCoords] = useState<GeoPoint | null>(null);
   const [places, setPlaces] = useState<(Place & { distanceKm: number })[]>([]);
   const [loading, setLoading] = useState(false);
-  const [filter, setFilter] = useState<PlaceCategory | "all">("all");
+  const [filter, setFilter] = useState<BrowseCategory | "all">("all");
   const [error, setError] = useState<string | null>(null);
 
   const discover = async () => {
@@ -56,7 +62,7 @@ export default function Nearby() {
   };
 
   const filtered =
-    filter === "all" ? places : places.filter((p) => p.category === filter);
+    filter === "all" ? places : places.filter((p) => browseGroupFor(p.category) === filter);
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>

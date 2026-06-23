@@ -20,6 +20,46 @@ export const INTEREST_CATEGORIES: Record<Interest, PlaceCategory[]> = {
   nightlife: ["nightlife"],
 };
 
+/**
+ * V3 category separation: the user-facing browse buckets. Unlike
+ * `INTEREST_CATEGORIES` (which intentionally overlaps — architecture and
+ * photography both draw on monuments — for *scoring*), these buckets are a
+ * strict PARTITION of every `PlaceCategory`: each real category belongs to
+ * exactly one browse group, so a category filter never shows the same place
+ * under two buckets and never silently hides a category under "All" only.
+ */
+export type BrowseCategory =
+  | "food"
+  | "nightlife"
+  | "history"
+  | "museums"
+  | "nature"
+  | "shopping"
+  | "culture";
+
+export const BROWSE_GROUPS: Record<BrowseCategory, PlaceCategory[]> = {
+  food: ["restaurant", "cafe"],
+  nightlife: ["nightlife"],
+  history: ["monument", "landmark"],
+  museums: ["museum"],
+  nature: ["park", "beach", "viewpoint"],
+  shopping: ["shopping"],
+  culture: ["attraction"],
+};
+
+/** The browse group a real place category belongs to (exactly one). */
+export function browseGroupFor(category: PlaceCategory): BrowseCategory {
+  for (const group of Object.keys(BROWSE_GROUPS) as BrowseCategory[]) {
+    if (BROWSE_GROUPS[group].includes(category)) return group;
+  }
+  return "culture"; // every category is mapped; this satisfies the type only
+}
+
+/** True when a place category belongs to the given browse group. */
+export function inBrowseGroup(category: PlaceCategory, group: BrowseCategory): boolean {
+  return BROWSE_GROUPS[group].includes(category);
+}
+
 /** The set of place categories that satisfy any of the given interests. */
 export function categoriesForInterests(interests: Interest[]): Set<PlaceCategory> {
   const set = new Set<PlaceCategory>();

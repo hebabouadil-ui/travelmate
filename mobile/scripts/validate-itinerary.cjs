@@ -246,5 +246,30 @@ ok(capped.some((s) => s.slot === "coffee_break") && capped.some((s) => s.slot ==
 ok(capped.some((s) => s.place.category === "monument"), `the real experience (monument) is always kept`);
 ok(V.capFoodStops(foodHeavy, true).length === foodHeavy.length, `a food-focused trip is exempt — nothing trimmed`);
 
+console.log("\n=== 25. Category separation: browse groups partition every category ===");
+const ALL_CATEGORIES = ["attraction","monument","museum","restaurant","cafe","beach","park","viewpoint","landmark","nightlife","shopping"];
+const groupOf = ALL_CATEGORIES.map((c) => I.browseGroupFor(c));
+ok(groupOf.every((g) => typeof g === "string"), `every real category maps to a browse group`);
+// Disjoint + complete: each category appears in exactly one group's list.
+let exactlyOnce = true;
+for (const c of ALL_CATEGORIES) {
+  const hits = Object.values(I.BROWSE_GROUPS).filter((list) => list.includes(c)).length;
+  if (hits !== 1) exactlyOnce = false;
+}
+ok(exactlyOnce, `each category belongs to exactly one group (strict partition, no overlap)`);
+ok(I.browseGroupFor("monument") === "history" && I.browseGroupFor("museum") === "museums", `history and museums are separated (not lumped as "sights")`);
+ok(I.browseGroupFor("cafe") === "food" && I.browseGroupFor("restaurant") === "food", `cafés and restaurants both surface under Food (not hidden under All only)`);
+ok(I.inBrowseGroup("viewpoint", "nature") && !I.inBrowseGroup("viewpoint", "history"), `a viewpoint is Nature, never History`);
+
+console.log("\n=== 26. Duplication & diversity guards ===");
+const noDupes = [stop({ place: { id: "a" } }), stop({ place: { id: "b" } }), stop({ place: { id: "c" } })];
+ok(V.duplicatePlaceNames(noDupes).length === 0, `a clean plan has no repeated places`);
+const withDupe = [stop({ place: { id: "a", name: "Prado" } }), stop({ place: { id: "a", name: "Prado" } })];
+ok(V.duplicatePlaceNames(withDupe).length === 1, `the same place twice is caught -> ${JSON.stringify(V.duplicatePlaceNames(withDupe))}`);
+const diverseDay = [stop({ place: { category: "monument" } }), stop({ place: { category: "museum" } }), stop({ place: { category: "park" } })];
+ok(V.experienceDiversity(diverseDay) === 1, `three different kinds of experience -> full diversity`);
+const monotonous = [stop({ place: { category: "museum" } }), stop({ place: { category: "museum" } }), stop({ place: { category: "museum" } })];
+ok(Math.abs(V.experienceDiversity(monotonous) - 1 / 3) < 1e-9, `museum, museum, museum -> low diversity ${V.experienceDiversity(monotonous).toFixed(2)}`);
+
 console.log(`\n========== ${pass} passed, ${fail} failed ==========`);
 process.exit(fail ? 1 : 0);

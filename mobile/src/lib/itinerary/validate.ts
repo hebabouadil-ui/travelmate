@@ -298,3 +298,35 @@ export function capFoodStops<T extends { place: Place; slot?: string }>(
   }
   return result;
 }
+
+// ── Duplication & diversity (V3) ───────────────────────────────────────────
+
+/**
+ * Names of places that appear more than once across the whole trip (by id when
+ * present, else normalized name). The V3 "repeated places" guard: the engine
+ * partitions sights per day and shares the used-food/used-extra sets across
+ * days, so a clean plan returns []. Anything here is a real duplication bug.
+ */
+export function duplicatePlaceNames(stops: { place: Place }[]): string[] {
+  const seen = new Set<string>();
+  const dupes = new Set<string>();
+  for (const s of stops) {
+    const key = s.place.id || normName(s.place.name);
+    if (seen.has(key)) dupes.add(s.place.name);
+    else seen.add(key);
+  }
+  return [...dupes];
+}
+
+/**
+ * 0..1 category diversity of a day's *experiences* (food/drink excluded):
+ * distinct experience categories ÷ experience stops. 1 = every experience is a
+ * different kind; low = a monotonous "museum, museum, museum" day. A day with
+ * one or zero experiences is trivially 1.
+ */
+export function experienceDiversity(stops: { place: Place }[]): number {
+  const exp = stops.filter((s) => !isFoodDrink(s.place.category));
+  if (exp.length <= 1) return 1;
+  const distinct = new Set(exp.map((s) => s.place.category)).size;
+  return distinct / exp.length;
+}

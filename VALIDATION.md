@@ -386,8 +386,22 @@ experience; food-focused trips are exempt. `withinFoodLimits()` reports the
 ≥70%-experience share for the audit. Wired into `engine.ts` per day. Harness
 §24 (8 assertions).
 
+## v3 Phase 3 — shipped: category separation, dedup & diversity
+**Finding (V3 directive):** "Overlapping categories / each category must
+return different recommendations" and "repeated places." The Nearby filter
+chips mapped to single raw categories, so cafés, monuments, museums, beaches,
+viewpoints and shopping had no dedicated bucket.
+
+**Fix:** `BROWSE_GROUPS` (`itinerary/interests.ts`) strictly partitions all 11
+categories into the 7 V3 buckets (food/nightlife/history/museums/nature/
+shopping/culture) — each category in exactly one group — with
+`browseGroupFor()`/`inBrowseGroup()`; the Nearby screen filters by group.
+`duplicatePlaceNames()` and `experienceDiversity()`
+(`itinerary/validate.ts`) make the repeated-places guard and monotonous-day
+signal measurable. Harness §25 (5 assertions) + §26 (4 assertions).
+
 ## How to reproduce
 ```
-cd mobile && npm run validate   # 93/93 assertions on the real algorithms
+cd mobile && npm run validate   # 102/102 assertions on the real algorithms
 cd mobile && npm run typecheck  # clean compile
 ```
