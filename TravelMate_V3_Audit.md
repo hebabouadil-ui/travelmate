@@ -153,3 +153,20 @@ regressions, update docs, commit, only then continue.
 > than implying it's the real thing. New harness §27 (9 assertions). 111/111
 > offline assertions pass; `npm run typecheck` is clean. Phases V3-5…V3-10
 > remain open.
+
+---
+
+> **Phase V3-5 status: shipped.** The "use existing recommendations first;
+> only fetch when necessary" rule (§7) is now explicit and ranked by exactly
+> the five factors the directive names. New pure functions in
+> `itinerary/scoring.ts`: `availabilityRank()` scores an already-loaded
+> candidate on Tier (0.4) + Confidence (0.3) + Interest match (0.15) +
+> Opening-hours-on-file (0.05) + Proximity (0.1); `rankExisting()` orders the
+> existing pool best-first with it; `shouldFetchMore()` decides whether the
+> existing pool is genuinely too thin for the requested trip (counting only
+> usable candidates) before any network call. `engine.ts` now builds from the
+> already-loaded pool and only calls `discoverPlaces()` when
+> `shouldFetchMore(pool, days × maxSightsPerDay)` is true, merging new results
+> (deduped) rather than replacing — so the app exhausts what it already has
+> first. New harness §28 (6 assertions). 117/117 offline assertions pass;
+> `npm run typecheck` is clean. Phases V3-6…V3-10 remain open.

@@ -285,5 +285,20 @@ ok(V.formatAddress({ housenumber: "10", street: "Rue de Rivoli", city: "Paris" }
 ok(V.formatAddress({ city: "Paris" }) === "Paris", `partial address (city only) still formats`);
 ok(V.formatAddress({}) === undefined, `no address parts -> undefined (UI shows nothing, no stray commas)`);
 
+console.log("\n=== 28. Use-existing-first: rank by tier/confidence/interest/distance/hours ===");
+const center28 = { lat: 0, lng: 0 };
+const tier1Far = place({ tier: 1, verified: true, popularity: 0.9, lat: 0, lng: 0.1, category: "monument", openingHours: "Mo-Su 09:00-18:00" });
+const tier3Near = place({ tier: 3, verified: true, popularity: 0.1, lat: 0, lng: 0.001, category: "shopping" });
+ok(S.availabilityRank(tier1Far, { center: center28 }) > S.availabilityRank(tier3Near, { center: center28 }),
+  `a must-see ranks above a minor nearby shop (tier+confidence outweigh distance)`);
+const ranked = S.rankExisting([tier3Near, tier1Far], { center: center28 });
+ok(ranked[0].tier === 1, `rankExisting puts the must-see first`);
+const interestPlace = place({ tier: 3, category: "museum", verified: true });
+ok(S.availabilityRank(interestPlace, { interests: ["museums"] }) > S.availabilityRank(interestPlace, { interests: [] }),
+  `a place matching a selected interest ranks higher than the same place off-interest`);
+ok(S.shouldFetchMore([place({}), place({})], 5) === true, `a thin 2-place pool for a 5-stop need -> fetch more`);
+ok(S.shouldFetchMore([place({}), place({}), place({}), place({}), place({}), place({})], 5) === false, `an ample pool -> use existing, no fetch`);
+ok(S.shouldFetchMore([place({ name: "" }), place({})], 2) === true, `unusable (nameless) candidates don't count toward "enough"`);
+
 console.log(`\n========== ${pass} passed, ${fail} failed ==========`);
 process.exit(fail ? 1 : 0);

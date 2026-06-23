@@ -1,4 +1,5 @@
-import type { Interest, Place, PlaceCategory } from "../types";
+import type { GeoPoint, Interest, Place, PlaceCategory } from "../types";
+import { haversineKm } from "../utils";
 import { categoriesForInterests } from "./interests";
 
 /**
@@ -152,6 +153,56 @@ function matchedInterest(p: Place, interests: Interest[]): Interest | undefined 
   const wanted = categoriesForInterests(interests);
   if (!wanted.has(p.category)) return undefined;
   return interests.find((i) => categoriesForInterests([i]).has(p.category));
+}
+
+// ── Use-existing-first ranking (V3 §7) ─────────────────────────────────────
+
+export interface AvailabilityContext {
+  interests?: Interest[];
+  /** Distance reference (the city center / route anchor). */
+  center?: GeoPoint;
+}
+
+/**
+ * V3 "use existing recommendations first": a 0..1 rank for an already-loaded
+ * candidate using exactly the factors the directive names — Tier, Confidence,
+ * User interests, Distance and Opening hours — so the engine exhausts the
+ * places it already has (highest-tier, most-confident, on-interest, closest,
+ * with real hours) before ever deciding to fetch more.
+ */
+export function availabilityRank(p: Place, ctx: AvailabilityContext = {}): number {
+  const interests = ctx.interests ?? [];
+  const tier = p.tier === 1 ? 1 : p.tier === 2 ? 0.6 : 0.2;
+  const confidence = typeof p.confidence === "number" ? p.confidence : confidenceScore(p);
+  const interestMatch = categoriesForInterests(interests).has(p.category) ? 1 : 0;
+  const distancePenalty = ctx.center ? Math.min(1, haversineKm(ctx.center, p) / 20) : 0;
+  const hasHours = p.openingHours ? 1 : 0;
+
+  const r =
+    tier * 0.4 +
+    confidence * 0.3 +
+    interestMatch * 0.15 +
+    hasHours * 0.05 +
+    (1 - distancePenalty) * 0.1;
+  return Math.max(0, Math.min(1, r));
+}
+
+/** Rank existing candidates best-first by the V3 §7 factors. Pure; no fetch. */
+export function rankExisting(places: Place[], ctx: AvailabilityContext = {}): Place[] {
+  return [...places]
+    .map((p) => ({ p, r: availabilityRank(p, ctx) }))
+    .sort((a, b) => b.r - a.r)
+    .map((x) => x.p);
+}
+
+/**
+ * Whether the existing, already-loaded pool is too thin to build the plan and
+ * a fetch for more places is actually warranted — "only fetch additional
+ * places when necessary." Counts only usable candidates (real category + name).
+ */
+export function shouldFetchMore(pool: Place[], needed: number): boolean {
+  const usable = pool.filter((p) => p.name?.trim() && p.category).length;
+  return usable < needed;
 }
 
 /**

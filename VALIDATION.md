@@ -413,8 +413,18 @@ category placeholder; `formatAddress()` builds a clean OSM address.
 shows reason, address, coordinates, hours and a tappable website, and badges
 non-exact images "Representative image." Harness §27 (9 assertions).
 
+## v3 Phase 5 — shipped: use existing recommendations first
+**Finding (V3 directive §7):** use the places already available before fetching
+new ones; rank by tier, confidence, interest, distance and opening hours.
+
+**Fix:** `availabilityRank()`, `rankExisting()` and `shouldFetchMore()`
+(`itinerary/scoring.ts`) rank the existing pool by exactly those five factors;
+`engine.ts` only calls `discoverPlaces()` when the existing pool is too thin
+(`shouldFetchMore(pool, days × maxSightsPerDay)`), merging deduped rather than
+replacing. Harness §28 (6 assertions).
+
 ## How to reproduce
 ```
-cd mobile && npm run validate   # 111/111 assertions on the real algorithms
+cd mobile && npm run validate   # 117/117 assertions on the real algorithms
 cd mobile && npm run typecheck  # clean compile
 ```

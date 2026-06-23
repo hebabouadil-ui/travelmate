@@ -30,7 +30,7 @@ import {
   optimizeRoute,
   planPerDay,
 } from "./optimize";
-import { confidenceScore, isConfidentGem, recommendationReason, selectionValue } from "./scoring";
+import { confidenceScore, isConfidentGem, recommendationReason, selectionValue, shouldFetchMore } from "./scoring";
 import { categoriesForInterests, dayTheme, INTEREST_CATEGORIES, interestCoverageScore } from "./interests";
 import {
   capFoodStops,
@@ -634,7 +634,16 @@ async function buildDeterministicDays(
   pool: Place[]
 ): Promise<{ days: ItineraryDay[]; overview: string; highlights: string[]; engine: Itinerary["engine"] }> {
   const center = geo.center;
-  const allPlaces = pool.length ? pool : await discoverPlaces(req.destination, center);
+  // V3 §7 "use existing recommendations first": build from the places already
+  // loaded into the app, and only fetch more when the existing pool is too thin
+  // for the requested trip — then merge (deduped), never replace.
+  const needed = req.days * maxSightsPerDay(req.profile?.activityLevel);
+  let allPlaces = pool;
+  if (shouldFetchMore(allPlaces, needed)) {
+    const fetched = await discoverPlaces(req.destination, center);
+    const seen = new Set(allPlaces.map((p) => p.id));
+    allPlaces = [...allPlaces, ...fetched.filter((p) => !seen.has(p.id))];
+  }
   const scored = scorePlaces(allPlaces, req.interests, req.profile?.foodPreference);
   const sights = scored.filter((p) => !isFood(p) && p.category !== "nightlife");
   const food = scored.filter((p) => isFood(p));
