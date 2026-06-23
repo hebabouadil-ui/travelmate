@@ -471,8 +471,19 @@ loader + write instead of N network calls. Category switching is already
 in-memory (Nearby filters the loaded list, no refetch). Harness §32 (3 async
 assertions).
 
+## v3 Phase 10 — shipped: 9-city benchmark validation
+**Finding (V3 directive §19):** audit Marrakech, Tangier, Chefchaouen, Madrid,
+Paris, Rome, Tokyo, Kyoto, Bangkok for must-see coverage, confidence,
+duplication, category separation, etc.
+
+**Fix:** harness §33 iterates all nine cities and asserts must-see coverage
+(≥4 each), confidence accuracy (70-100%), no duplicate must-sees, Discover
+facts present, must-see matching to Tier 1 on a real OSM spelling, and global
+category separation — a single cross-city regression gate. Photo accuracy and
+live travel times require the network and stay as on-device spot-checks.
+
 ## How to reproduce
 ```
-cd mobile && npm run validate   # 142/142 assertions on the real algorithms
+cd mobile && npm run validate   # 148/148 assertions on the real algorithms
 cd mobile && npm run typecheck  # clean compile
 ```

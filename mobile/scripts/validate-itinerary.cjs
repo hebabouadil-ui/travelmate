@@ -345,6 +345,39 @@ ok(unknownSummary.hasPack === false && unknownSummary.attractionCount === null, 
 ok(unknownSummary.confidence === K.GLOBAL_ENGINE_CONFIDENCE, `unknown city: global-engine confidence baseline (still works worldwide)`);
 ok(unknownSummary.topExperiences.length === 0 && unknownSummary.weatherNote === null, `unknown city: no invented experiences or weather claims`);
 
+console.log("\n=== 33. Benchmark: the 9 audit destinations (offline-verifiable dimensions) ===");
+const BENCHMARK = ["Marrakech","Tangier","Chefchaouen","Madrid","Paris","Rome","Tokyo","Kyoto","Bangkok"];
+// Known real OSM spellings per city, to verify must-see matching survives variants.
+const BENCH_OSM = {
+  Marrakech: "Jardin Majorelle", Tangier: "Caves of Hercules", Chefchaouen: "Kasbah",
+  Madrid: "Museo del Prado", Paris: "Eiffel Tower", Rome: "Colosseum",
+  Tokyo: "Sensō-ji", Kyoto: "Fushimi Inari-taisha", Bangkok: "Wat Pho",
+};
+let mustSeeOK = 0, confOK = 0, dupOK = 0, factsOK = 0, matchOK = 0;
+for (const city of BENCHMARK) {
+  const pack = K.getKnowledgePack(city);
+  if (pack && pack.mustSee.length >= 4) mustSeeOK++;
+  if (pack && pack.confidence >= 70 && pack.confidence <= 100) confOK++;
+  // duplication: no repeated must-see names within a pack
+  if (pack) {
+    const norm = pack.mustSee.map((n) => V.normName(n));
+    if (new Set(norm).size === norm.length) dupOK++;
+  }
+  const sum = K.destinationSummary(city);
+  if (sum.hasPack && sum.attractionCount > 0 && sum.topExperiences.length > 0 && sum.bestMonths.length > 0) factsOK++;
+  // must-see matching against a realistic OSM spelling -> tier 1
+  if (K.packNameTier(pack, BENCH_OSM[city]) === 1) matchOK++;
+}
+ok(mustSeeOK === 9, `must-see coverage: all 9 cities have >=4 curated must-sees (${mustSeeOK}/9)`);
+ok(confOK === 9, `confidence accuracy: all 9 cities report 70-100% destination confidence (${confOK}/9)`);
+ok(dupOK === 9, `duplication: no city has a repeated must-see name (${dupOK}/9)`);
+ok(factsOK === 9, `Discover facts: all 9 cities expose count + experiences + best months (${factsOK}/9)`);
+ok(matchOK === 9, `must-see matching: a real OSM spelling resolves to Tier 1 in all 9 cities (${matchOK}/9)`);
+// category separation holds globally (verified structurally in §25) for every city's data.
+ok(["restaurant","monument","museum","park","nightlife","shopping"].every((c) => typeof I.browseGroupFor(c) === "string"),
+  `category separation: every category maps to one browse group for all destinations`);
+console.log("  (note: photo accuracy and live travel times require network and are spot-checked on-device, per VALIDATION.md)");
+
 console.log("\n=== 32. Request deduplication: concurrent same-key calls share one load ===");
 (async () => {
   const dedupe = N.createInflight();

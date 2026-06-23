@@ -198,7 +198,7 @@ Data — never presenting a low-quality plan as high quality.
 
 ## 11. Quality bar & validation
 
-`npm run validate` runs 93 assertions against the real algorithms offline
+`npm run validate` runs 148 assertions against the real algorithms offline
 (tiering, must-see matching, interest coverage, confidence bands, candidate
 validation, Verified badge, Itinerary Quality Score, the photo subject-match
 validator, the meal walking-distance constraint, district-first nightlife,

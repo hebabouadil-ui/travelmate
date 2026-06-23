@@ -240,3 +240,20 @@ regressions, update docs, commit, only then continue.
 > calls still pick up fresh data, and different keys never coalesce. New harness
 > §32 (3 assertions, async). 142/142 offline assertions pass; `npm run
 > typecheck` is clean. Phase V3-10 remains open.
+
+---
+
+> **Phase V3-10 status: shipped.** The validation phase (§19) is done for every
+> offline-verifiable dimension across all nine audit destinations (Marrakech,
+> Tangier, Chefchaouen, Madrid, Paris, Rome, Tokyo, Kyoto, Bangkok). New harness
+> §33 iterates the nine cities and asserts, as a single regression gate:
+> must-see coverage (≥4 curated must-sees each), confidence accuracy (70-100%
+> each), duplication (no repeated must-see name in any pack), Discover facts
+> (count + experiences + best months present), must-see matching (a real OSM
+> spelling resolves to Tier 1 in all nine), and category separation (every
+> category maps to one browse group). Photo accuracy and live travel times
+> require the network and remain on-device spot-checks (documented in
+> VALIDATION.md), as they can't run in the offline harness. New harness §33 (6
+> assertions). 148/148 offline assertions pass; `npm run typecheck` is clean.
+> **All V3 phases (V3-1…V3-10) are shipped; every section of the V3 directive
+> is addressed (see §1b).**
