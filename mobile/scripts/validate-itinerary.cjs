@@ -332,5 +332,17 @@ ok(V.passesDisplayConfidence(true, 0.6) === false, `a 60% attraction is NOT show
 ok(V.passesDisplayConfidence(false, 0.45) === true, `a 45% restaurant (functional, no ratings source) is exempt and kept`);
 ok(V.DISPLAY_CONFIDENCE_FLOOR === 0.7, `the display floor is exactly 70%`);
 
+console.log("\n=== 31. Discover page: destination summary (pack and global) ===");
+const marraSummary = K.destinationSummary("Marrakech");
+ok(marraSummary.hasPack === true && marraSummary.attractionCount === 35, `Marrakech: pack summary with ${marraSummary.attractionCount} attractions`);
+ok(marraSummary.confidence === 95, `Marrakech: high curated confidence ${marraSummary.confidence}%`);
+ok(marraSummary.bestMonths.includes("Mar") && marraSummary.budgetPerDay && marraSummary.budgetPerDay.medium > 0, `Marrakech: best months + budget present`);
+ok(marraSummary.topExperiences.includes("Jemaa el-Fnaa"), `Marrakech: top experiences lead with real must-sees`);
+ok(typeof marraSummary.weatherNote === "string" && marraSummary.weatherNote.length > 0, `Marrakech: weather suitability note present`);
+const unknownSummary = K.destinationSummary("Some Tiny Village");
+ok(unknownSummary.hasPack === false && unknownSummary.attractionCount === null, `unknown city: no pack, count unknown (honest)`);
+ok(unknownSummary.confidence === K.GLOBAL_ENGINE_CONFIDENCE, `unknown city: global-engine confidence baseline (still works worldwide)`);
+ok(unknownSummary.topExperiences.length === 0 && unknownSummary.weatherNote === null, `unknown city: no invented experiences or weather claims`);
+
 console.log(`\n========== ${pass} passed, ${fail} failed ==========`);
 process.exit(fail ? 1 : 0);

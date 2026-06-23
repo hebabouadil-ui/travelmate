@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -21,6 +21,7 @@ import { generateItinerary } from "@/lib/itinerary/engine";
 import { useProfile } from "@/store/useProfile";
 import { SEED_CITIES } from "@/lib/data/seed";
 import { searchCities, type CitySuggestion } from "@/lib/data/search";
+import { destinationSummary } from "@/lib/data/knowledge";
 import { GeneratingOverlay } from "@/components/GeneratingOverlay";
 
 const POPULAR = Object.values(SEED_CITIES).map((c) => c.name);
@@ -51,6 +52,12 @@ export default function Plan() {
   const [picked, setPicked] = useState(false);
   const [pickedCenter, setPickedCenter] = useState<GeoPoint | null>(null);
   const [pickedCountry, setPickedCountry] = useState<string | null>(null);
+
+  // V3 Discover facts for the chosen destination (works with or without a pack).
+  const summary = useMemo(
+    () => (destination.trim().length >= 2 ? destinationSummary(destination) : null),
+    [destination]
+  );
 
   useEffect(() => {
     if (params.destination) {
@@ -203,6 +210,47 @@ export default function Plan() {
             </ScrollView>
           )}
 
+          {/* V3 Discover facts: destination expertise at a glance */}
+          {summary ? (
+            <View style={styles.facts}>
+              <View style={styles.factsHeader}>
+                <Icon
+                  name={summary.hasPack ? "shield-checkmark" : "earth"}
+                  size={15}
+                  color={summary.hasPack ? colors.success : colors.primary}
+                />
+                <Text style={styles.factsTitle}>
+                  {summary.hasPack ? "Local expert coverage" : "Global coverage"}
+                </Text>
+                <Text style={styles.factsConf}>{summary.confidence}% confidence</Text>
+              </View>
+              <View style={styles.factsRow}>
+                {summary.attractionCount != null ? (
+                  <Fact icon="sparkles" label="Attractions" value={`${summary.attractionCount}+`} />
+                ) : null}
+                {summary.bestMonths.length ? (
+                  <Fact icon="calendar-outline" label="Best months" value={summary.bestMonths.join(", ")} />
+                ) : null}
+                {summary.budgetPerDay ? (
+                  <Fact icon="wallet-outline" label="Budget/day" value={`$${summary.budgetPerDay[budget]}`} />
+                ) : null}
+              </View>
+              {summary.topExperiences.length ? (
+                <Text style={styles.factsExp} numberOfLines={2}>
+                  <Text style={{ fontWeight: "800" }}>Top experiences: </Text>
+                  {summary.topExperiences.join(" · ")}
+                </Text>
+              ) : null}
+              {summary.weatherNote ? (
+                <Text style={styles.factsWeather} numberOfLines={2}>
+                  <Icon name="partly-sunny-outline" size={12} color={colors.textMuted} /> {summary.weatherNote}
+                </Text>
+              ) : !summary.hasPack ? (
+                <Text style={styles.factsWeather}>Any city worldwide — built from live OpenStreetMap data.</Text>
+              ) : null}
+            </View>
+          ) : null}
+
           {/* Itinerary mode */}
           <Text style={styles.label}>Itinerary type</Text>
           <View style={styles.modeRow}>
@@ -303,8 +351,30 @@ export default function Plan() {
   );
 }
 
+function Fact({ icon, label, value }: { icon: any; label: string; value: string }) {
+  return (
+    <View style={styles.fact}>
+      <Icon name={icon} size={14} color={colors.textMuted} />
+      <View style={{ flex: 1 }}>
+        <Text style={styles.factLabel}>{label}</Text>
+        <Text style={styles.factValue} numberOfLines={1}>{value}</Text>
+      </View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
+  facts: { marginTop: spacing.lg, backgroundColor: colors.card, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: spacing.md },
+  factsHeader: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: spacing.sm },
+  factsTitle: { color: colors.text, fontSize: font.small, fontWeight: "800", flex: 1 },
+  factsConf: { color: colors.success, fontSize: font.tiny, fontWeight: "800" },
+  factsRow: { flexDirection: "row", gap: spacing.sm, flexWrap: "wrap" },
+  fact: { flexDirection: "row", alignItems: "center", gap: 6, minWidth: "30%", flexGrow: 1, backgroundColor: colors.surface, borderRadius: radius.md, padding: spacing.sm },
+  factLabel: { color: colors.textFaint, fontSize: font.tiny },
+  factValue: { color: colors.text, fontSize: font.tiny, fontWeight: "800" },
+  factsExp: { color: colors.textMuted, fontSize: font.tiny, lineHeight: 17, marginTop: spacing.sm },
+  factsWeather: { color: colors.textMuted, fontSize: font.tiny, lineHeight: 16, marginTop: spacing.sm, fontStyle: "italic" },
   scroll: { padding: spacing.lg, paddingBottom: spacing.xxxl },
   title: { color: colors.text, fontSize: font.hero, fontWeight: "900", letterSpacing: -0.5 },
   subtitle: { color: colors.textMuted, fontSize: font.body, marginTop: 2, marginBottom: spacing.lg },

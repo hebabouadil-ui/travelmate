@@ -845,6 +845,50 @@ export function getKnowledgePack(destination: string): KnowledgePack | undefined
   return undefined;
 }
 
+/** The V3 Discover-page facts for a destination (§17). Works with OR without a
+ *  curated pack — a pack city gets rich, high-confidence facts; any other city
+ *  worldwide still gets honest, non-null fields from the global engine. */
+export interface DestinationSummary {
+  hasPack: boolean;
+  /** Curated attraction count, or null when unknown (no pack). */
+  attractionCount: number | null;
+  /** 0..100 destination confidence (pack confidence, else global baseline). */
+  confidence: number;
+  bestMonths: string[];
+  budgetPerDay: KnowledgePack["budgetPerDay"] | null;
+  /** A few headline things to do (must-sees + a cultural experience). */
+  topExperiences: string[];
+  /** Plain-language weather suitability note, when curated. */
+  weatherNote: string | null;
+}
+
+/** Global-engine destination confidence when no curated pack exists (§16). */
+export const GLOBAL_ENGINE_CONFIDENCE = 55;
+
+export function destinationSummary(destination: string): DestinationSummary {
+  const pack = getKnowledgePack(destination);
+  if (!pack) {
+    return {
+      hasPack: false,
+      attractionCount: null,
+      confidence: GLOBAL_ENGINE_CONFIDENCE,
+      bestMonths: [],
+      budgetPerDay: null,
+      topExperiences: [],
+      weatherNote: null,
+    };
+  }
+  return {
+    hasPack: true,
+    attractionCount: pack.attractionCount,
+    confidence: pack.confidence,
+    bestMonths: pack.bestMonths,
+    budgetPerDay: pack.budgetPerDay,
+    topExperiences: [...pack.mustSee.slice(0, 3), ...pack.culturalExperiences.slice(0, 2)],
+    weatherNote: pack.weatherNote,
+  };
+}
+
 const MATCH_STOPWORDS = new Set([
   "the", "a", "an", "of", "and", "de", "la", "le", "el", "du", "des", "da",
   "di", "do", "las", "los", "al", "place", "plaza", "parc", "park", "musee",

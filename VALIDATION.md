@@ -450,8 +450,18 @@ below 70% with backfill + a completeness guard; functional food/coffee/sunset/
 night stops are exempt. Harness §30 (6 assertions); §5/6 opening-hours test
 retuned to the new template.
 
+## v3 Phase 8 — shipped: Discover page destination facts
+**Finding (V3 directive §17):** the Discover/plan view should show attraction
+count, destination confidence, best months, budget estimate, top experiences
+and weather suitability.
+
+**Fix:** `destinationSummary()` (`data/knowledge.ts`) assembles all six fields
+from the curated pack, and degrades honestly for any city (null count, global
+confidence baseline, no invented experiences). Surfaced on the Plan screen as
+a live facts card. Harness §31 (8 assertions, pack + global branches).
+
 ## How to reproduce
 ```
-cd mobile && npm run validate   # 131/131 assertions on the real algorithms
+cd mobile && npm run validate   # 139/139 assertions on the real algorithms
 cd mobile && npm run typecheck  # clean compile
 ```

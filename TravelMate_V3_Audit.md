@@ -208,3 +208,18 @@ regressions, update docs, commit, only then continue.
 > assertions); the existing opening-hours test was retuned to the new template.
 > 131/131 offline assertions pass; `npm run typecheck` is clean. Phases
 > V3-8…V3-10 remain open.
+
+---
+
+> **Phase V3-8 status: shipped.** The Discover-page destination facts (§17)
+> are done. New `destinationSummary()` + `DestinationSummary` (`data/knowledge.ts`)
+> assemble all six requested fields — attraction count, destination confidence,
+> best months, per-day budget estimate, top experiences and weather suitability
+> — from the curated pack when one exists, and degrade honestly for any other
+> city (count null, confidence = `GLOBAL_ENGINE_CONFIDENCE`, no invented
+> experiences or weather claims) so global coverage is never gated. Surfaced on
+> the Plan screen as a live "Local expert coverage / Global coverage" facts
+> card that updates as the destination is typed, showing the budget for the
+> selected tier. New harness §31 (8 assertions, pack + global branches).
+> 139/139 offline assertions pass; `npm run typecheck` is clean. Phases
+> V3-9…V3-10 remain open.
