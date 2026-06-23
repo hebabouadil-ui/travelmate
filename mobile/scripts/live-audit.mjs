@@ -36,20 +36,28 @@ const ENDPOINTS = [ // overpass.ts:5-10
   "https://overpass.osm.ch/api/interpreter",
 ];
 
-// EXACT query from overpass.ts:59-70 (buildQuery), radius 6000 (overpass.ts:32).
-function buildQuery(c, r = 6000) {
+// Two balanced buckets, mirroring overpass.ts (sightseeing vs venues), each
+// capped separately so food can't starve sightseeing.
+function buildSightsQuery(c, r = 6000) {
   const around = `(around:${r},${c.lat},${c.lng})`;
   return `[out:json][timeout:25];
 (
   nwr["tourism"~"attraction|museum|artwork|viewpoint|gallery|zoo|theme_park"]${around};
   nwr["historic"~"monument|memorial|castle|ruins|archaeological_site|fort"]${around};
-  nwr["amenity"~"restaurant|cafe"]${around};
   nwr["leisure"~"park|garden"]${around};
   nwr["natural"="beach"]${around};
-  nwr["amenity"~"bar|pub|nightclub"]${around};
   nwr["shop"~"mall|department_store"]${around};
 );
-out center 350;`;
+out center 300;`;
+}
+function buildVenuesQuery(c, r = 6000) {
+  const around = `(around:${r},${c.lat},${c.lng})`;
+  return `[out:json][timeout:25];
+(
+  nwr["amenity"~"restaurant|cafe"]${around};
+  nwr["amenity"~"bar|pub|nightclub"]${around};
+);
+out center 300;`;
 }
 
 // classify() from overpass.ts:123-138
@@ -77,8 +85,7 @@ async function timed(label, fn) {
   }
 }
 
-async function overpass(center) {
-  const query = buildQuery(center);
+async function raceQuery(query) {
   const attempts = [];
   for (const ep of ENDPOINTS) {
     try {
@@ -90,33 +97,44 @@ async function overpass(center) {
           Accept: "application/json",
           "User-Agent": "VoyageAI-Mobile/1.0 (contact@voyage.ai)",
         },
-        signal: AbortSignal.timeout(25000),
+        signal: AbortSignal.timeout(20000),
       });
       if (!res.ok) { attempts.push(`${ep} -> HTTP ${res.status}`); continue; }
       const data = await res.json();
       const elements = data.elements || [];
-      // Match the app: an empty result means try the next mirror (overpass.ts:51).
       if (elements.length === 0) { attempts.push(`${ep} -> 0 elements`); continue; }
-      const byCat = {};
-      let named = 0, withAddr = 0, withHours = 0, withSite = 0, withWikidata = 0;
-      for (const el of elements) {
-        const tags = el.tags || {};
-        const cat = classify(tags);
-        if (!cat) continue;
-        if (!(tags.name || tags["name:en"])) continue;
-        named++;
-        byCat[cat] = (byCat[cat] || 0) + 1;
-        if (tags["addr:street"]) withAddr++;
-        if (tags.opening_hours) withHours++;
-        if (tags.website || tags["contact:website"]) withSite++;
-        if (tags.wikidata) withWikidata++;
-      }
-      return { endpoint: ep, total: elements.length, named, byCat, withAddr, withHours, withSite, withWikidata, attempts };
+      return { elements, attempts };
     } catch (e) {
       attempts.push(`${ep} -> ${String(e?.message || e).slice(0, 40)}`);
     }
   }
-  return { error: "all mirrors failed/empty", attempts };
+  return { elements: [], attempts };
+}
+
+async function overpass(center) {
+  const [sights, venues] = await Promise.all([
+    raceQuery(buildSightsQuery(center)),
+    raceQuery(buildVenuesQuery(center)),
+  ]);
+  const elements = [...sights.elements, ...venues.elements];
+  if (elements.length === 0) {
+    return { error: "all mirrors failed/empty", attempts: [...sights.attempts, ...venues.attempts] };
+  }
+  const byCat = {};
+  let named = 0, withAddr = 0, withHours = 0, withSite = 0, withWikidata = 0;
+  for (const el of elements) {
+    const tags = el.tags || {};
+    const cat = classify(tags);
+    if (!cat) continue;
+    if (!(tags.name || tags["name:en"])) continue;
+    named++;
+    byCat[cat] = (byCat[cat] || 0) + 1;
+    if (tags["addr:street"]) withAddr++;
+    if (tags.opening_hours) withHours++;
+    if (tags.website || tags["contact:website"]) withSite++;
+    if (tags.wikidata) withWikidata++;
+  }
+  return { total: elements.length, named, byCat, withAddr, withHours, withSite, withWikidata };
 }
 
 // Foursquare with FULL fields — proves what the key can actually supply

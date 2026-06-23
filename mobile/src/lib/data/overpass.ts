@@ -42,12 +42,22 @@ export async function overpassPlaces(
   center: GeoPoint,
   radiusM = 6000
 ): Promise<Place[]> {
-  const query = buildQuery(center, radiusM);
+  // Two SEPARATE balanced buckets, each capped on its own. The live audit
+  // showed a single `out center 350` getting consumed by a city's hundreds of
+  // bars/restaurants, starving sightseeing (London: 191 nightlife + 88
+  // restaurants left only ~32 monuments/museums). Querying sightseeing and
+  // venues independently guarantees attractions are never crowded out.
+  const [sights, venues] = await Promise.all([
+    raceQuery(buildSightsQuery(center, radiusM)),
+    raceQuery(buildVenuesQuery(center, radiusM)),
+  ]);
+  const merged = dedupe([...sights, ...venues]);
+  return merged;
+}
 
-  // Performance: hit ALL mirrors in parallel and take the FIRST that returns a
-  // non-empty result, instead of waiting out a slow/empty mirror sequentially
-  // (which could cost 25s × N). A single flaky mirror can no longer stall or
-  // empty the whole pool. Timeout tightened to 12s per mirror.
+/** Run one Overpass query across all mirrors in parallel; first non-empty wins.
+ *  A flaky/slow/throttled mirror can no longer stall or empty the result. */
+function raceQuery(query: string): Promise<Place[]> {
   const attempts = ENDPOINTS.map(
     (endpoint) =>
       new Promise<Place[]>((resolve, reject) => {
@@ -65,35 +75,37 @@ export async function overpassPlaces(
             const places = (data.elements ?? [])
               .map(toPlace)
               .filter((p): p is Place => p !== null);
-            // Treat empty as failure so Promise.any falls to another mirror.
             if (places.length === 0) throw new Error("overpass empty");
-            resolve(dedupe(places));
+            resolve(places);
           })
           .catch(reject)
           .finally(() => clearTimeout(timer));
       })
   );
-
-  try {
-    return await Promise.any(attempts);
-  } catch {
-    return []; // every mirror failed/empty → caller falls back to seeds/cache
-  }
+  return Promise.any(attempts).catch(() => [] as Place[]);
 }
 
-function buildQuery(c: GeoPoint, r: number): string {
+function buildSightsQuery(c: GeoPoint, r: number): string {
   const around = `(around:${r},${c.lat},${c.lng})`;
   return `[out:json][timeout:25];
 (
   nwr["tourism"~"attraction|museum|artwork|viewpoint|gallery|zoo|theme_park"]${around};
   nwr["historic"~"monument|memorial|castle|ruins|archaeological_site|fort"]${around};
-  nwr["amenity"~"restaurant|cafe"]${around};
   nwr["leisure"~"park|garden"]${around};
   nwr["natural"="beach"]${around};
-  nwr["amenity"~"bar|pub|nightclub"]${around};
   nwr["shop"~"mall|department_store"]${around};
 );
-out center 350;`;
+out center 300;`;
+}
+
+function buildVenuesQuery(c: GeoPoint, r: number): string {
+  const around = `(around:${r},${c.lat},${c.lng})`;
+  return `[out:json][timeout:25];
+(
+  nwr["amenity"~"restaurant|cafe"]${around};
+  nwr["amenity"~"bar|pub|nightclub"]${around};
+);
+out center 300;`;
 }
 
 function toPlace(el: OverpassElement): Place | null {
