@@ -34,6 +34,7 @@ import {
 import { confidenceScore, isConfidentGem, recommendationReason, selectionValue, shouldFetchMore } from "./scoring";
 import {
   categoriesForInterests,
+  composeBackbone,
   dayTheme,
   destinationConfidence,
   INTEREST_CATEGORIES,
@@ -149,7 +150,7 @@ export async function generateItinerary(req: TripRequest): Promise<Itinerary> {
   // represented (Interest Engine — enforced, not just a scoring nudge),
   // then drop low-confidence attractions.
   applyTiers(days, pack);
-  if (pack) injectMustSees(days, pool, pack, geo.name);
+  if (pack) injectMustSees(days, pool, pack, geo.name, req.interests);
   ensureInterestCoverage(days, pool, req.interests);
   applyTiers(days, pack);
   gateLowConfidence(days);
@@ -330,17 +331,30 @@ function injectMustSees(
   days: ItineraryDay[],
   pool: Place[],
   pack: KnowledgePack,
-  city: string
+  city: string,
+  interests: Interest[] = []
 ): void {
   const presentNames: string[] = [];
   days.forEach((d) => d.stops.forEach((s) => presentNames.push(s.place.name)));
   const usedPool = new Set<string>();
   const injectedPerDay = new Array(days.length).fill(0);
 
+  // V4: when the traveller picked interests, a must-see whose category does NOT
+  // match any of them is "off-interest". We still keep the city's identity by
+  // injecting a small number of marquee off-interest sights, but we no longer
+  // force EVERY monument into a food/nature/shopping trip — that was the cause
+  // of "monuments dominate even when I didn't select them".
+  const wanted = categoriesForInterests(interests);
+  const OFF_INTEREST_CAP = interests.length ? 1 : Infinity;
+  let offInterestInjected = 0;
+
   for (const name of pack.mustSee) {
     if (nameIsPresent(name, presentNames)) continue;
     const match = bestPoolByName(name, pool, usedPool);
     if (!match) continue; // can't verify it → never invent; skip
+    // Cap off-interest must-sees so they can't crowd out the chosen theme.
+    const offInterest = wanted.size > 0 && !wanted.has(match.category);
+    if (offInterest && offInterestInjected >= OFF_INTEREST_CAP) continue;
 
     const order = leastLoadedOrder(injectedPerDay).map((i) => ({ d: days[i], i }));
 
@@ -367,6 +381,7 @@ function injectMustSees(
     target.place = p;
     target.note = `A must-see of ${city} — one of its defining sights; arrive early to beat the crowds.`;
     injectedPerDay[targetDayIdx]++;
+    if (offInterest) offInterestInjected++;
   }
 }
 
@@ -661,7 +676,12 @@ async function buildDeterministicDays(
     req.profile?.foodPreference,
     req.profile?.travelerType
   );
-  const sights = scored.filter((p) => !isFood(p) && p.category !== "nightlife");
+  // V4 root fix: the daytime backbone is composed FROM the traveller's
+  // interests (not a fixed score sort), so History/Nature/Shopping/Photography
+  // trips draw structurally different days from the same pool. Cap to what the
+  // trip can hold so interest matches aren't pushed out by famous filler.
+  const backboneMax = req.days * maxSightsPerDay(req.profile?.activityLevel) + req.days;
+  const sights = composeBackbone(scored, req.interests, backboneMax);
   const food = scored.filter((p) => isFood(p));
 
   const counts = planPerDay(

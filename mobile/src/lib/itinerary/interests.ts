@@ -67,6 +67,76 @@ export function categoriesForInterests(interests: Interest[]): Set<PlaceCategory
   return set;
 }
 
+// ── Interest-driven day backbone (V4 root fix) ─────────────────────────────
+
+/** Categories that are NOT part of the daytime sightseeing backbone — meals and
+ *  nightlife live in their own fixed slots, not the main activity sequence. */
+const NON_BACKBONE: PlaceCategory[] = ["restaurant", "cafe", "nightlife"];
+
+/**
+ * Select the daytime sightseeing backbone for a trip from the scored pool so
+ * that the traveller's INTERESTS actually determine which places fill the day —
+ * not just nudge ranking. Places whose category matches a selected interest are
+ * chosen first (best-scored first); only then is the day topped up with the
+ * strongest remaining sights so it's never empty. With no interests selected
+ * (Balanced Explorer) it returns a diverse, round-robin mix across categories
+ * instead of letting one category (usually monuments) dominate.
+ *
+ * This is the fix for "different interest combinations produce almost the same
+ * itinerary": History/Museums, Nature/Beach, Shopping and Photography now draw
+ * structurally different backbones from the same pool.
+ */
+export function composeBackbone<T extends { category: PlaceCategory; score?: number }>(
+  pool: T[],
+  interests: Interest[],
+  count: number
+): T[] {
+  const byScore = (a: T, b: T) => (b.score ?? 0) - (a.score ?? 0);
+  const candidates = pool.filter((p) => !NON_BACKBONE.includes(p.category));
+
+  if (!interests.length) return diverseMix(candidates, count);
+
+  const wanted = categoriesForInterests(interests);
+  const matching = candidates.filter((p) => wanted.has(p.category)).sort(byScore);
+  const others = candidates.filter((p) => !wanted.has(p.category)).sort(byScore);
+  // Interest matches fill the day first; strongest non-matching sights only
+  // backfill the remainder so the day stays complete in thin-data cities.
+  return [...matching, ...others].slice(0, count);
+}
+
+/** A varied selection that rotates through categories (best-first within each)
+ *  so a no-interest trip isn't 80% monuments — the Balanced Explorer default. */
+function diverseMix<T extends { category: PlaceCategory; score?: number }>(
+  candidates: T[],
+  count: number
+): T[] {
+  const byScore = (a: T, b: T) => (b.score ?? 0) - (a.score ?? 0);
+  const buckets = new Map<PlaceCategory, T[]>();
+  for (const p of [...candidates].sort(byScore)) {
+    const arr = buckets.get(p.category) ?? [];
+    arr.push(p);
+    buckets.set(p.category, arr);
+  }
+  // Order categories by their best place's score, then round-robin across them.
+  const order = [...buckets.entries()].sort(
+    (a, b) => (b[1][0].score ?? 0) - (a[1][0].score ?? 0)
+  );
+  const out: T[] = [];
+  let added = true;
+  while (out.length < count && added) {
+    added = false;
+    for (const [, arr] of order) {
+      const next = arr.shift();
+      if (next) {
+        out.push(next);
+        added = true;
+        if (out.length >= count) break;
+      }
+    }
+  }
+  return out;
+}
+
 // ── Traveler-type personalization & Balanced Explorer default (V3 §8) ───────
 
 /**

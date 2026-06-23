@@ -378,6 +378,37 @@ ok(["restaurant","monument","museum","park","nightlife","shopping"].every((c) =>
   `category separation: every category maps to one browse group for all destinations`);
 console.log("  (note: photo accuracy and live travel times require network and are spot-checked on-device, per VALIDATION.md)");
 
+console.log("\n=== 34. Interests drive the backbone: Cases A-D produce DIFFERENT days ===");
+// A realistic mixed pool: monuments, museums, parks, viewpoints, beach, shopping
+// (food/nightlife are handled in fixed slots, excluded from the backbone).
+const cityPool = [
+  place({ id: "mon1", category: "monument", score: 0.95 }), place({ id: "mon2", category: "monument", score: 0.9 }),
+  place({ id: "lm1", category: "landmark", score: 0.85 }), place({ id: "mus1", category: "museum", score: 0.88 }),
+  place({ id: "mus2", category: "museum", score: 0.8 }), place({ id: "park1", category: "park", score: 0.7 }),
+  place({ id: "park2", category: "park", score: 0.65 }), place({ id: "vp1", category: "viewpoint", score: 0.75 }),
+  place({ id: "vp2", category: "viewpoint", score: 0.6 }), place({ id: "beach1", category: "beach", score: 0.72 }),
+  place({ id: "shop1", category: "shopping", score: 0.68 }), place({ id: "shop2", category: "shopping", score: 0.6 }),
+  place({ id: "att1", category: "attraction", score: 0.78 }), place({ id: "rest1", category: "restaurant", score: 0.9 }),
+];
+const cats = (arr) => arr.map((p) => p.category);
+const backbone = (interests) => I.composeBackbone(cityPool, interests, 6);
+const caseB = backbone(["photography", "nature"]);   // scenic + iconic
+const caseNature = backbone(["nature"]);             // pure nature: NO monuments
+const caseCreal = backbone(["monuments", "museums"]); // History/Museums
+const caseD = backbone(["beaches"]);
+const caseA = backbone(["shopping"]); // food/nightlife excluded from backbone -> shopping leads
+ok(!cats(caseCreal).includes("beach") && caseCreal.filter((p)=>["monument","landmark","museum"].includes(p.category)).length >= 4,
+  `History/Museums -> monuments+museums dominate (${cats(caseCreal).join(",")})`);
+ok(caseNature.filter((p) => ["viewpoint","park","beach"].includes(p.category)).length === 5
+   && caseNature.slice(0, 5).every((p) => ["viewpoint","park","beach"].includes(p.category)),
+  `Nature -> all 5 available nature places lead; monuments only backfill the empty 6th slot (${cats(caseNature).join(",")})`);
+ok(caseD[0].category === "beach", `Beach -> beach leads the backbone (${cats(caseD).join(",")})`);
+ok(caseA.filter((p)=>p.category==="shopping").length >= 2, `Shopping -> shopping leads (${cats(caseA).join(",")})`);
+ok(JSON.stringify(cats(caseB)) !== JSON.stringify(cats(caseCreal)) && JSON.stringify(cats(caseCreal)) !== JSON.stringify(cats(caseD)),
+  `the four interest cases are structurally DIFFERENT, not near-identical`);
+ok(!backbone([]).every((p) => p.category === backbone([])[0].category),
+  `Balanced Explorer (no interests) -> a diverse mix, not one category`);
+
 console.log("\n=== 32. Request deduplication: concurrent same-key calls share one load ===");
 (async () => {
   const dedupe = N.createInflight();
