@@ -118,3 +118,46 @@ export async function geocode(query: string): Promise<GeocodeResult> {
   }
   throw new Error(`Could not locate destination "${query}"`);
 }
+
+interface NominatimReverse {
+  display_name?: string;
+  name?: string;
+  address?: {
+    road?: string;
+    house_number?: string;
+    pedestrian?: string;
+    neighbourhood?: string;
+    suburb?: string;
+    city?: string;
+    town?: string;
+    village?: string;
+  };
+}
+
+/**
+ * Reverse-geocode coordinates to a human address (free, keyless Nominatim) —
+ * the fallback so the UI NEVER shows raw latitude/longitude when an address is
+ * missing from OSM/Foursquare. Cached 30 days; returns undefined on failure
+ * (the UI then says "Address unavailable", never coordinates).
+ */
+export async function reverseGeocode(point: GeoPoint): Promise<string | undefined> {
+  const key = `revgeo:${point.lat.toFixed(5)},${point.lng.toFixed(5)}`;
+  return withCache<string | undefined>(
+    key,
+    1000 * 60 * 60 * 24 * 30,
+    async () => {
+      const url =
+        `https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=18` +
+        `&accept-language=en&lat=${point.lat}&lon=${point.lng}`;
+      const it = await fetchJson<NominatimReverse>(url, { timeoutMs: 7000 });
+      const a = it.address ?? {};
+      const street = a.road || a.pedestrian || a.neighbourhood;
+      const number = a.house_number;
+      const town = a.city || a.town || a.village || a.suburb;
+      const line = [number, street].filter(Boolean).join(" ").trim();
+      const full = [line || street, town].filter(Boolean).join(", ");
+      return full || it.name || it.display_name?.split(",").slice(0, 2).join(",");
+    },
+    (v) => !v
+  ).catch(() => undefined);
+}

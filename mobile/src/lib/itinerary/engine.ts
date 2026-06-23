@@ -17,7 +17,7 @@ import { enrichPopularity } from "../data/popularity";
 import { getKnowledgePack, looseMatch, packNameTier, type KnowledgePack } from "../data/knowledge";
 import { getWeather } from "../data/weather";
 import { buildOverview } from "../data/overviews";
-import { categoryImage, cityHeroImage as cityImageFor } from "../data/wikipedia";
+import { cityHeroImage as cityImageFor } from "../data/wikipedia";
 import { resolveStopMedia } from "../data/media";
 import { currencyForCountry } from "../currency";
 import { dayRoute } from "../data/routing";
@@ -376,7 +376,6 @@ function injectMustSees(
 
     usedPool.add(match.id);
     const p: Place = { ...match, tier: 1, hiddenGem: false };
-    if (!p.imageUrl) p.imageUrl = categoryImage(p.category, p.name);
     presentNames.push(p.name);
     target.place = p;
     target.note = `A must-see of ${city} — one of its defining sights; arrive early to beat the crowds.`;
@@ -434,7 +433,6 @@ function ensureInterestCoverage(days: ItineraryDay[], pool: Place[], interests: 
     used.add(norm(candidate.name));
     present.add(candidate.category);
     const p: Place = { ...candidate };
-    if (!p.imageUrl) p.imageUrl = categoryImage(p.category, p.name);
     target.place = p;
     target.note = `Matched to your interest in ${interest} — a genuine local highlight in this category.`;
     injectedPerDay[targetDayIdx]++;
@@ -526,7 +524,6 @@ function weatherAdapt(days: ItineraryDay[], pool: Place[], req: TripRequest): vo
           used.add(norm(alt.name));
           const reason = rainy ? "rain expected" : hot ? "the afternoon heat" : cold ? "a cold day" : "strong winds";
           const p: Place = { ...alt };
-          if (!p.imageUrl) p.imageUrl = categoryImage(p.category, p.name);
           s.place = p;
           s.note = `Indoor pick for ${reason} — swapped from an outdoor stop to keep the day comfortable.`;
           s.durationMin = DURATION[p.category] ?? s.durationMin;
@@ -571,7 +568,6 @@ async function finalizeDays(
       for (const p of candidates) {
         if (day.stops.length >= MIN_STOPS_PER_DAY) break;
         used.add(norm(p.name));
-        if (!p.imageUrl) p.imageUrl = categoryImage(p.category, p.name);
         p.hiddenGem = isConfidentGem(p);
         const slot: GuideSlot = SLOTS[Math.min(day.stops.length, SLOTS.length - 1)];
         day.stops.push({
@@ -621,7 +617,9 @@ async function finalizeDays(
  * Resolve a real photo (and description) for every stop, in parallel, and embed
  * it on the place so cards show the correct image immediately — and so saved
  * trips keep their photos offline. Bounded by an overall deadline so a slow
- * network never stalls generation; unresolved stops keep their category image.
+ * network never stalls generation. A stop is only marked photoResolved once a
+ * REAL photo is found, so a failed attempt (e.g. Foursquare out of credits)
+ * retries later instead of locking in a missing image.
  */
 async function enrichStopPhotos(stops: ItineraryStop[], city: string): Promise<void> {
   const work = Promise.all(
@@ -629,13 +627,15 @@ async function enrichStopPhotos(stops: ItineraryStop[], city: string): Promise<v
       if (st.place.photoResolved) return;
       try {
         const media = await resolveStopMedia(st.place, city);
-        if (media.imageUrl) st.place.imageUrl = media.imageUrl;
+        if (media.imageUrl) {
+          st.place.imageUrl = media.imageUrl;
+          st.place.photoResolved = true;
+        }
         if (media.description && !st.place.description) {
           st.place.description = media.description;
         }
-        st.place.photoResolved = true;
       } catch {
-        // keep the existing category image
+        // leave unresolved → UI shows a placeholder, retried later
       }
     })
   );
@@ -715,7 +715,6 @@ async function buildDeterministicDays(
     // V3 food limits: enforce the meal/drink count allowance unless it's a food trip.
     const stops = capFoodStops(built, foodFocused);
     stops.forEach((st) => {
-      if (!st.place.imageUrl) st.place.imageUrl = categoryImage(st.place.category, st.place.name);
       // Deterministic "Recommended because…" — the V3 explainability rule.
       st.place.recommendationReason = recommendationReason(st.place, {
         city: req.destination,

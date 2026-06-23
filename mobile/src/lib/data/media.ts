@@ -1,44 +1,42 @@
 import type { Place } from "../types";
-import { enrichPlace, categoryImage, commonsPhotoNear } from "./wikipedia";
+import { enrichPlace } from "./wikipedia";
 import { foursquarePhoto } from "./foursquare";
 
 const VENUE_CATEGORIES = ["restaurant", "cafe", "nightlife", "shopping"];
 
 export interface StopMedia {
-  imageUrl: string;
+  /** A real, subject-matched photo. Undefined means "show a placeholder" — we
+   *  NEVER return a generic stock or geo-nearby (possibly-wrong) image. */
+  imageUrl?: string;
   description?: string;
 }
 
 /**
- * Resolve the best REAL photo + description for a place, with a strict fallback
- * hierarchy so every card gets a distinct, on-topic image:
+ * Resolve the EXACT photo for a place, or nothing. Only two sources are trusted:
  *
- *   venues (restaurants/cafés/bars/shops):
- *     Foursquare venue photo → Wikipedia → Commons geo-photo → category (seeded)
- *   landmarks/museums/parks/etc.:
- *     Wikipedia article photo → Commons geo-photo → Foursquare → category (seeded)
+ *   - Foursquare venue photo (matched by name + location) — primary for
+ *     restaurants/cafés/bars/shops.
+ *   - Wikipedia article photo — primary for landmarks/museums/parks — gated by
+ *     `isMatchingArticle` so it's the right subject, not a topic the search
+ *     merely ranked.
  *
- * The category image is only the LAST resort and is seeded by the place name, so
- * two places never share the same stock photo. Real sources run in parallel; the
- * hierarchy just decides which result wins.
+ * The old Commons "nearest geotagged photo" path was removed: it returned
+ * photos of whatever happened to be near the coordinates (a frequent source of
+ * WRONG images). The old category stock fallback was removed too: a generic
+ * Unsplash photo is not this place. When neither real source yields a match we
+ * return no image, and the UI shows a clean placeholder.
  */
 export async function resolveStopMedia(place: Place, city: string): Promise<StopMedia> {
-  const [fsq, wiki, commons] = await Promise.all([
+  const venueFirst = VENUE_CATEGORIES.includes(place.category);
+  const [fsq, wiki] = await Promise.all([
     foursquarePhoto(place.name, { lat: place.lat, lng: place.lng }).catch(() => undefined),
     enrichPlace(place.name, city, place.category).catch(
       () => ({} as { imageUrl?: string; description?: string })
     ),
-    commonsPhotoNear(place.lat, place.lng).catch(() => undefined),
   ]);
 
-  const venueFirst = VENUE_CATEGORIES.includes(place.category);
-  const order = venueFirst
-    ? [fsq, wiki.imageUrl, commons]
-    : [wiki.imageUrl, commons, fsq];
-
-  const imageUrl =
-    order.find((u): u is string => Boolean(u)) ??
-    categoryImage(place.category, place.name);
+  const order = venueFirst ? [fsq, wiki.imageUrl] : [wiki.imageUrl, fsq];
+  const imageUrl = order.find((u): u is string => Boolean(u));
 
   return { imageUrl, description: wiki.description };
 }

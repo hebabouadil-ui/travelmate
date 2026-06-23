@@ -10,7 +10,6 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Icon } from "@/components/Icon";
 import * as Haptics from "expo-haptics";
 import type { DestinationMatch, ItineraryStop, Place } from "@/lib/types";
-import { categoryImage } from "@/lib/data/wikipedia";
 import { resolveStopMedia } from "@/lib/data/media";
 import { getKnowledgePack } from "@/lib/data/knowledge";
 import { currencySymbol } from "@/lib/currency";
@@ -190,7 +189,6 @@ export function StopCard({
         >
           <SmartImage
             uri={image}
-            fallback={categoryImage(stop.place.category, stop.place.name)}
             style={styles.stopImage}
             emoji={meta.emoji}
           />

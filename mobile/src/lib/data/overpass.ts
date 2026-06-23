@@ -32,28 +32,42 @@ export async function overpassPlaces(
   radiusM = 6000
 ): Promise<Place[]> {
   const query = buildQuery(center, radiusM);
-  for (const endpoint of ENDPOINTS) {
-    try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 25000);
-      const res = await fetch(endpoint, {
-        method: "POST",
-        body: "data=" + encodeURIComponent(query),
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        signal: controller.signal,
-      });
-      clearTimeout(timer);
-      if (!res.ok) continue;
-      const data = (await res.json()) as OverpassResponse;
-      const places = data.elements
-        .map(toPlace)
-        .filter((p): p is Place => p !== null);
-      if (places.length > 0) return dedupe(places);
-    } catch {
-      // try next mirror
-    }
+
+  // Performance: hit ALL mirrors in parallel and take the FIRST that returns a
+  // non-empty result, instead of waiting out a slow/empty mirror sequentially
+  // (which could cost 25s × N). A single flaky mirror can no longer stall or
+  // empty the whole pool. Timeout tightened to 12s per mirror.
+  const attempts = ENDPOINTS.map(
+    (endpoint) =>
+      new Promise<Place[]>((resolve, reject) => {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 12000);
+        fetch(endpoint, {
+          method: "POST",
+          body: "data=" + encodeURIComponent(query),
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          signal: controller.signal,
+        })
+          .then(async (res) => {
+            if (!res.ok) throw new Error(`overpass ${res.status}`);
+            const data = (await res.json()) as OverpassResponse;
+            const places = (data.elements ?? [])
+              .map(toPlace)
+              .filter((p): p is Place => p !== null);
+            // Treat empty as failure so Promise.any falls to another mirror.
+            if (places.length === 0) throw new Error("overpass empty");
+            resolve(dedupe(places));
+          })
+          .catch(reject)
+          .finally(() => clearTimeout(timer));
+      })
+  );
+
+  try {
+    return await Promise.any(attempts);
+  } catch {
+    return []; // every mirror failed/empty → caller falls back to seeds/cache
   }
-  return [];
 }
 
 function buildQuery(c: GeoPoint, r: number): string {

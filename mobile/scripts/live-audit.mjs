@@ -79,6 +79,7 @@ async function timed(label, fn) {
 
 async function overpass(center) {
   const query = buildQuery(center);
+  const attempts = [];
   for (const ep of ENDPOINTS) {
     try {
       const res = await fetch(ep, {
@@ -87,11 +88,14 @@ async function overpass(center) {
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         signal: AbortSignal.timeout(25000),
       });
-      if (!res.ok) continue;
+      if (!res.ok) { attempts.push(`${ep} -> HTTP ${res.status}`); continue; }
       const data = await res.json();
+      const elements = data.elements || [];
+      // Match the app: an empty result means try the next mirror (overpass.ts:51).
+      if (elements.length === 0) { attempts.push(`${ep} -> 0 elements`); continue; }
       const byCat = {};
       let named = 0, withAddr = 0, withHours = 0, withSite = 0, withWikidata = 0;
-      for (const el of data.elements || []) {
+      for (const el of elements) {
         const tags = el.tags || {};
         const cat = classify(tags);
         if (!cat) continue;
@@ -103,12 +107,12 @@ async function overpass(center) {
         if (tags.website || tags["contact:website"]) withSite++;
         if (tags.wikidata) withWikidata++;
       }
-      return { endpoint: ep, total: (data.elements || []).length, named, byCat, withAddr, withHours, withSite, withWikidata };
-    } catch {
-      /* next mirror */
+      return { endpoint: ep, total: elements.length, named, byCat, withAddr, withHours, withSite, withWikidata, attempts };
+    } catch (e) {
+      attempts.push(`${ep} -> ${String(e?.message || e).slice(0, 40)}`);
     }
   }
-  return { error: "all mirrors failed" };
+  return { error: "all mirrors failed/empty", attempts };
 }
 
 // Foursquare with FULL fields — proves what the key can actually supply

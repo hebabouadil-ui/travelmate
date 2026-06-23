@@ -15,6 +15,7 @@ import { Icon } from "@/components/Icon";
 import type { ItineraryStop } from "@/lib/types";
 import { colors, font, radius, spacing, CATEGORY_META } from "@/theme";
 import { resolveStopMedia } from "@/lib/data/media";
+import { reverseGeocode } from "@/lib/data/geocode";
 import { openDirections, openInMaps } from "@/lib/navigation";
 import { hasExactPhoto } from "@/lib/itinerary/validate";
 import { GradientButton, GhostButton } from "./ui";
@@ -38,6 +39,7 @@ export function PlaceSheet({
   const [loading, setLoading] = useState(false);
   const [image, setImage] = useState<string | undefined>();
   const [desc, setDesc] = useState<string | undefined>();
+  const [address, setAddress] = useState<string | undefined>();
 
   const place = stop?.place;
 
@@ -46,6 +48,7 @@ export function PlaceSheet({
     if (visible && place) {
       setImage(place.imageUrl);
       setDesc(place.description);
+      setAddress(place.address);
       setLoading(true);
       resolveStopMedia(place, city)
         .then((m) => {
@@ -54,6 +57,13 @@ export function PlaceSheet({
           if (m.description) setDesc(m.description);
         })
         .finally(() => active && setLoading(false));
+      // Never show raw coordinates: reverse-geocode a human address when one
+      // isn't already on the place (free, keyless, cached).
+      if (!place.address) {
+        reverseGeocode(place).then((a) => {
+          if (active && a) setAddress(a);
+        });
+      }
     }
     return () => {
       active = false;
@@ -146,12 +156,7 @@ export function PlaceSheet({
                 <Info icon="sunny-outline" label="Best time" value={place.bestTime || "Information unavailable"} />
                 <Info icon="alarm-outline" label="Hours" value={place.openingHours || "Information unavailable"} />
                 {place.cuisine ? <Info icon="restaurant-outline" label="Cuisine" value={place.cuisine} /> : null}
-                {place.address ? <Info icon="location-outline" label="Address" value={place.address} /> : null}
-                <Info
-                  icon="navigate-outline"
-                  label="Coordinates"
-                  value={`${place.lat.toFixed(4)}, ${place.lng.toFixed(4)}`}
-                />
+                <Info icon="location-outline" label="Address" value={address || "Address unavailable"} />
                 {place.website ? (
                   <Pressable
                     style={styles.info}
