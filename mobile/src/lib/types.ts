@@ -90,6 +90,10 @@ export interface Place extends GeoPoint {
   verified?: boolean;
   /** Human opening hours if known (OSM). */
   openingHours?: string;
+  /** Street address if known (OSM addr:* tags). */
+  address?: string;
+  /** Official website if known (OSM website/contact:website tag). */
+  website?: string;
   /** Suggested neighborhood/area label. */
   neighborhood?: string;
   /** Best time of day to visit, e.g. "Golden hour". */

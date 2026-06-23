@@ -45,7 +45,8 @@ optimized · supported by a real photo.**
 | Attractions / POIs | **OpenStreetMap** (Overpass) | real coordinates, categories, opening hours |
 | Fame / popularity | **Wikidata** sitelink counts | real global-fame signal (no reviews exist for free) |
 | Destination expertise | **Curated Knowledge Packs** | ~60 cities, hand-authored |
-| Photos | **Wikimedia Commons** → official site → Unsplash → *Pexels (staged)* | never AI-generated, never generic city stock; Wikipedia hits pass a subject-match gate (`isMatchingArticle`) before being trusted |
+| Photos | **Wikimedia Commons** → official site → Unsplash → *Pexels (staged)* | priority codified in `PHOTO_SOURCE_PRIORITY`/`bestPhotoSource`; never AI-generated, never generic city stock; Wikipedia hits pass a subject-match gate (`isMatchingArticle`); when no real source exists a category placeholder is shown and badged "Representative image" (`hasExactPhoto`), never a wrong image |
+| Place metadata | **OpenStreetMap** tags | name, `address` (`addr:*`), `website`/`contact:website`, coordinates, opening hours surfaced per stop |
 | Weather | **Open-Meteo** | temp, precipitation, wind, codes |
 | Routing | **OSRM** | real road/walking travel times |
 | Narration/personalization | **Gemini** (AI) | organizes & explains only |

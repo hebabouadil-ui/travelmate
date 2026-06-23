@@ -330,3 +330,58 @@ export function experienceDiversity(stops: { place: Place }[]): number {
   const distinct = new Set(exp.map((s) => s.place.category)).size;
   return distinct / exp.length;
 }
+
+// ── Photo source priority & placeholder policy (V3) ────────────────────────
+
+/** V3 photo priority, best first. We never AI-generate and never use a generic
+ *  city photo; a place-specific Commons/official image wins, with stock photo
+ *  services as staged last resorts before a category placeholder. */
+export type PhotoSource =
+  | "wikimedia_commons"
+  | "official_website"
+  | "unsplash"
+  | "pexels";
+
+export const PHOTO_SOURCE_PRIORITY: readonly PhotoSource[] = [
+  "wikimedia_commons",
+  "official_website",
+  "unsplash",
+  "pexels",
+];
+
+/**
+ * Pick the highest-priority photo source actually available for a place.
+ * Returns null when none is — the caller must then show a category PLACEHOLDER,
+ * never a generic city photo or an unrelated image (the V3 "never show
+ * incorrect images" rule).
+ */
+export function bestPhotoSource(
+  available: Partial<Record<PhotoSource, boolean>>
+): PhotoSource | null {
+  for (const src of PHOTO_SOURCE_PRIORITY) {
+    if (available[src]) return src;
+  }
+  return null;
+}
+
+/**
+ * Is this stop showing a real, place-specific photo (vs a category
+ * placeholder)? A place-specific photo requires `photoResolved` — set only
+ * after a real source (Commons/official/Foursquare) returned an image that
+ * passed the subject-match gate. Used to badge "exact photo" vs "placeholder".
+ */
+export function hasExactPhoto(p: Place): boolean {
+  return Boolean(p.photoResolved && p.imageUrl);
+}
+
+/** Build a single display address from OSM addr:* parts; undefined if empty so
+ *  the UI shows nothing rather than stray commas. */
+export function formatAddress(parts: {
+  housenumber?: string;
+  street?: string;
+  city?: string;
+}): string | undefined {
+  const line1 = [parts.housenumber, parts.street].filter(Boolean).join(" ").trim();
+  const out = [line1, parts.city?.trim()].filter((s) => s && s.length).join(", ");
+  return out.length ? out : undefined;
+}

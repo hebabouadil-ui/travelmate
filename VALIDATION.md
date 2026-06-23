@@ -400,8 +400,21 @@ shopping/culture) — each category in exactly one group — with
 (`itinerary/validate.ts`) make the repeated-places guard and monotonous-day
 signal measurable. Harness §25 (5 assertions) + §26 (4 assertions).
 
+## v3 Phase 4 — shipped: photo priority, placeholder honesty & place metadata
+**Finding (V3 directive §3/§4):** wrong/generic photos; every recommendation
+must carry an exact photo (or a placeholder, never an incorrect image) plus
+name, address, coordinates, opening hours and website.
+
+**Fix:** `PHOTO_SOURCE_PRIORITY` + `bestPhotoSource()` (`itinerary/validate.ts`)
+codify Commons → official → Unsplash → Pexels and return null (→ placeholder)
+when nothing real exists; `hasExactPhoto()` separates a real photo from a
+category placeholder; `formatAddress()` builds a clean OSM address.
+`overpass.ts` now extracts `Place.address` + `Place.website`. `PlaceSheet`
+shows reason, address, coordinates, hours and a tappable website, and badges
+non-exact images "Representative image." Harness §27 (9 assertions).
+
 ## How to reproduce
 ```
-cd mobile && npm run validate   # 102/102 assertions on the real algorithms
+cd mobile && npm run validate   # 111/111 assertions on the real algorithms
 cd mobile && npm run typecheck  # clean compile
 ```

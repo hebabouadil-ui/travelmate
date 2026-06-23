@@ -271,5 +271,19 @@ ok(V.experienceDiversity(diverseDay) === 1, `three different kinds of experience
 const monotonous = [stop({ place: { category: "museum" } }), stop({ place: { category: "museum" } }), stop({ place: { category: "museum" } })];
 ok(Math.abs(V.experienceDiversity(monotonous) - 1 / 3) < 1e-9, `museum, museum, museum -> low diversity ${V.experienceDiversity(monotonous).toFixed(2)}`);
 
+console.log("\n=== 27. Photo priority, placeholder honesty & place metadata ===");
+ok(JSON.stringify(V.PHOTO_SOURCE_PRIORITY) === JSON.stringify(["wikimedia_commons","official_website","unsplash","pexels"]),
+  `photo source priority is Commons -> official -> Unsplash -> Pexels`);
+ok(V.bestPhotoSource({ unsplash: true, wikimedia_commons: true }) === "wikimedia_commons",
+  `Commons wins over Unsplash when both exist`);
+ok(V.bestPhotoSource({ pexels: true }) === "pexels", `falls through to Pexels when only it is available`);
+ok(V.bestPhotoSource({}) === null, `no real source -> null (caller must show a placeholder, never a wrong image)`);
+ok(V.hasExactPhoto(place({ photoResolved: true, imageUrl: "x" })) === true, `a resolved real photo -> exact`);
+ok(V.hasExactPhoto(place({ photoResolved: false, imageUrl: "x" })) === false, `an unresolved category image -> NOT exact (badged "Representative")`);
+ok(V.formatAddress({ housenumber: "10", street: "Rue de Rivoli", city: "Paris" }) === "10 Rue de Rivoli, Paris",
+  `address parts assemble cleanly -> "${V.formatAddress({ housenumber: "10", street: "Rue de Rivoli", city: "Paris" })}"`);
+ok(V.formatAddress({ city: "Paris" }) === "Paris", `partial address (city only) still formats`);
+ok(V.formatAddress({}) === undefined, `no address parts -> undefined (UI shows nothing, no stray commas)`);
+
 console.log(`\n========== ${pass} passed, ${fail} failed ==========`);
 process.exit(fail ? 1 : 0);

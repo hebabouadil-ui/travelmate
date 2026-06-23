@@ -34,16 +34,45 @@ personalizes, explains and optimizes.
 
 ---
 
+## 1b. Full prompt coverage — every section accounted for
+
+Every section of the V3 directive, so nothing is skipped:
+
+1. **Core philosophy** (local-expert feel) — guiding goal of all phases.
+2. **AI responsibility** (never invent; only organize/rank/personalize/explain/optimize) — enforced since V2 P2 (data-first, AI narrates last).
+3. **Data sources** (OSM/Wikidata/Wikipedia, Open-Meteo, OSRM; photos Commons→official→Unsplash→Pexels) — sources in place; photo priority codified in **V3-4**.
+4. **Photo system** (exact photo + name + address + coords + hours + website; placeholder if none; never wrong/generic) — **V3-4**.
+5. **Recommendation explanation** — **V3-1 ✅**.
+6. **Category separation** (7 distinct buckets, diversity checks) — **V3-3 ✅**.
+7. **Use existing recommendations first** (rank by tier/confidence/interest/distance/hours; fetch only when needed) — **V3-5**.
+8. **User interest engine** (per-interest priorities; Balanced Explorer default; Family, Romantic, Photography) — **V3-6**.
+9. **Itinerary redesign** (experience-based day, not a food list) — V2 slots + **V3-2 ✅** (food cap) + **V3-7** (day-structure clock template).
+10. **Food limits** (≤1 bf/lunch/dinner + 1 drink; experiences ≥70%) — **V3-2 ✅**.
+11. **Advanced day structure** (08:00→21:30 intentional clock) — **V3-7**.
+12. **Must-see enforcement** (Tier 1 always) — V2 P2/P3 ✅.
+13. **Weather-aware planning** (indoor swaps; must-sees re-timed) — V2 weather-adapt ✅.
+14. **Route optimization** (N-C-S, minimize travel) — V2 P2 (2-opt) + P7 ✅.
+15. **Confidence system** (score + source + reason; below 70% not shown) — bands V2 P4; the **70% display gate** for attractions in **V3-7**.
+16. **Knowledge packs** (premium layer; pack→high-confidence, else global engine; any city) — verify + assert in **V3-6**.
+17. **Discover page** (count, confidence, best months, budget, top experiences, weather suitability) — **V3-8**.
+18. **Performance** (<3s dest / <2s nearby / <1s category; cache/prefetch/dedup) — **V3-9**.
+19. **Validation phase** (9 cities: must-see, photo, confidence, route, travel, weather, dedup, category) — **V3-10**.
+20. **Final goal** (real·verified·optimized·personalized·explainable·accurate) — the bar all phases are measured against.
+
 ## 2. Execution plan
 
 | Phase | Scope | Files |
 |---|---|---|
-| **V3-1** | **Recommendation Reason Engine** — deterministic "Recommended because…" per stop, surfaced on the place | `scoring.ts`, `types.ts`, `engine.ts` |
-| V3-2 | Food limits + ≥70% experience dominance (with food-trip exception), measurable | `interests.ts`/`validate.ts`, `engine.ts` |
-| V3-3 | Category separation map + per-day diversity & cross-day dedup checks | `interests.ts`, `engine.ts` |
-| V3-4 | Photo placeholder policy (never a generic/incorrect image) + source-priority assertions | `media.ts`, `wikipedia.ts` |
-| V3-5 | Performance: request dedup, prefetch, parallel AI/Overpass, structured logging | `cache.ts`, `overpass.ts`, `itineraryAI.ts` |
-| V3-6 | Benchmark validation across the 9 named destinations | `scripts/validate-itinerary.cjs` |
+| **V3-1** | **Recommendation Reason Engine** — deterministic "Recommended because…" per stop | `scoring.ts`, `types.ts`, `engine.ts` ✅ |
+| **V3-2** | Food limits + ≥70% experience dominance (food-trip exempt), measurable | `validate.ts`, `engine.ts` ✅ |
+| **V3-3** | Category separation partition + diversity & dedup checks | `interests.ts`, `validate.ts`, `nearby.tsx` ✅ |
+| **V3-4** | Photo source-priority + placeholder policy (never wrong/generic) + place metadata (address/website/coords/hours) | `validate.ts`, `overpass.ts`, `media.ts`, `types.ts`, `PlaceSheet.tsx` |
+| V3-5 | Use-existing-first ranking (tier/confidence/interest/distance/hours before any fetch) | `scoring.ts`, `engine.ts` |
+| V3-6 | Interest engine completeness: Balanced-Explorer default, Family/Romantic/Photography priorities; pack→global fallback assertions | `interests.ts`, `engine.ts`, `knowledge.ts` |
+| V3-7 | Advanced day-structure clock template + 70% confidence display gate for attractions | `slots.ts`/`dayflow.ts`, `validate.ts` |
+| V3-8 | Discover page data (count, confidence, best months, budget, top experiences, weather suitability) | `knowledge.ts`, discover screen |
+| V3-9 | Performance: request dedup, prefetch, parallel Overpass/AI, structured logging | `cache.ts`, `overpass.ts`, `engine.ts` |
+| V3-10 | Benchmark validation across the 9 named destinations | `scripts/validate-itinerary.cjs` |
 
 **Standing rule (unchanged):** after each phase — compile, run tests, fix
 regressions, update docs, commit, only then continue.
@@ -105,3 +134,22 @@ regressions, update docs, commit, only then continue.
 > completeness/disjointness) and §26 (4 assertions, dedup + diversity).
 > 102/102 offline assertions pass; `npm run typecheck` is clean. Phases
 > V3-4…V3-6 remain open.
+
+---
+
+> **Phase V3-4 status: shipped.** The photo + place-metadata requirements
+> (§3, §4) are addressed. New pure helpers in `itinerary/validate.ts`:
+> `PHOTO_SOURCE_PRIORITY` + `bestPhotoSource()` codify the exact V3 order
+> (Wikimedia Commons → official website → Unsplash → Pexels) and return null
+> when no real source exists — the signal to show a category PLACEHOLDER, never
+> a generic city photo or an unrelated image; `hasExactPhoto()` distinguishes a
+> real, subject-matched photo from a placeholder; `formatAddress()` assembles a
+> clean display address from OSM `addr:*` parts (no stray commas). `overpass.ts`
+> now extracts `address` (from `addr:housenumber/street/city`) and `website`
+> (from `website`/`contact:website`) into the new `Place.address`/
+> `Place.website` fields. `PlaceSheet` now shows the recommendation reason, the
+> address, exact coordinates, opening hours and a tappable official-website
+> link, and honestly badges a non-exact image "Representative image" rather
+> than implying it's the real thing. New harness §27 (9 assertions). 111/111
+> offline assertions pass; `npm run typecheck` is clean. Phases V3-5…V3-10
+> remain open.

@@ -8,6 +8,7 @@ import {
   Pressable,
   ScrollView,
   ActivityIndicator,
+  Linking,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Icon } from "@/components/Icon";
@@ -15,6 +16,7 @@ import type { ItineraryStop } from "@/lib/types";
 import { colors, font, radius, spacing, CATEGORY_META } from "@/theme";
 import { resolveStopMedia } from "@/lib/data/media";
 import { openDirections, openInMaps } from "@/lib/navigation";
+import { hasExactPhoto } from "@/lib/itinerary/validate";
 import { GradientButton, GhostButton } from "./ui";
 
 /**
@@ -80,6 +82,13 @@ export function PlaceSheet({
               />
               {loading ? (
                 <ActivityIndicator color={colors.white} style={styles.heroLoading} />
+              ) : !hasExactPhoto(place) ? (
+                // V3 photo honesty: never pass off a placeholder as the real
+                // thing — say so rather than implying a generic image is exact.
+                <View style={styles.placeholderChip}>
+                  <Icon name="image-outline" size={11} color={colors.white} />
+                  <Text style={styles.placeholderText}>Representative image</Text>
+                </View>
               ) : null}
               <Pressable style={styles.close} onPress={onClose} hitSlop={8}>
                 <Icon name="close" size={20} color={colors.white} />
@@ -107,6 +116,13 @@ export function PlaceSheet({
                 </View>
               ) : null}
 
+              {place.recommendationReason ? (
+                <View style={styles.reasonBox}>
+                  <Icon name="checkmark-circle" size={14} color={colors.success} />
+                  <Text style={styles.reasonText}>{place.recommendationReason}</Text>
+                </View>
+              ) : null}
+
               {desc ? <Text style={styles.desc}>{desc}</Text> : null}
 
               <View style={styles.verifyRow}>
@@ -130,6 +146,26 @@ export function PlaceSheet({
                 <Info icon="sunny-outline" label="Best time" value={place.bestTime || "Information unavailable"} />
                 <Info icon="alarm-outline" label="Hours" value={place.openingHours || "Information unavailable"} />
                 {place.cuisine ? <Info icon="restaurant-outline" label="Cuisine" value={place.cuisine} /> : null}
+                {place.address ? <Info icon="location-outline" label="Address" value={place.address} /> : null}
+                <Info
+                  icon="navigate-outline"
+                  label="Coordinates"
+                  value={`${place.lat.toFixed(4)}, ${place.lng.toFixed(4)}`}
+                />
+                {place.website ? (
+                  <Pressable
+                    style={styles.info}
+                    onPress={() => Linking.openURL(place.website!).catch(() => {})}
+                  >
+                    <Icon name="globe-outline" size={16} color={colors.primary} />
+                    <View>
+                      <Text style={styles.infoLabel}>Website</Text>
+                      <Text style={[styles.infoValue, { color: colors.primary }]} numberOfLines={1}>
+                        Open official site
+                      </Text>
+                    </View>
+                  </Pressable>
+                ) : null}
               </View>
 
               <View style={styles.actions}>
@@ -184,6 +220,10 @@ const styles = StyleSheet.create({
   content: { padding: spacing.lg },
   whyBox: { flexDirection: "row", gap: spacing.sm, backgroundColor: colors.primary + "12", borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.md },
   whyText: { flex: 1, color: colors.text, fontSize: font.body, lineHeight: 21, fontWeight: "600" },
+  reasonBox: { flexDirection: "row", gap: spacing.sm, alignItems: "flex-start", backgroundColor: colors.success + "12", borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.md },
+  reasonText: { flex: 1, color: colors.success, fontSize: font.small, lineHeight: 19, fontWeight: "700" },
+  placeholderChip: { position: "absolute", top: spacing.md, left: spacing.md, flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "rgba(5,8,16,0.55)", paddingHorizontal: spacing.sm, paddingVertical: 4, borderRadius: radius.pill },
+  placeholderText: { color: colors.white, fontSize: font.tiny, fontWeight: "600" },
   verifyRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: spacing.md },
   verifyText: { color: colors.textMuted, fontSize: font.tiny, fontWeight: "600" },
   desc: { color: colors.textMuted, fontSize: font.body, lineHeight: 22, marginBottom: spacing.lg },

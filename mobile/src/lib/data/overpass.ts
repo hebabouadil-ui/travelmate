@@ -1,5 +1,6 @@
 import type { GeoPoint, Place, PlaceCategory } from "../types";
 import { makeId } from "../utils";
+import { formatAddress } from "../itinerary/validate";
 
 const ENDPOINTS = [
   "https://overpass-api.de/api/interpreter",
@@ -98,6 +99,12 @@ function toPlace(el: OverpassElement): Place | null {
     tags: collectDietTags(tags),
     hiddenGem,
     openingHours: tags.opening_hours,
+    address: formatAddress({
+      housenumber: tags["addr:housenumber"],
+      street: tags["addr:street"],
+      city: tags["addr:city"],
+    }),
+    website: tags.website || tags["contact:website"] || undefined,
     neighborhood: tags["addr:suburb"] || tags["addr:district"] || tags["addr:city"],
     verified: true, // straight from OpenStreetMap — a real, mapped place
     score:
