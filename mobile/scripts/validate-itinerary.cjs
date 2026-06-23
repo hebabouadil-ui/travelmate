@@ -217,5 +217,34 @@ ok(/most-visited/i.test(S.recommendationReason(place({ category: "attraction", p
 ok(/worthwhile stop/i.test(S.recommendationReason(place({ category: "attraction", popularity: 0 }), { city: "Tangier", interests: [], distanceKm: 9 })),
   `an obscure, far, off-interest stop -> honest worthwhile-stop fallback (no invented reason)`);
 
+console.log("\n=== 24. Food limits: meal allowance enforced, experiences dominate ===");
+const wellBalanced = [
+  stop({ slot: "breakfast", place: { category: "cafe" } }),
+  stop({ slot: "main_attraction", place: { category: "monument" } }),
+  stop({ slot: "morning_activity", place: { category: "landmark" } }),
+  stop({ slot: "lunch", place: { category: "restaurant" } }),
+  stop({ slot: "afternoon_activity", place: { category: "museum" } }),
+  stop({ slot: "sunset", place: { category: "viewpoint" } }),
+  stop({ slot: "dinner", place: { category: "restaurant" } }),
+];
+ok(Math.abs(V.experienceShare(wellBalanced) - 4 / 7) < 1e-9, `4 of 7 stops are experiences -> ${V.experienceShare(wellBalanced).toFixed(2)}`);
+ok(V.withinFoodLimits(wellBalanced, false) === false, `a real day still under 70% experiences is flagged honestly`);
+// A day that piles on extra drinks/snacks beyond the 1bf+1lunch+1dinner+1drink allowance.
+const foodHeavy = [
+  stop({ slot: "breakfast", place: { category: "cafe" } }),
+  stop({ slot: "main_attraction", place: { category: "monument" } }),
+  stop({ slot: "lunch", place: { category: "restaurant" } }),
+  stop({ slot: "afternoon_activity", place: { category: "cafe", id: "snack" } }), // excess snack
+  stop({ slot: "coffee_break", place: { category: "cafe" } }), // the 1 allowed drink
+  stop({ slot: "dinner", place: { category: "restaurant" } }),
+];
+const capped = V.capFoodStops(foodHeavy, false);
+ok(capped.filter((s) => V.isFoodDrink(s.place.category)).length === 4, `excess food/drink trimmed to the 4-stop allowance (kept ${capped.filter((s) => V.isFoodDrink(s.place.category)).length})`);
+ok(capped.some((s) => s.slot === "lunch") && capped.some((s) => s.slot === "dinner"), `lunch and dinner anchors are never dropped`);
+ok(!capped.some((s) => s.place.id === "snack"), `the excess afternoon snack café is the one dropped`);
+ok(capped.some((s) => s.slot === "coffee_break") && capped.some((s) => s.slot === "breakfast"), `the allowed breakfast + 1 drink are kept`);
+ok(capped.some((s) => s.place.category === "monument"), `the real experience (monument) is always kept`);
+ok(V.capFoodStops(foodHeavy, true).length === foodHeavy.length, `a food-focused trip is exempt — nothing trimmed`);
+
 console.log(`\n========== ${pass} passed, ${fail} failed ==========`);
 process.exit(fail ? 1 : 0);

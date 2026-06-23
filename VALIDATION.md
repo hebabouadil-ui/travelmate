@@ -360,8 +360,34 @@ day → "Historic & Monuments", a no-majority day and a food-only day → honest
 
 78/78 assertions pass; `npm run typecheck` is clean.
 
+## v3 Phase 1 — shipped: explainable recommendation reasons
+**Finding (V3 directive):** "Users do not understand why a place was
+recommended." The only per-stop rationale was free-text AI narration, which
+can drift or be generic.
+
+**Fix:** `recommendationReason()` (`itinerary/scoring.ts`) returns one
+deterministic, source-backed "Recommended because…" line per stop in a fixed
+precedence (must-see tier → explicit interest match → real nightlife district
+→ walking-distance meal → global fame → proximity to route → honest
+worthwhile-stop fallback), never claiming a reason the data doesn't support.
+Stored on `Place.recommendationReason`, computed for every stop in
+`engine.ts`, shown in `StopCard`. Harness §23 (7 assertions) covers each
+branch and the no-false-claim guarantee.
+
+## v3 Phase 2 — shipped: food limits & experience dominance
+**Finding (V3 directive):** "Too many food/drink recommendations; food
+dominates"; the bad "Restaurant → Café → Restaurant → Café" pattern.
+
+**Fix:** `experienceShare()`, `withinFoodLimits()` and `capFoodStops()`
+(`itinerary/validate.ts`). `capFoodStops()` enforces V3's count allowance
+(≤1 breakfast + 1 lunch + 1 dinner + 1 optional drink), dropping excess
+café/snack/extra-restaurant stops while never removing a meal anchor or a real
+experience; food-focused trips are exempt. `withinFoodLimits()` reports the
+≥70%-experience share for the audit. Wired into `engine.ts` per day. Harness
+§24 (8 assertions).
+
 ## How to reproduce
 ```
-cd mobile && npm run validate   # 78/78 assertions on the real algorithms
+cd mobile && npm run validate   # 93/93 assertions on the real algorithms
 cd mobile && npm run typecheck  # clean compile
 ```

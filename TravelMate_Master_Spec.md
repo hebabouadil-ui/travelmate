@@ -65,7 +65,10 @@ optimized · supported by a real photo.**
    back from. Meals are bound to within walking distance of the current
    itinerary (`nearestWithinRadius`, 1.5km), never picked from anywhere in
    the city; evening nightlife prefers a real, OSM-density-backed district
-   over an isolated venue that's merely closer (`bestNightlifeVenue`).
+   over an isolated venue that's merely closer (`bestNightlifeVenue`). Food is
+   then capped to a meal allowance (≤1 breakfast + 1 lunch + 1 dinner + 1
+   optional drink) so experiences dominate the day (`capFoodStops`); food-
+   focused trips are exempt.
 4. **Tier:** every place tiered 1/2/3 (pack membership, else fame).
 5. **Guarantee must-sees:** missing Tier-1 sights replace the weakest anchors
    (verified against OSM, never invented), spread across days by
@@ -187,13 +190,14 @@ Data — never presenting a low-quality plan as high quality.
 
 ## 11. Quality bar & validation
 
-`npm run validate` runs 78 assertions against the real algorithms offline
+`npm run validate` runs 93 assertions against the real algorithms offline
 (tiering, must-see matching, interest coverage, confidence bands, candidate
 validation, Verified badge, Itinerary Quality Score, the photo subject-match
 validator, the meal walking-distance constraint, district-first nightlife,
-budget-tiered travel mode + walking fatigue, day-theme taxonomy, route flow,
-scheduling, opening-hours guard). See `VALIDATION.md` for the full report and
-the 10-point checklist.
+budget-tiered travel mode + walking fatigue, day-theme taxonomy, deterministic
+recommendation reasons, food-limit/experience-dominance enforcement, route
+flow, scheduling, opening-hours guard). See `VALIDATION.md` for the full
+report and the 10-point checklist.
 
 Live, on-device spot-checks remain for photo correctness and day-trip travel
 legs (cannot be verified in the network-restricted CI).

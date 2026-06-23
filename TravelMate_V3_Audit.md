@@ -65,3 +65,22 @@ regressions, update docs, commit, only then continue.
 > covers each precedence branch and the no-false-claim guarantee. 85/85
 > offline assertions pass; `npm run typecheck` is clean. Phases V3-2…V3-6
 > remain open.
+
+---
+
+> **Phase V3-2 status: shipped.** The "too many food/drink recommendations;
+> food dominates" complaint is fixed with a real, measurable guard. New pure
+> functions in `itinerary/validate.ts`: `experienceShare()` (0..1 of a day's
+> stops that are real experiences, not food/drink — nightlife counts as a
+> night experience, not a meal), `withinFoodLimits()` (the ≥70%-experience
+> measurement, surfaced for the audit), and `capFoodStops()` which enforces
+> V3's count allowance — at most 1 breakfast, 1 lunch, 1 dinner and 1 optional
+> drink, dropping any excess café/snack/extra restaurant while never removing
+> a meal anchor or a real experience, so the "Restaurant → Café → Restaurant →
+> Café" pattern can't occur. Food-focused trips (the traveller selected food,
+> or a food-lover profile) are exempt. Wired into `engine.ts`: each built day
+> is passed through `capFoodStops(built, foodFocused)` before scheduling. The
+> count allowance is always achievable; the stricter share is a measurement we
+> never chase by deleting a traveller's lunch. New harness §24 (8 assertions).
+> 93/93 offline assertions pass; `npm run typecheck` is clean. Phases
+> V3-3…V3-6 remain open.

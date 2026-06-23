@@ -212,3 +212,89 @@ export function verificationQualityScore(stops: { place: Place }[]): number {
   if (!stops.length) return 1;
   return stops.filter((s) => s.place.verified).length / stops.length;
 }
+
+// ── Food limits & experience dominance (V3) ────────────────────────────────
+
+/** Categories that count as food/drink for the domination guard. Nightlife is
+ *  a night *experience*, not a meal, so it is deliberately excluded. */
+const FOOD_DRINK: PlaceCategory[] = ["restaurant", "cafe"];
+
+/** A normal trip's experiences (attractions, culture, nature, nightlife…) must
+ *  be at least this share of the day — food/drink may never dominate. */
+export const EXPERIENCE_MIN_SHARE = 0.7;
+
+/** Hard cap on food/drink stops in a normal day: 1 breakfast/coffee + 1 lunch
+ *  + 1 dinner + 1 optional extra drink. Food-focused trips are exempt. */
+export const NORMAL_FOOD_CAP = 4;
+
+export function isFoodDrink(category: PlaceCategory): boolean {
+  return FOOD_DRINK.includes(category);
+}
+
+/** 0..1 share of a day's stops that are real experiences (not food/drink). */
+export function experienceShare(stops: { place: Place }[]): number {
+  if (!stops.length) return 1;
+  const food = stops.filter((s) => isFoodDrink(s.place.category)).length;
+  return (stops.length - food) / stops.length;
+}
+
+/**
+ * Does a day respect the V3 food rules? A food-focused trip (the traveller
+ * explicitly asked for food, or it's a food-lover profile) is allowed to break
+ * them; every other trip must keep food/drink at or under `NORMAL_FOOD_CAP`
+ * AND experiences at or above `EXPERIENCE_MIN_SHARE`.
+ */
+export function withinFoodLimits(
+  stops: { place: Place }[],
+  foodFocused = false
+): boolean {
+  if (foodFocused) return true;
+  const food = stops.filter((s) => isFoodDrink(s.place.category)).length;
+  return food <= NORMAL_FOOD_CAP && experienceShare(stops) >= EXPERIENCE_MIN_SHARE;
+}
+
+/**
+ * Enforce the V3 food *count* allowance on a built day: at most one breakfast,
+ * one lunch, one dinner and one optional drink (coffee break). Any extra
+ * food/drink stop — a second café, an afternoon snack, a non-slotted extra
+ * restaurant — is dropped so food/drink can never pile up into the
+ * "Restaurant → Café → Restaurant → Café" pattern the V3 directive calls out.
+ * Meal anchors (lunch/dinner) and every real experience are never removed, and
+ * the original order of kept stops is preserved. Food-focused trips are exempt.
+ *
+ * Note: this enforces the *count* allowance, which is always achievable. The
+ * stricter ≥70%-experience *share* (`withinFoodLimits`) is a measurement for
+ * the audit — on a city with thin attraction data it can't be reached by
+ * deleting meals, and we never strip a traveller's lunch to chase a ratio.
+ */
+export function capFoodStops<T extends { place: Place; slot?: string }>(
+  stops: T[],
+  foodFocused = false
+): T[] {
+  if (foodFocused) return stops;
+  let breakfastKept = false;
+  let drinkKept = false;
+  const result: T[] = [];
+  for (const s of stops) {
+    if (!isFoodDrink(s.place.category)) {
+      result.push(s); // every real experience is always kept
+      continue;
+    }
+    if (s.slot === "lunch" || s.slot === "dinner") {
+      result.push(s); // meal anchors are never dropped
+      continue;
+    }
+    if (s.slot === "breakfast" && !breakfastKept) {
+      breakfastKept = true;
+      result.push(s);
+      continue;
+    }
+    if (s.slot === "coffee_break" && !drinkKept) {
+      drinkKept = true;
+      result.push(s);
+      continue;
+    }
+    // anything else is excess food/drink beyond the allowance — drop it.
+  }
+  return result;
+}

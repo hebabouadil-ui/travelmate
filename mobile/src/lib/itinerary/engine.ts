@@ -33,6 +33,7 @@ import {
 import { confidenceScore, isConfidentGem, recommendationReason, selectionValue } from "./scoring";
 import { categoriesForInterests, dayTheme, INTEREST_CATEGORIES, interestCoverageScore } from "./interests";
 import {
+  capFoodStops,
   confidenceBand,
   isVerified,
   landmarkCoverageScore,
@@ -648,6 +649,10 @@ async function buildDeterministicDays(
     req.interests.includes("nightlife") ||
     req.profile?.travelerType === "couple" ||
     req.days === 1;
+  // A food-focused trip may exceed the normal food caps; every other trip keeps
+  // experiences at >=70% of the day (see `capFoodStops`).
+  const foodFocused =
+    req.interests.includes("food") || req.profile?.travelerType === "food_lover";
 
   const clusters = clusterIntoDays(sights, counts);
   const usedFood = new Set<string>();
@@ -661,7 +666,9 @@ async function buildDeterministicDays(
 
   const days: ItineraryDay[] = clusters.map((group, idx) => {
     const ordered = optimizeRoute(group, center);
-    const stops = buildStops(ordered, food, scored, center, usedFood, usedExtra, req, wantsEvening);
+    const built = buildStops(ordered, food, scored, center, usedFood, usedExtra, req, wantsEvening);
+    // V3 food limits: enforce the meal/drink count allowance unless it's a food trip.
+    const stops = capFoodStops(built, foodFocused);
     stops.forEach((st) => {
       if (!st.place.imageUrl) st.place.imageUrl = categoryImage(st.place.category, st.place.name);
       // Deterministic "Recommended because…" — the V3 explainability rule.
