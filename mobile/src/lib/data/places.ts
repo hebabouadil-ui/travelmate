@@ -4,15 +4,37 @@ import { foursquareSearch } from "./foursquare";
 import { getSeedPlaces } from "./seedPlaces";
 import { findSeedCity } from "./seed";
 import { withCache } from "../cache";
+import { wikidataPlaces } from "./wikidata";
+import { resolveRegion } from "./region";
+import type { RegionAnchor } from "./region";
+import { haversineKm } from "../utils";
 
 /**
  * Discovery engine: gather POIs for a destination from free sources, IN
- * PARALLEL. Foursquare is the primary source for venue types (restaurants,
- * cafés, bars/nightlife, shopping); OpenStreetMap + curated seeds supply
- * monuments/museums/parks/landmarks. Everything is merged and de-duplicated by
- * name; results cached for offline use. Foursquare degrades to nothing when no
- * key / out of credits, so OSM still carries the plan.
+ * PARALLEL, in candidate-source priority order — Destination Knowledge Pack
+ * (curated seeds) > Wikidata (UNESCO sites/national monuments/museums/
+ * castles/palaces/beaches) > OpenStreetMap (geometry + venues, never treated
+ * as a popularity signal) — with Foursquare enriching venue-type places
+ * (restaurants/cafés/bars/shopping) with the address/hours/website/photo
+ * fields OSM frequently lacks.
+ *
+ * Metro Area Support: when the destination's own radius comes back thin
+ * even after Overpass's internal 8km->40km Dynamic Radius Expansion, this
+ * fans out to the nearest districts/satellite municipalities the generic
+ * Destination Region Resolver found (e.g. Dieppe/Riverview for Moncton)
+ * instead of ever stopping at a municipal boundary.
+ *
+ * Everything is merged and de-duplicated by name; results cached for
+ * offline use. Foursquare/Wikidata/Region degrade to nothing when
+ * unavailable, so OSM still carries the plan.
  */
+
+const THIN_POOL_THRESHOLD = 25;
+const REGION_ANCHOR_RADIUS_M = 5000;
+const MAX_FANOUT_ANCHORS = 3;
+const MIN_ANCHOR_DISTANCE_KM = 3;
+const NEIGHBORHOOD_MAX_KM = 5;
+
 export async function discoverPlaces(
   query: string,
   center: GeoPoint
@@ -28,23 +50,75 @@ export async function discoverPlaces(
     (v) => v.length === 0
   ).catch(() => [] as Place[]);
 
-  // Foursquare venue candidates (primary for food/nightlife/shopping), fetched
-  // concurrently. Each returns [] when Foursquare is unavailable.
-  const [live, fsqRest, fsqCafe, fsqBar, fsqShop] = await Promise.all([
+  // Foursquare venue candidates, Wikidata candidates and Region Resolver
+  // anchors, all fetched concurrently alongside OSM.
+  const [live, fsqRest, fsqCafe, fsqBar, fsqShop, wikidata, region] = await Promise.all([
     osmPromise,
     foursquareSearch("restaurant", center),
     foursquareSearch("cafe", center),
     foursquareSearch("nightlife", center),
     foursquareSearch("shopping", center),
+    wikidataPlaces(center),
+    resolveRegion(center),
   ]);
 
-  // Foursquare first so its richer venue records (photo/address/hours/website)
-  // win the dedupe over a thinner OSM record of the same place.
-  const merged = mergeByName([...fsqRest, ...fsqCafe, ...fsqBar, ...fsqShop, ...seeds, ...live]);
+  // Wikidata candidates take priority (trusted, globally documented) ahead
+  // of the existing Foursquare/seed/OSM merge order, which is unchanged.
+  let merged = mergeByName([
+    ...wikidata,
+    ...fsqRest,
+    ...fsqCafe,
+    ...fsqBar,
+    ...fsqShop,
+    ...seeds,
+    ...live,
+  ]);
+
+  // Metro Area Support: still thin after OSM's own radius escalation? Fan
+  // out to the nearest distinct districts/municipalities rather than ever
+  // stopping at the destination's own administrative boundary.
+  if (merged.length < THIN_POOL_THRESHOLD && region.length > 0) {
+    const anchors = region
+      .filter((a) => a.distanceKm > MIN_ANCHOR_DISTANCE_KM)
+      .slice(0, MAX_FANOUT_ANCHORS);
+    if (anchors.length > 0) {
+      const extra = await Promise.all(
+        anchors.map((a) => overpassPlaces(a.center, REGION_ANCHOR_RADIUS_M))
+      );
+      merged = mergeByName([...merged, ...extra.flat()]);
+    }
+  }
+
+  attachNeighborhoods(merged, region);
+
   if (merged.length > 0) return merged;
 
   // Last resort: seed only.
   return seeds;
+}
+
+/** Generic, source-backed neighborhood labeling: any candidate still
+ *  missing one gets the name of its nearest Region Resolver anchor. */
+function attachNeighborhoods(places: Place[], region: RegionAnchor[]): void {
+  if (region.length === 0) return;
+  for (const p of places) {
+    if (p.neighborhood) continue;
+    const nearest = nearestAnchor(p, region);
+    if (nearest) p.neighborhood = nearest.name;
+  }
+}
+
+function nearestAnchor(p: GeoPoint, region: RegionAnchor[]): RegionAnchor | undefined {
+  let best: RegionAnchor | undefined;
+  let bestDist = Infinity;
+  for (const a of region) {
+    const d = haversineKm(p, a.center);
+    if (d < bestDist) {
+      bestDist = d;
+      best = a;
+    }
+  }
+  return best && bestDist <= NEIGHBORHOOD_MAX_KM ? best : undefined;
 }
 
 function normalizeKey(query: string): string | null {

@@ -2,6 +2,7 @@ import { ENV } from "../env";
 import { withCache } from "../cache";
 import { makeId, slugify } from "../utils";
 import type { GeoPoint, Place, PlaceCategory } from "../types";
+import { isTouristIrrelevant, classifyExperience } from "./relevance";
 
 /**
  * Foursquare Places integration. Foursquare is the PRIMARY source for venue-type
@@ -165,17 +166,23 @@ export async function foursquareSearch(
       return results
         .map(normalize)
         .filter((v): v is FsqVenue => !!v && v.lat != null && v.lng != null)
-        .map((v) => toPlace(v, kind));
+        .map((v) => toPlace(v, kind))
+        .filter((p): p is Place => p !== null);
     },
     (v) => v.length === 0
   ).catch(() => []);
 }
 
-function toPlace(v: FsqVenue, kind: FsqVenue["category"] | string): Place {
+// Tourist Relevance Filter: a free-text "shopping" query can surface big-box
+// retail under Foursquare's own "shop|store" categories — reject those
+// before they reach scoring, same as the OSM/Overpass discovery path.
+function toPlace(v: FsqVenue, kind: FsqVenue["category"] | string): Place | null {
+  if (isTouristIrrelevant(v.name, undefined)) return null;
+  const category = (kind as PlaceCategory) || v.category;
   return {
     id: makeId("fsq"),
     name: v.name,
-    category: (kind as PlaceCategory) || v.category,
+    category,
     lat: v.lat!,
     lng: v.lng!,
     source: "overpass", // treated as a real, mapped venue for the Verified badge
@@ -187,6 +194,7 @@ function toPlace(v: FsqVenue, kind: FsqVenue["category"] | string): Place {
     website: v.website,
     score: typeof v.rating === "number" ? Math.min(1, v.rating / 10) : 0.55,
     rating: v.rating,
+    experiences: classifyExperience(category, undefined, v.name),
   };
 }
 

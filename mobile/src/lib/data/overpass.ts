@@ -2,6 +2,7 @@ import type { GeoPoint, Place, PlaceCategory } from "../types";
 import { makeId } from "../utils";
 import { formatAddress } from "../itinerary/validate";
 import { ENV } from "../env";
+import { isTouristIrrelevant, classifyExperience } from "./relevance";
 
 // Overpass/Nominatim throttle or 406-reject anonymous requests. Identifying the
 // client with a descriptive User-Agent (etiquette requirement) and asking for
@@ -33,6 +34,15 @@ interface OverpassResponse {
   elements: OverpassElement[];
 }
 
+// Dynamic Radius Expansion: small/medium cities are often thin within a
+// tight municipal-style radius even though plenty of real attractions sit
+// just outside it. Escalate the search radius — never stop at an
+// administrative boundary — until the pool is no longer thin, capping at
+// 40km. Callers that pass an explicit radius (e.g. a Region Resolver anchor
+// query in places.ts) skip escalation and get exactly that radius.
+const RADIUS_STEPS_M = [8000, 15000, 25000, 40000];
+const THIN_POOL_MIN = 25;
+
 /**
  * Query the free Overpass API (OpenStreetMap) for points of interest around a
  * center. Tries multiple mirrors. Returns [] on total failure so callers can
@@ -40,8 +50,19 @@ interface OverpassResponse {
  */
 export async function overpassPlaces(
   center: GeoPoint,
-  radiusM = 6000
+  radiusM?: number
 ): Promise<Place[]> {
+  if (radiusM != null) return queryAtRadius(center, radiusM);
+
+  let result: Place[] = [];
+  for (const step of RADIUS_STEPS_M) {
+    result = await queryAtRadius(center, step);
+    if (result.length >= THIN_POOL_MIN) break;
+  }
+  return result;
+}
+
+async function queryAtRadius(center: GeoPoint, radiusM: number): Promise<Place[]> {
   // Two SEPARATE balanced buckets, each capped on its own. The live audit
   // showed a single `out center 350` getting consumed by a city's hundreds of
   // bars/restaurants, starving sightseeing (London: 191 nightlife + 88
@@ -51,8 +72,7 @@ export async function overpassPlaces(
     raceQuery(buildSightsQuery(center, radiusM)),
     raceQuery(buildVenuesQuery(center, radiusM)),
   ]);
-  const merged = dedupe([...sights, ...venues]);
-  return merged;
+  return dedupe([...sights, ...venues]);
 }
 
 /** Run one Overpass query across all mirrors in parallel; first non-empty wins.
@@ -87,10 +107,14 @@ function raceQuery(query: string): Promise<Place[]> {
 
 function buildSightsQuery(c: GeoPoint, r: number): string {
   const around = `(around:${r},${c.lat},${c.lng})`;
-  // place_of_worship is gated to wikidata/wikipedia-tagged ones only — a city
-  // has hundreds of small neighborhood mosques/churches; without the gate they
-  // would flood the 300-cap, while famous ones (Hassan II Mosque, Notre-Dame-
-  // style landmarks) are exactly the ones OSM tags with wikidata/wikipedia.
+  // place_of_worship and boutique/fashion shops are gated to wikidata/
+  // wikipedia-tagged ones only — a city has hundreds of small neighborhood
+  // mosques/churches/clothing shops; without the gate they would flood the
+  // 300-cap, while the famous ones (Hassan II Mosque, a real fashion-district
+  // boutique) are exactly the ones OSM tags with wikidata/wikipedia.
+  // amenity=marketplace surfaces souks/local markets (Shopping engine) —
+  // genuine travel experiences, never the big-box retail the relevance
+  // filter rejects downstream.
   return `[out:json][timeout:25];
 (
   nwr["tourism"~"attraction|museum|artwork|viewpoint|gallery|zoo|theme_park"]${around};
@@ -98,6 +122,9 @@ function buildSightsQuery(c: GeoPoint, r: number): string {
   nwr["leisure"~"park|garden"]${around};
   nwr["natural"="beach"]${around};
   nwr["shop"~"mall|department_store"]${around};
+  nwr["amenity"="marketplace"]${around};
+  nwr["shop"~"boutique|fashion"]["wikidata"]${around};
+  nwr["shop"~"boutique|fashion"]["wikipedia"]${around};
   nwr["amenity"="place_of_worship"]["wikidata"]${around};
   nwr["amenity"="place_of_worship"]["wikipedia"]${around};
 );
@@ -106,10 +133,14 @@ out center 300;`;
 
 function buildVenuesQuery(c: GeoPoint, r: number): string {
   const around = `(around:${r},${c.lat},${c.lng})`;
+  // Nightlife engine: bars/pubs/nightclubs plus biergarten and live-music
+  // venues — never museums/monuments. Food engine: restaurants/cafés plus
+  // bakeries (authentic local food stops, not random venues).
   return `[out:json][timeout:25];
 (
   nwr["amenity"~"restaurant|cafe"]${around};
-  nwr["amenity"~"bar|pub|nightclub"]${around};
+  nwr["shop"="bakery"]${around};
+  nwr["amenity"~"bar|pub|nightclub|biergarten|music_venue"]${around};
 );
 out center 300;`;
 }
@@ -124,6 +155,11 @@ function toPlace(el: OverpassElement): Place | null {
 
   const category = classify(tags);
   if (!category) return null;
+
+  // Tourist Relevance Filter: TravelMate is a travel planner, not a maps
+  // app — reject big-box retail/utilities/industrial before they ever reach
+  // scoring (see relevance.ts).
+  if (isTouristIrrelevant(name, tags)) return null;
 
   // Hidden-gem heuristic: places without wikidata/wikipedia tags and not
   // explicitly major attractions are more likely off-the-beaten-path.
@@ -152,6 +188,7 @@ function toPlace(el: OverpassElement): Place | null {
     verified: true, // straight from OpenStreetMap — a real, mapped place
     score:
       isMajor ? 0.9 : category === "restaurant" || category === "cafe" ? 0.5 : 0.6,
+    experiences: classifyExperience(category, tags, name),
     source: "overpass",
     wikidataId: tags.wikidata,
     wikipediaTitle: tags.wikipedia ? tags.wikipedia.replace(/^[a-z]+:/, "") : undefined,
@@ -172,12 +209,16 @@ function classify(tags: Record<string, string>): PlaceCategory | null {
   if (tags.tourism === "viewpoint") return "viewpoint";
   if (tags.tourism) return "attraction";
   if (tags.amenity === "place_of_worship") return "monument";
+  if (tags.amenity === "marketplace") return "attraction";
   if (tags.amenity === "restaurant") return "restaurant";
   if (tags.amenity === "cafe") return "cafe";
-  if (["bar", "pub", "nightclub"].includes(tags.amenity || "")) return "nightlife";
+  if (tags.shop === "bakery") return "cafe";
+  if (["bar", "pub", "nightclub", "biergarten", "music_venue"].includes(tags.amenity || ""))
+    return "nightlife";
   if (tags.leisure === "park" || tags.leisure === "garden") return "park";
   if (tags.natural === "beach") return "beach";
   if (tags.shop === "mall" || tags.shop === "department_store") return "shopping";
+  if (tags.shop === "boutique" || tags.shop === "fashion") return "shopping";
   return null;
 }
 

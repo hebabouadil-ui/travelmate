@@ -25,6 +25,23 @@ export type Interest =
 
 export type FoodPreference = "halal" | "vegetarian" | "vegan" | "none";
 
+/** Closed-taxonomy experience classification, assigned to every candidate at
+ *  discovery time (before scoring) so downstream selection can reason about
+ *  what KIND of travel experience a place is, independent of its display
+ *  category/icon (`PlaceCategory`). */
+export type ExperienceTag =
+  | "history"
+  | "nature"
+  | "shopping"
+  | "nightlife"
+  | "food"
+  | "photography"
+  | "architecture"
+  | "family"
+  | "romantic"
+  | "luxury"
+  | "adventure";
+
 /** Confidence rules: 90-100 Excellent, 70-89 Trusted, 50-69 Fallback (kept,
  *  but clearly labeled), below 50 Reject (never displayed). */
 export type ConfidenceBand = "excellent" | "trusted" | "fallback" | "reject";
@@ -68,7 +85,7 @@ export interface Place extends GeoPoint {
   /** True when this is an off-the-beaten-path recommendation. */
   hiddenGem?: boolean;
   cuisine?: string;
-  source: "overpass" | "opentripmap" | "wikipedia" | "ai" | "mock";
+  source: "overpass" | "opentripmap" | "wikipedia" | "wikidata" | "ai" | "mock";
   wikipediaUrl?: string;
   /** Wikidata entity id (e.g. "Q243") from OSM — used to fetch fame/popularity. */
   wikidataId?: string;
@@ -103,6 +120,10 @@ export interface Place extends GeoPoint {
   /** Real review rating (0..10) from Foursquare, when it actually returned
    *  one. Never fabricated — absent rather than guessed when no source has it. */
   rating?: number;
+  /** Closed-taxonomy experience classification assigned at discovery time
+   *  (see `classifyExperience` in `data/relevance.ts`), e.g. ["history",
+   *  "architecture"]. Independent of `category`, which drives icon/grouping. */
+  experiences?: ExperienceTag[];
 }
 
 export type PlaceCategory =

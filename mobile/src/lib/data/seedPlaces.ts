@@ -1,4 +1,5 @@
 import type { Place, PlaceCategory } from "../types";
+import { classifyExperience } from "./relevance";
 
 type Seed = [string, PlaceCategory, number, number, boolean?, string?];
 
@@ -213,6 +214,7 @@ export function getSeedPlaces(cityKey: string): Place[] {
     cuisine,
     tags: cuisine ? [cuisine] : [],
     score: category === "restaurant" || category === "cafe" ? 0.6 : 0.85,
+    experiences: classifyExperience(category, undefined, name),
     source: "mock" as const,
   }));
 }
