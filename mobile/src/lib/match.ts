@@ -45,6 +45,14 @@ const TRAITS: Record<string, Partial<Record<Interest, number>>> = {
     architecture: 0.8,
     photography: 0.8,
   },
+  casablanca: {
+    monuments: 0.9,
+    architecture: 0.9,
+    beaches: 0.7,
+    nightlife: 0.8,
+    food: 0.8,
+    shopping: 0.7,
+  },
 };
 
 /**

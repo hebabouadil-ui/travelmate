@@ -38,6 +38,7 @@ export function PlaceSheet({
 }) {
   const [loading, setLoading] = useState(false);
   const [image, setImage] = useState<string | undefined>();
+  const [imageFailed, setImageFailed] = useState(false);
   const [desc, setDesc] = useState<string | undefined>();
   const [address, setAddress] = useState<string | undefined>();
 
@@ -47,13 +48,17 @@ export function PlaceSheet({
     let active = true;
     if (visible && place) {
       setImage(place.imageUrl);
+      setImageFailed(false);
       setDesc(place.description);
       setAddress(place.address);
       setLoading(true);
       resolveStopMedia(place, city)
         .then((m) => {
           if (!active) return;
-          if (m.imageUrl) setImage(m.imageUrl);
+          if (m.imageUrl) {
+            setImage(m.imageUrl);
+            setImageFailed(false);
+          }
           if (m.description) setDesc(m.description);
         })
         .finally(() => active && setLoading(false));
@@ -81,8 +86,12 @@ export function PlaceSheet({
           <View style={styles.handle} />
           <ScrollView showsVerticalScrollIndicator={false}>
             <View style={styles.hero}>
-              {image ? (
-                <Image source={{ uri: image }} style={StyleSheet.absoluteFill} />
+              {image && !imageFailed ? (
+                <Image
+                  source={{ uri: image }}
+                  style={StyleSheet.absoluteFill}
+                  onError={() => setImageFailed(true)}
+                />
               ) : (
                 <LinearGradient colors={colors.gradient} style={StyleSheet.absoluteFill} />
               )}

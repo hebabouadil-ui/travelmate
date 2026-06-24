@@ -18,6 +18,18 @@ export interface KnowledgePack {
   mustSee: string[];
   /** Tier 2 — strong attractions. */
   strong: string[];
+  /** Tier 3 — real, verifiable hidden gems (authentic, lower-traffic spots).
+   *  A pool place matching one of these is treated as a confirmed gem even if
+   *  the generic heuristic in `gemConfidence()` wouldn't have flagged it. */
+  hiddenGems?: string[];
+  /** Tier 4 — local-favorite venues (the kind a local would actually
+   *  recommend), used to nudge restaurant/café/bar picks beyond whatever a
+   *  generic API search happens to return first. */
+  localRecommendations?: string[];
+  /** Real, named nightlife venues (bars/clubs/rooftops/beach clubs) — used to
+   *  prefer an actual known venue over a generic nearby bar when picking the
+   *  evening stop. */
+  nightlife?: string[];
   /** Best places to catch sunset / golden hour. */
   sunsetSpots: string[];
   /** Signature food experiences (described, matched to real venues by the pool). */
@@ -45,6 +57,7 @@ const PACKS: KnowledgePack[] = [
     aliases: ["marrakesh"],
     mustSee: ["Jemaa el-Fnaa", "Koutoubia Mosque", "Bahia Palace", "Jardin Majorelle"],
     strong: ["Saadian Tombs", "Ben Youssef Madrasa", "El Badi Palace", "Menara Gardens", "Le Jardin Secret", "Maison de la Photographie"],
+    nightlife: ["Theatro Marrakech", "Pacha Marrakech", "Comptoir Darna", "Kabana Rooftop"],
     sunsetSpots: ["Kabana Rooftop", "El Fenn Rooftop", "Nomad Rooftop", "Café des Épices Terrace"],
     foodExperiences: ["Traditional Moroccan breakfast", "Tagine lunch in the medina", "Jemaa el-Fnaa street food", "Mint tea on a rooftop"],
     neighborhoods: ["Medina", "Gueliz", "Kasbah", "Mellah"],
@@ -60,6 +73,7 @@ const PACKS: KnowledgePack[] = [
     country: "Spain",
     mustSee: ["Museo del Prado", "Royal Palace of Madrid", "Buen Retiro Park", "Plaza Mayor"],
     strong: ["Puerta del Sol", "Museo Reina Sofía", "Thyssen-Bornemisza Museum", "Gran Vía", "Almudena Cathedral", "Temple of Debod", "Mercado de San Miguel"],
+    nightlife: ["Teatro Kapital", "Joy Eslava"],
     sunsetSpots: ["Temple of Debod", "Círculo de Bellas Artes Rooftop", "Parque de las Siete Tetas"],
     foodExperiences: ["Churros con chocolate breakfast", "Tapas crawl in La Latina", "Cocido madrileño lunch", "Mercado de San Miguel bites"],
     neighborhoods: ["Centro", "La Latina", "Malasaña", "Chueca", "Salamanca"],
@@ -91,6 +105,7 @@ const PACKS: KnowledgePack[] = [
     country: "Japan",
     mustSee: ["Senso-ji", "Meiji Shrine", "Shibuya Crossing", "Tokyo Skytree"],
     strong: ["Tokyo Tower", "Ueno Park", "Tsukiji Outer Market", "Shinjuku Gyoen", "teamLab Planets", "Imperial Palace", "Asakusa", "Akihabara"],
+    nightlife: ["Golden Gai", "New York Bar", "Womb Shibuya"],
     sunsetSpots: ["Tokyo Metropolitan Government Building Observation Deck", "Shibuya Sky", "Roppongi Hills Mori Tower", "Odaiba Seaside Park"],
     foodExperiences: ["Tsukiji sushi breakfast", "Ramen lunch", "Izakaya hopping in Omoide Yokocho", "Conveyor-belt sushi"],
     neighborhoods: ["Shinjuku", "Shibuya", "Asakusa", "Ginza", "Akihabara", "Harajuku"],
@@ -106,6 +121,7 @@ const PACKS: KnowledgePack[] = [
     country: "France",
     mustSee: ["Eiffel Tower", "Louvre Museum", "Notre-Dame de Paris", "Arc de Triomphe"],
     strong: ["Musée d'Orsay", "Sacré-Cœur", "Sainte-Chapelle", "Champs-Élysées", "Luxembourg Gardens", "Centre Pompidou", "Montmartre", "Palais Garnier"],
+    nightlife: ["Moulin Rouge", "Le Baron", "Castel"],
     sunsetSpots: ["Trocadéro", "Sacré-Cœur steps", "Galeries Lafayette Rooftop", "Pont Alexandre III"],
     foodExperiences: ["Croissant & café breakfast", "Bistro lunch", "Cheese & wine tasting", "Patisserie tour"],
     neighborhoods: ["Le Marais", "Saint-Germain-des-Prés", "Montmartre", "Latin Quarter", "Champs-Élysées"],
@@ -121,6 +137,7 @@ const PACKS: KnowledgePack[] = [
     country: "Italy",
     mustSee: ["Colosseum", "Vatican Museums", "Trevi Fountain", "Pantheon"],
     strong: ["Roman Forum", "St. Peter's Basilica", "Piazza Navona", "Spanish Steps", "Castel Sant'Angelo", "Borghese Gallery", "Palatine Hill", "Trastevere"],
+    nightlife: ["Freni e Frizioni", "Jerry Thomas Project", "Goa Club"],
     sunsetSpots: ["Giardino degli Aranci", "Pincio Terrace", "Castel Sant'Angelo Bridge", "Gianicolo Hill"],
     foodExperiences: ["Espresso & cornetto breakfast", "Cacio e pepe lunch", "Gelato walk", "Trastevere dinner"],
     neighborhoods: ["Centro Storico", "Trastevere", "Monti", "Vaticano", "Testaccio"],
@@ -136,6 +153,7 @@ const PACKS: KnowledgePack[] = [
     country: "Spain",
     mustSee: ["Sagrada Família", "Park Güell", "La Rambla", "Casa Batlló"],
     strong: ["Casa Milà (La Pedrera)", "Gothic Quarter", "Picasso Museum", "Montjuïc", "Barceloneta Beach", "Camp Nou", "Mercat de la Boqueria", "Palau de la Música Catalana"],
+    nightlife: ["Razzmatazz", "Pacha Barcelona"],
     sunsetSpots: ["Bunkers del Carmel", "Montjuïc Castle", "W Hotel Eclipse Bar", "Barceloneta Beach"],
     foodExperiences: ["Catalan breakfast", "Tapas & vermouth", "Paella by the sea", "La Boqueria market bites"],
     neighborhoods: ["Gothic Quarter", "El Born", "Eixample", "Gràcia", "Barceloneta"],
@@ -206,15 +224,25 @@ const PACKS: KnowledgePack[] = [
   },
   {
     city: "Casablanca", country: "Morocco", aliases: ["casa"],
-    mustSee: ["Hassan II Mosque", "Old Medina of Casablanca", "Corniche Ain Diab", "Mohammed V Square"],
-    strong: ["Quartier Habous", "Cathédrale du Sacré-Cœur", "Villa des Arts", "Morocco Mall"],
-    sunsetSpots: ["Corniche Ain Diab", "Hassan II Mosque esplanade"],
-    foodExperiences: ["Fresh seafood", "Moroccan breakfast", "Street food", "Café culture"],
-    neighborhoods: ["Centre Ville", "Ain Diab", "Habous"],
-    culturalExperiences: ["Art Deco architecture walk", "Mosque tour", "Corniche stroll"],
+    mustSee: [
+      "Hassan II Mosque", "Corniche Ain Diab", "Casablanca Marina", "Morocco Mall",
+      "Twin Center", "Habous Quarter", "Old Medina of Casablanca", "Arab League Park",
+      "Mohammed V Square",
+    ],
+    strong: [
+      "Sky 28", "Le Cabestan", "Rick's Café", "La Sqala", "Anfa Place",
+      "Villa des Arts", "Cathédrale du Sacré-Cœur",
+    ],
+    hiddenGems: ["La Sqala", "Ancienne Médina ramparts", "Parc Murdoch"],
+    localRecommendations: ["La Sqala", "Le Cabestan", "Rick's Café", "Bodega"],
+    nightlife: ["Sky 28", "Le Cabestan", "Tahiti Beach Club", "Bodega"],
+    sunsetSpots: ["Corniche Ain Diab", "Hassan II Mosque esplanade", "Sky 28"],
+    foodExperiences: ["Fresh seafood at Le Cabestan", "Breakfast in La Sqala's garden", "Moroccan breakfast", "Street food", "Café culture in Maarif"],
+    neighborhoods: ["Centre Ville", "Ain Diab", "Habous", "Maarif", "Gauthier"],
+    culturalExperiences: ["Art Deco architecture walk", "Mosque tour", "Corniche stroll", "Twin Center & Maarif shopping"],
     bestMonths: ["Apr", "May", "Jun", "Sep", "Oct", "Nov"],
-    attractionCount: 18, budgetPerDay: { economy: 40, medium: 85, luxury: 200 },
-    weatherNote: "Mild Atlantic climate year-round; spring and autumn are best.", confidence: 85,
+    attractionCount: 22, budgetPerDay: { economy: 40, medium: 85, luxury: 200 },
+    weatherNote: "Mild Atlantic climate year-round; spring and autumn are best.", confidence: 88,
   },
   {
     city: "Rabat", country: "Morocco",
@@ -638,6 +666,7 @@ const PACKS: KnowledgePack[] = [
     city: "Bangkok", country: "Thailand", aliases: ["krung thep"],
     mustSee: ["Grand Palace", "Wat Pho", "Wat Arun", "Chatuchak Weekend Market"],
     strong: ["Wat Phra Kaew", "Khao San Road", "Jim Thompson House", "Yaowarat (Chinatown)", "Asiatique"],
+    nightlife: ["Sky Bar (Lebua)", "Levels Club & Lounge"],
     sunsetSpots: ["Wat Arun riverside", "Rooftop sky bars"],
     foodExperiences: ["Street food crawl", "Pad thai", "Mango sticky rice", "Boat noodles"],
     neighborhoods: ["Rattanakosin (Old City)", "Sukhumvit", "Chinatown"],
@@ -712,6 +741,7 @@ const PACKS: KnowledgePack[] = [
     city: "London", country: "United Kingdom", aliases: ["london uk", "greater london"],
     mustSee: ["British Museum", "Tower of London", "Buckingham Palace", "Westminster Abbey"],
     strong: ["London Eye", "Tate Modern", "St Paul's Cathedral", "Borough Market", "National Gallery", "Covent Garden", "Camden Market"],
+    nightlife: ["Fabric", "Ministry of Sound", "Sky Garden"],
     sunsetSpots: ["Primrose Hill", "Sky Garden", "London Eye"],
     foodExperiences: ["Sunday roast", "Afternoon tea", "Borough Market", "Brick Lane curry"],
     neighborhoods: ["Westminster", "South Bank", "Shoreditch", "Camden", "Notting Hill"],
@@ -937,6 +967,26 @@ export function packNameTier(pack: KnowledgePack, placeName: string): 1 | 2 | 0 
   if (pack.mustSee.some((x) => looseMatch(x, placeName))) return 1;
   if (pack.strong.some((x) => looseMatch(x, placeName))) return 2;
   return 0;
+}
+
+/** True when a candidate matches one of the pack's curated Tier-3 hidden gems
+ *  (real, verified, lower-traffic spots) — promoted to a confirmed gem even
+ *  when the generic `gemConfidence()` heuristic wouldn't flag it on its own. */
+export function packIsHiddenGem(pack: KnowledgePack, placeName: string): boolean {
+  return (pack.hiddenGems ?? []).some((x) => looseMatch(x, placeName));
+}
+
+/** True when a candidate matches one of the pack's curated Tier-4 local-
+ *  favorite venues — used to nudge meal/café picks beyond whatever a generic
+ *  API search happens to return first. */
+export function packIsLocalRecommendation(pack: KnowledgePack, placeName: string): boolean {
+  return (pack.localRecommendations ?? []).some((x) => looseMatch(x, placeName));
+}
+
+/** True when a candidate matches one of the pack's curated real nightlife
+ *  venues — used to prefer an actual known venue over a generic nearby bar. */
+export function packIsNightlifeVenue(pack: KnowledgePack, placeName: string): boolean {
+  return (pack.nightlife ?? []).some((x) => looseMatch(x, placeName));
 }
 
 /**

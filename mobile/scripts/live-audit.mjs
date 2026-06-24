@@ -47,6 +47,8 @@ function buildSightsQuery(c, r = 6000) {
   nwr["leisure"~"park|garden"]${around};
   nwr["natural"="beach"]${around};
   nwr["shop"~"mall|department_store"]${around};
+  nwr["amenity"="place_of_worship"]["wikidata"]${around};
+  nwr["amenity"="place_of_worship"]["wikipedia"]${around};
 );
 out center 300;`;
 }
@@ -60,12 +62,13 @@ function buildVenuesQuery(c, r = 6000) {
 out center 300;`;
 }
 
-// classify() from overpass.ts:123-138
+// classify() from overpass.ts:166-181
 function classify(tags) {
   if (tags.historic) return ["monument", "memorial"].includes(tags.historic) ? "monument" : "landmark";
   if (tags.tourism === "museum" || tags.tourism === "gallery") return "museum";
   if (tags.tourism === "viewpoint") return "viewpoint";
   if (tags.tourism) return "attraction";
+  if (tags.amenity === "place_of_worship") return "monument";
   if (tags.amenity === "restaurant") return "restaurant";
   if (tags.amenity === "cafe") return "cafe";
   if (["bar", "pub", "nightclub"].includes(tags.amenity || "")) return "nightlife";

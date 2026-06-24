@@ -175,6 +175,27 @@ const DATA: Record<string, Seed[]> = {
     ["Brooklyn Roasting Co.", "cafe", 40.7035, -73.9889, true, "coffee"],
     ["Please Don't Tell", "nightlife", 40.7256, -73.9836, true],
   ],
+  casablanca: [
+    ["Hassan II Mosque", "monument", 33.6086, -7.6325],
+    ["Corniche Ain Diab", "beach", 33.5878, -7.6822],
+    ["Casablanca Marina", "landmark", 33.6063, -7.6298],
+    ["Morocco Mall", "shopping", 33.5798, -7.6914],
+    ["Twin Center", "landmark", 33.5898, -7.6326],
+    ["Habous Quarter", "landmark", 33.5851, -7.6109, true],
+    ["Old Medina of Casablanca", "landmark", 33.6034, -7.6184],
+    ["Arab League Park", "park", 33.5921, -7.6259],
+    ["Mohammed V Square", "landmark", 33.5933, -7.6178],
+    ["Villa des Arts", "museum", 33.5942, -7.6324, true],
+    ["Cathédrale du Sacré-Cœur", "monument", 33.5944, -7.6261, true],
+    ["Anfa Place", "shopping", 33.5837, -7.6647],
+    ["La Sqala", "restaurant", 33.6024, -7.6217, true, "moroccan"],
+    ["Le Cabestan", "restaurant", 33.6075, -7.6402, false, "seafood"],
+    ["Rick's Café", "restaurant", 33.6029, -7.6219, false, "international"],
+    ["Sky 28", "nightlife", 33.5908, -7.6324, true],
+    ["Tahiti Beach Club", "nightlife", 33.5689, -7.7106, true],
+    ["Bodega", "nightlife", 33.5934, -7.6253, true],
+    ["Café Maure", "cafe", 33.6037, -7.6189, true, "moroccan"],
+  ],
 };
 
 let counter = 0;

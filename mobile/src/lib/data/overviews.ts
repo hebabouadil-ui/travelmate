@@ -53,6 +53,11 @@ const CURATED: Record<string, Overview> = {
       "New York runs at a current you can feel the moment you arrive — skyline views, Central Park escapes, Broadway lights and a slice of the world's best pizza at 2am. The city that never sleeps gives you a lifetime of trips in one.",
     highlights: ["Unforgettable skyline", "Central Park", "Museums & Broadway", "Iconic food, 24/7"],
   },
+  casablanca: {
+    overview:
+      "Casablanca is Morocco's confident, modern face — the soaring Hassan II Mosque rising straight out of the Atlantic, Art Deco boulevards from its French-colonial heyday, and a beach-club corniche that turns every evening into a sunset ritual. It's less postcard than Marrakech and more real: a working megacity with serious food, design and nightlife.",
+    highlights: ["Hassan II Mosque on the ocean", "Art Deco Centre Ville", "Corniche beach clubs & sunsets", "Twin Center & Morocco Mall shopping"],
+  },
 };
 
 const INTEREST_PHRASE: Record<Interest, string> = {

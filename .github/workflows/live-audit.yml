@@ -6,6 +6,12 @@ name: Live Provider Audit
 # candidate counts per source/category, which provider can fill each field,
 # Foursquare field availability, and timings.
 #
+# Also runs the REAL generateItinerary() engine end-to-end for the V4 sign-off
+# cases (Casablanca Luxury/Nightlife, Casablanca Budget/Nature, Rome
+# Nature/History/Luxury, Paris Photography, Marrakech Food), printing every
+# candidate considered, its real FinalScore, which were selected vs rejected,
+# why each selected place won, its API source, and total generation time.
+#
 # This is the V4 "reality check" evidence mechanism — proof from real API
 # responses, not unit tests. Trigger manually from the Actions tab.
 
@@ -23,6 +29,10 @@ on:
       - "claude/**"
     paths:
       - "mobile/scripts/live-audit.mjs"
+      - "mobile/scripts/run-itinerary-audit.cjs"
+      - "mobile/scripts/audit-shims/**"
+      - "mobile/package.json"
+      - "mobile/src/lib/**"
       - ".github/workflows/live-audit.yml"
 
 jobs:
@@ -38,5 +48,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+      - name: Install dependencies
+        run: npm ci
       - name: Run live provider audit
         run: node scripts/live-audit.mjs ${{ github.event.inputs.cities }}
+      - name: Run real generateItinerary() evidence audit (V4 sign-off cases)
+        run: npm run audit:itinerary

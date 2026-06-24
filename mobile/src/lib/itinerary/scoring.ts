@@ -1,18 +1,30 @@
-import type { GeoPoint, Interest, Place, PlaceCategory } from "../types";
+import type { Budget, GeoPoint, Interest, Place, PlaceCategory } from "../types";
 import { haversineKm } from "../utils";
 import { categoriesForInterests } from "./interests";
 
 /**
- * Attraction scoring engine.
+ * Attraction scoring engine — implements the FinalScore formula:
+ *   FinalScore = Popularity + MustSeeWeight + InterestWeight + BudgetWeight +
+ *                DistanceWeight + OpeningHoursWeight + PhotoQualityWeight +
+ *                ReviewWeight + DiversityWeight
+ * (WeatherWeight is applied structurally — `weatherAdapt()` in engine.ts swaps
+ * whole outdoor slots for indoor ones on adverse-weather days. There is no
+ * honest per-place weather sensitivity to score against, only a day-level
+ * forecast, so it isn't faked as a per-candidate term here. DiversityWeight is
+ * applied where it actually matters — across the candidates being compared for
+ * the SAME slot — in engine.ts's backfill/venue-picking, not here.)
  *
- * Free OSM/Wikipedia data has no star ratings or review counts, so — per the
- * "never invent data" rule — we DO NOT fabricate them. Instead we rank on
- * signals we can actually trust, with GLOBAL FAME as the dominant factor:
+ * Free OSM/Wikipedia data has no star ratings or review counts by default, so
+ * — per the "never invent data" rule — we never fabricate them; `rating` is
+ * only ever populated from a real Foursquare response. Instead we rank mainly
+ * on signals we can always trust, with GLOBAL FAME as the dominant factor:
  *   - popularity  (Wikidata sitelink count → how many language Wikipedias cover
  *                  it; a real, source-backed fame proxy)            ← dominant
  *   - tourist value of the category (a monument outranks a generic mall)
  *   - interest match (does it fit what the traveller asked for?)
+ *   - budget fit (does this category suit the traveller's spending tier?)
  *   - verification (grounded to a real OSM POI)
+ *   - a real review rating, when Foursquare actually returned one
  * The result is a 0..1 score used to rank candidates. Fame deliberately
  * outweighs distance at selection time, so a world-famous attraction is never
  * dropped just because a smaller place sits closer.
@@ -40,6 +52,44 @@ const W_CATEGORY = 0.3;
 const W_INTEREST = 0.2;
 const W_VERIFIED = 0.06;
 const W_GEM = 0.04;
+const W_BUDGET = 0.15;
+const W_HOURS = 0.03;
+const W_PHOTO = 0.03;
+const W_REVIEW = 0.1;
+
+/**
+ * BudgetWeight: how well a place's category fits a traveller's spending tier.
+ * An economy trip leans toward free outdoor sights and away from paid dining/
+ * nightlife/shopping; a luxury trip leans the opposite way. `medium` is all
+ * zeros, so a caller that doesn't pass a budget (or passes "medium") sees
+ * exactly the previous behavior.
+ */
+const BUDGET_CATEGORY_FIT: Record<Budget, Partial<Record<PlaceCategory, number>>> = {
+  economy: {
+    park: 0.15,
+    viewpoint: 0.12,
+    beach: 0.1,
+    monument: 0.05,
+    landmark: 0.05,
+    restaurant: -0.12,
+    nightlife: -0.15,
+    shopping: -0.1,
+    museum: -0.05,
+  },
+  medium: {},
+  luxury: {
+    restaurant: 0.12,
+    nightlife: 0.12,
+    shopping: 0.08,
+    museum: 0.05,
+    cafe: 0.04,
+  },
+};
+
+/** BudgetWeight term (roughly -0.15..0.15) for a category under a spending tier. */
+export function budgetFit(category: PlaceCategory, budget: Budget = "medium"): number {
+  return BUDGET_CATEGORY_FIT[budget]?.[category] ?? 0;
+}
 
 /** True when a place is a well-documented, notable site (Wikipedia/Wikidata). */
 function isNotable(p: Place): boolean {
@@ -52,8 +102,19 @@ export function fameValue(p: Place): number {
   return isNotable(p) ? 0.5 : 0;
 }
 
-/** 0..1 desirability score for a place given the traveller's interests. */
-export function attractionScore(p: Place, interests: Interest[] = []): number {
+/** ReviewWeight: a real Foursquare rating (0..10) normalized to 0..1. Never
+ *  fabricated — a place with no real rating contributes 0, not a guess. */
+function reviewValue(p: Place): number {
+  return typeof p.rating === "number" ? Math.max(0, Math.min(1, p.rating / 10)) : 0;
+}
+
+/** 0..1 desirability score for a place given the traveller's interests and
+ *  budget tier (the FinalScore formula's per-candidate terms). */
+export function attractionScore(
+  p: Place,
+  interests: Interest[] = [],
+  budget: Budget = "medium"
+): number {
   const wanted = categoriesForInterests(interests);
 
   let s = fameValue(p) * W_POPULARITY;
@@ -61,6 +122,10 @@ export function attractionScore(p: Place, interests: Interest[] = []): number {
   if (wanted.has(p.category)) s += W_INTEREST;
   if (p.verified) s += W_VERIFIED;
   if (p.hiddenGem) s += W_GEM;
+  s += budgetFit(p.category, budget) * W_BUDGET;
+  if (p.openingHours) s += W_HOURS;
+  if (p.photoResolved) s += W_PHOTO;
+  s += reviewValue(p) * W_REVIEW;
   return Math.min(1, s);
 }
 
@@ -68,10 +133,17 @@ export function attractionScore(p: Place, interests: Interest[] = []): number {
  * Selection value used when choosing which places make the cut. Tier-1 must-see
  * places dominate, then fame; distance is only a gentle tie-breaker (~0.005/km),
  * so a world-famous attraction is never dropped because a smaller one is closer.
+ * Budget defaults to "medium" (no fit adjustment) so existing callers that
+ * don't pass one see no behavior change.
  */
-export function selectionValue(p: Place, distanceKm: number, interests: Interest[] = []): number {
+export function selectionValue(
+  p: Place,
+  distanceKm: number,
+  interests: Interest[] = [],
+  budget: Budget = "medium"
+): number {
   const tierBoost = p.tier === 1 ? 0.5 : p.tier === 2 ? 0.2 : 0;
-  return attractionScore(p, interests) + tierBoost - distanceKm * 0.005;
+  return attractionScore(p, interests, budget) + tierBoost - distanceKm * 0.005;
 }
 
 /**

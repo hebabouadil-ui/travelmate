@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
 import {
-  Image,
   Pressable,
   StyleSheet,
   Text,
@@ -48,7 +47,7 @@ export function DestinationCard({
       }}
       style={({ pressed }) => [styles.destCard, shadow.card, { transform: [{ scale: pressed ? 0.985 : 1 }] }]}
     >
-      <Image source={{ uri: match.image }} style={styles.destImage} />
+      <SmartImage uri={match.image} style={styles.destImage} />
       <LinearGradient
         colors={["transparent", "rgba(5,8,16,0.15)", "rgba(5,8,16,0.92)"]}
         style={StyleSheet.absoluteFill}
@@ -109,7 +108,7 @@ export function DestinationMini({
 }) {
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [styles.mini, { opacity: pressed ? 0.9 : 1 }]}>
-      <Image source={{ uri: match.image }} style={styles.miniImage} />
+      <SmartImage uri={match.image} style={styles.miniImage} />
       <LinearGradient colors={["transparent", "rgba(5,8,16,0.9)"]} style={StyleSheet.absoluteFill} />
       <View style={styles.miniBody}>
         <Text style={styles.miniName}>{match.name}</Text>

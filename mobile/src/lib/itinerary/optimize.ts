@@ -142,7 +142,8 @@ export function nearestWithinRadius(
   predicate: (p: Place) => boolean,
   exclude: Set<string>,
   maxKm: number,
-  allowReuse = false
+  allowReuse = false,
+  rank?: (p: Place) => number
 ): Place | undefined {
   const candidates = pool
     .filter(predicate)
@@ -150,16 +151,25 @@ export function nearestWithinRadius(
   const within = candidates.filter((c) => c.d <= maxKm);
 
   const unusedWithin = within.filter((c) => !exclude.has(c.p.id));
-  if (unusedWithin.length) return closest(unusedWithin);
-  if (allowReuse && within.length) return closest(within);
+  if (unusedWithin.length) return pick(unusedWithin, rank);
+  if (allowReuse && within.length) return pick(within, rank);
 
   const unused = candidates.filter((c) => !exclude.has(c.p.id));
-  if (unused.length) return closest(unused);
-  return allowReuse && candidates.length ? closest(candidates) : undefined;
+  if (unused.length) return pick(unused, rank);
+  return allowReuse && candidates.length ? pick(candidates, rank) : undefined;
 }
 
 function closest(cs: { p: Place; d: number }[]): Place {
   return cs.reduce((best, c) => (c.d < best.d ? c : best)).p;
+}
+
+/** Best-ranked candidate when a `rank` function is supplied (higher wins —
+ *  used to fold in budget fit/fame/rating); otherwise the plain
+ *  closest-by-distance choice, so existing callers see no behavior change
+ *  unless they opt in. */
+function pick(cs: { p: Place; d: number }[], rank?: (p: Place) => number): Place {
+  if (!rank) return closest(cs);
+  return cs.reduce((best, c) => (rank(c.p) > rank(best.p) ? c : best)).p;
 }
 
 /**
@@ -175,7 +185,8 @@ export function bestNightlifeVenue(
   nightlife: Place[],
   exclude: Set<string>,
   allowReuse = false,
-  districtRadiusKm = 0.3
+  districtRadiusKm = 0.3,
+  rank?: (p: Place) => number
 ): Place | undefined {
   const density = (p: Place) =>
     nightlife.filter((o) => o.id !== p.id && haversineKm(p, o) <= districtRadiusKm).length;
@@ -183,9 +194,11 @@ export function bestNightlifeVenue(
   const pickBest = (list: Place[]): Place | undefined => {
     if (!list.length) return undefined;
     return list
-      .map((p) => ({ p, density: density(p), d: haversineKm(anchor, p) }))
-      // Densest real cluster wins; distance to the anchor only breaks ties.
-      .sort((a, b) => b.density - a.density || a.d - b.d)[0].p;
+      .map((p) => ({ p, density: density(p), q: rank ? rank(p) : 0, d: haversineKm(anchor, p) }))
+      // Densest real cluster wins; quality (fame/budget fit/rating, when
+      // supplied) breaks ties among similarly-dense venues; raw distance to
+      // the anchor is the final tie-break.
+      .sort((a, b) => b.density - a.density || b.q - a.q || a.d - b.d)[0].p;
   };
 
   const unused = nightlife.filter((p) => !exclude.has(p.id));

@@ -1,4 +1,5 @@
 import type {
+  Budget,
   Daypart,
   GeoPoint,
   Interest,
@@ -14,7 +15,15 @@ import { addDays, haversineKm, makeId } from "../utils";
 import { geocode, type GeocodeResult } from "../data/geocode";
 import { discoverPlaces } from "../data/places";
 import { enrichPopularity } from "../data/popularity";
-import { getKnowledgePack, looseMatch, packNameTier, type KnowledgePack } from "../data/knowledge";
+import {
+  getKnowledgePack,
+  looseMatch,
+  packIsHiddenGem,
+  packIsLocalRecommendation,
+  packIsNightlifeVenue,
+  packNameTier,
+  type KnowledgePack,
+} from "../data/knowledge";
 import { getWeather } from "../data/weather";
 import { buildOverview } from "../data/overviews";
 import { cityHeroImage as cityImageFor } from "../data/wikipedia";
@@ -31,7 +40,7 @@ import {
   optimizeRoute,
   planPerDay,
 } from "./optimize";
-import { confidenceScore, isConfidentGem, recommendationReason, selectionValue, shouldFetchMore } from "./scoring";
+import { budgetFit, confidenceScore, isConfidentGem, recommendationReason, selectionValue, shouldFetchMore } from "./scoring";
 import {
   categoriesForInterests,
   composeBackbone,
@@ -69,6 +78,14 @@ const FOOD_CATEGORIES: PlaceCategory[] = ["restaurant", "cafe"];
 /** Restaurant/Café Engine: a meal must come from within walking distance of
  *  the current itinerary, not from anywhere in the city (see `nearestWithinRadius`). */
 const WALK_RADIUS_KM = 1.5;
+
+/** Score bonus for a candidate matching a knowledge pack's curated Tier-4
+ *  local-favorite venue — enough to beat a closer but generic match without
+ *  overriding a much stronger fame/budget-fit signal. */
+const LOCAL_RECOMMENDATION_BOOST = 0.3;
+/** Score bonus for a candidate matching a knowledge pack's curated, real
+ *  nightlife venue — same rationale as `LOCAL_RECOMMENDATION_BOOST`. */
+const NIGHTLIFE_PACK_BOOST = 0.3;
 
 const DURATION: Record<PlaceCategory, number> = {
   museum: 90,
@@ -142,7 +159,7 @@ export async function generateItinerary(req: TripRequest): Promise<Itinerary> {
 
   // Select, cluster and route the day from REAL candidates only (pool + pack).
   // AI is invoked inside this step strictly to narrate the result.
-  const { days, overview, highlights, engine } = await buildDeterministicDays(req, geo, weather, pool);
+  const { days, overview, highlights, engine, scoredCandidates } = await buildDeterministicDays(req, geo, weather, pool);
 
   // Knowledge-first quality pass: tier every stop, guarantee Tier-1 must-sees
   // appear (replacing weak anchors, spread across days — never stacked into
@@ -151,7 +168,7 @@ export async function generateItinerary(req: TripRequest): Promise<Itinerary> {
   // then drop low-confidence attractions.
   applyTiers(days, pack);
   if (pack) injectMustSees(days, pool, pack, geo.name, req.interests);
-  ensureInterestCoverage(days, pool, req.interests);
+  ensureInterestCoverage(days, pool, req.interests, req.budget);
   applyTiers(days, pack);
   gateLowConfidence(days);
   // Adapt each day to its forecast (rain/heat/cold/wind) before routing.
@@ -192,6 +209,7 @@ export async function generateItinerary(req: TripRequest): Promise<Itinerary> {
     createdAt: new Date().toISOString(),
     engine,
     audit,
+    debugPool: req.debug ? scoredCandidates : undefined,
   };
 }
 
@@ -299,7 +317,12 @@ function tierOf(p: Place, pack?: KnowledgePack): 1 | 2 | 3 {
 }
 
 function applyTiers(days: ItineraryDay[], pack?: KnowledgePack): void {
-  for (const d of days) for (const s of d.stops) s.place.tier = tierOf(s.place, pack);
+  for (const d of days) for (const s of d.stops) {
+    s.place.tier = tierOf(s.place, pack);
+    // A curated Tier-3 hidden gem is a confirmed gem even if the generic
+    // popularity-based heuristic in `gemConfidence()` wouldn't flag it.
+    if (pack && packIsHiddenGem(pack, s.place.name)) s.place.hiddenGem = true;
+  }
 }
 
 /** Best verified pool place matching a known name (tolerant token match). */
@@ -395,7 +418,12 @@ function injectMustSees(
  * take priority; an interest is left honestly uncovered if the destination's
  * real data has nothing in its category (never invented).
  */
-function ensureInterestCoverage(days: ItineraryDay[], pool: Place[], interests: Interest[]): void {
+function ensureInterestCoverage(
+  days: ItineraryDay[],
+  pool: Place[],
+  interests: Interest[],
+  budget: Budget = "medium"
+): void {
   if (!interests.length) return;
   const present = new Set<PlaceCategory>();
   const used = new Set<string>();
@@ -413,7 +441,10 @@ function ensureInterestCoverage(days: ItineraryDay[], pool: Place[], interests: 
 
     const candidate = pool
       .filter((p) => wanted.includes(p.category) && !used.has(norm(p.name)))
-      .sort((a, b) => selectionValue(b, 0, interests) - selectionValue(a, 0, interests))[0];
+      .sort(
+        (a, b) =>
+          selectionValue(b, 0, interests, budget) - selectionValue(a, 0, interests, budget)
+      )[0];
     if (!candidate) continue; // no real candidate → leave honestly uncovered
 
     const order = leastLoadedOrder(injectedPerDay);
@@ -476,14 +507,15 @@ function findIndoorAlt(
   anchor: GeoPoint,
   pool: Place[],
   used: Set<string>,
-  interests: TripRequest["interests"]
+  interests: TripRequest["interests"],
+  budget: Budget = "medium"
 ): Place | null {
   const cands = pool.filter((p) => isIndoor(p.category) && !used.has(norm(p.name)));
   if (!cands.length) return null;
   cands.sort(
     (a, b) =>
-      selectionValue(b, haversineKm(anchor, b), interests) -
-      selectionValue(a, haversineKm(anchor, a), interests)
+      selectionValue(b, haversineKm(anchor, b), interests, budget) -
+      selectionValue(a, haversineKm(anchor, a), interests, budget)
   );
   return cands[0] ?? null;
 }
@@ -518,7 +550,7 @@ function weatherAdapt(days: ItineraryDay[], pool: Place[], req: TripRequest): vo
         s.place.tier !== 1 &&
         (rainy || cold || windy || (hot && s.slot === "afternoon_activity"));
       if (swap) {
-        const alt = findIndoorAlt(s.place, pool, used, req.interests);
+        const alt = findIndoorAlt(s.place, pool, used, req.interests, req.budget);
         if (alt) {
           used.delete(norm(s.place.name));
           used.add(norm(alt.name));
@@ -539,6 +571,36 @@ function weatherAdapt(days: ItineraryDay[], pool: Place[], req: TripRequest): vo
 }
 
 const MIN_STOPS_PER_DAY = 4;
+/** Same-category penalty applied per existing occurrence during backfill, so
+ *  a thin day doesn't fill with five museums in a row just because museums
+ *  scored highest — a soft DiversityWeight, not a hard cap. */
+const BACKFILL_DIVERSITY_PENALTY = 0.07;
+
+/**
+ * Pick the single best backfill candidate for a thin day. Mirrors
+ * `composeBackbone()`'s upstream split — interest-matching places are
+ * exhausted before off-interest filler — so a late backfill can never undo
+ * the traveller's actual interests the way a flat pool-wide sort did before.
+ * Ranked by `selectionValue` (fame/tier/budget fit/distance) minus a same-
+ * category penalty for places already in this day, so the result also stays
+ * visibly different across budget tiers and doesn't repeat one category.
+ */
+function pickBackfillCandidate(
+  available: Place[],
+  anchor: GeoPoint,
+  interests: Interest[],
+  budget: Budget,
+  categoryCounts: Map<PlaceCategory, number>
+): Place {
+  const wanted = categoriesForInterests(interests);
+  const rank = (p: Place) =>
+    selectionValue(p, haversineKm(anchor, p), interests, budget) -
+    (categoryCounts.get(p.category) ?? 0) * BACKFILL_DIVERSITY_PENALTY;
+
+  const matching = interests.length ? available.filter((p) => wanted.has(p.category)) : [];
+  const candidates = matching.length ? matching : available;
+  return candidates.reduce((best, p) => (rank(p) > rank(best) ? p : best));
+}
 
 /**
  * Post-process: make sure no day is thin (backfill from the OSM pool by
@@ -557,17 +619,16 @@ async function finalizeDays(
   for (const day of days) {
     const anchor = day.stops[0]?.place ?? center;
     if (day.stops.length < MIN_STOPS_PER_DAY && pool.length) {
-      // Rank by real desirability — global fame (Wikidata) dominates, with only
-      // a gentle distance tie-breaker, so the BEST places win and a famous
-      // attraction is never dropped just because a minor one is closer.
-      const candidates = pool
-        .filter((p) => !used.has(norm(p.name)))
-        .map((p) => ({ p, v: selectionValue(p, haversineKm(anchor, p), req.interests) }))
-        .sort((a, b) => b.v - a.v)
-        .map((x) => x.p);
-      for (const p of candidates) {
-        if (day.stops.length >= MIN_STOPS_PER_DAY) break;
+      const categoryCounts = new Map<PlaceCategory, number>();
+      day.stops.forEach((s) =>
+        categoryCounts.set(s.place.category, (categoryCounts.get(s.place.category) ?? 0) + 1)
+      );
+      let available = pool.filter((p) => !used.has(norm(p.name)));
+      while (day.stops.length < MIN_STOPS_PER_DAY && available.length) {
+        const p = pickBackfillCandidate(available, anchor, req.interests, req.budget, categoryCounts);
+        available = available.filter((c) => c !== p);
         used.add(norm(p.name));
+        categoryCounts.set(p.category, (categoryCounts.get(p.category) ?? 0) + 1);
         p.hiddenGem = isConfidentGem(p);
         const slot: GuideSlot = SLOTS[Math.min(day.stops.length, SLOTS.length - 1)];
         day.stops.push({
@@ -658,7 +719,15 @@ async function buildDeterministicDays(
   geo: GeocodeResult,
   weather: ItineraryDay["weather"][],
   pool: Place[]
-): Promise<{ days: ItineraryDay[]; overview: string; highlights: string[]; engine: Itinerary["engine"] }> {
+): Promise<{
+  days: ItineraryDay[];
+  overview: string;
+  highlights: string[];
+  engine: Itinerary["engine"];
+  /** Every candidate considered for this trip, post-scoring (pre-selection) —
+   *  only read by callers when `req.debug` is set. */
+  scoredCandidates: Place[];
+}> {
   const center = geo.center;
   // V3 §7 "use existing recommendations first": build from the places already
   // loaded into the app, and only fetch more when the existing pool is too thin
@@ -674,7 +743,8 @@ async function buildDeterministicDays(
     allPlaces,
     req.interests,
     req.profile?.foodPreference,
-    req.profile?.travelerType
+    req.profile?.travelerType,
+    req.budget
   );
   // V4 root fix: the daytime backbone is composed FROM the traveller's
   // interests (not a fixed score sort), so History/Nature/Shopping/Photography
@@ -738,22 +808,31 @@ async function buildDeterministicDays(
 
   const fallbackOverview = buildOverview(req);
   const engine = await narrate(req, days, fallbackOverview);
-  return { days, overview: fallbackOverview.overview, highlights: fallbackOverview.highlights, engine };
+  return {
+    days,
+    overview: fallbackOverview.overview,
+    highlights: fallbackOverview.highlights,
+    engine,
+    scoredCandidates: scored,
+  };
 }
 
 function isFood(p: Place): boolean {
   return FOOD_CATEGORIES.includes(p.category);
 }
 
-/** Boost places matching the traveller's interests, traveller type + food
- *  preference. Explicit interests dominate; the traveller-type lean is a gentle
- *  secondary nudge (Family → kid-friendly, Romantic couples → sunsets/dining),
- *  and a Balanced Explorer (no interests, no lean) gets an even mix. */
+/** Boost places matching the traveller's interests, traveller type, budget tier
+ *  and food preference. Explicit interests dominate; the traveller-type lean is
+ *  a gentle secondary nudge (Family → kid-friendly, Romantic couples →
+ *  sunsets/dining), budget fit pulls economy trips toward free outdoor sights
+ *  and luxury trips toward dining/nightlife/shopping, and a Balanced Explorer
+ *  (no interests, no lean) gets an even mix. */
 function scorePlaces(
   places: Place[],
   interests: Interest[],
   foodPref?: string,
-  travelerType?: TravelerType
+  travelerType?: TravelerType,
+  budget?: Budget
 ): Place[] {
   const boosted = categoriesForInterests(interests);
   const typeLean = travelerBoostCategories(travelerType);
@@ -772,6 +851,7 @@ function scorePlaces(
       ) {
         score += 0.3;
       }
+      score += budgetFit(p.category, budget);
       return { ...p, score };
     })
     .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
@@ -789,6 +869,13 @@ function buildStops(
 ): ItineraryStop[] {
   const stops: ItineraryStop[] = [];
   const anchor = ordered[0] ?? center;
+  // Knowledge pack, when this destination has one — used to prefer a real,
+  // named local-favorite or nightlife venue over a generic nearest match.
+  const pack = getKnowledgePack(req.destination);
+  const localBoost = (p: Place) =>
+    pack && packIsLocalRecommendation(pack, p.name) ? LOCAL_RECOMMENDATION_BOOST : 0;
+  const nightlifeBoost = (p: Place) =>
+    pack && packIsNightlifeVenue(pack, p.name) ? NIGHTLIFE_PACK_BOOST : 0;
   // Walking Fatigue model: cumulative walked km this day, used to push later
   // legs toward transit even when individually short (see `decideTravelMode`).
   // This placeholder is superseded once the real OSRM/haversine day route is
@@ -814,8 +901,17 @@ function buildStops(
   };
 
   // Optional morning coffee at a nearby café — a small touch that makes the
-  // day feel curated rather than a bare list of monuments.
-  const coffee = nearestWithinRadius(anchor, pool, (p) => p.category === "cafe", usedExtra, WALK_RADIUS_KM, true);
+  // day feel curated rather than a bare list of monuments. Ranked (not just
+  // nearest) so budget/fame/rating actually move the pick.
+  const coffee = nearestWithinRadius(
+    anchor,
+    pool,
+    (p) => p.category === "cafe",
+    usedExtra,
+    WALK_RADIUS_KM,
+    true,
+    (p) => selectionValue(p, haversineKm(anchor, p), req.interests, req.budget) + localBoost(p)
+  );
   if (coffee) {
     usedExtra.add(coffee.id);
     push(coffee, "morning", "breakfast");
@@ -828,8 +924,17 @@ function buildStops(
   if (ordered[1]) push(ordered[1], "morning", "morning_activity");
 
   // Lunch within walking distance of the morning area (reuse a great spot
-  // rather than picking one from across town if the pool is small).
-  const lunch = nearestWithinRadius(anchor, food, (p) => p.category === "restaurant", usedFood, WALK_RADIUS_KM, true);
+  // rather than picking one from across town if the pool is small). Ranked by
+  // budget fit/fame/rating so luxury and economy trips pick differently.
+  const lunch = nearestWithinRadius(
+    anchor,
+    food,
+    (p) => p.category === "restaurant",
+    usedFood,
+    WALK_RADIUS_KM,
+    true,
+    (p) => selectionValue(p, haversineKm(anchor, p), req.interests, req.budget) + localBoost(p)
+  );
   if (lunch) {
     usedFood.add(lunch.id);
     push(lunch, "lunch", "lunch");
@@ -854,18 +959,35 @@ function buildStops(
   }
 
   // Dinner within walking distance of the last sight
-  const dinner = nearestWithinRadius(last, food, (p) => p.category === "restaurant", usedFood, WALK_RADIUS_KM, true);
+  const dinner = nearestWithinRadius(
+    last,
+    food,
+    (p) => p.category === "restaurant",
+    usedFood,
+    WALK_RADIUS_KM,
+    true,
+    (p) => selectionValue(p, haversineKm(last, p), req.interests, req.budget) + localBoost(p)
+  );
   if (dinner) {
     usedFood.add(dinner.id);
     push(dinner, "dinner", "dinner");
   }
 
-  // Optional evening: a real nightlife district first, else a scenic viewpoint
+  // Optional evening: a real nightlife district first, else a scenic viewpoint.
+  // Within the winning district, ranked by budget fit/fame/rating — not just
+  // distance — so luxury vs. economy/nightlife-vs-other-interests trips
+  // actually land on different venues.
   if (wantsEvening) {
     const nightlifePool = pool.filter((p) => p.category === "nightlife");
     const evening =
-      bestNightlifeVenue(last, nightlifePool, usedExtra, true) ??
-      nearestWhere(last, pool, (p) => p.category === "viewpoint", usedExtra, true);
+      bestNightlifeVenue(
+        last,
+        nightlifePool,
+        usedExtra,
+        true,
+        0.3,
+        (p) => selectionValue(p, haversineKm(last, p), req.interests, req.budget) + nightlifeBoost(p)
+      ) ?? nearestWhere(last, pool, (p) => p.category === "viewpoint", usedExtra, true);
     if (evening) {
       usedExtra.add(evening.id);
       push(evening, "evening", "night");

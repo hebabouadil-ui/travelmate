@@ -87,6 +87,10 @@ function raceQuery(query: string): Promise<Place[]> {
 
 function buildSightsQuery(c: GeoPoint, r: number): string {
   const around = `(around:${r},${c.lat},${c.lng})`;
+  // place_of_worship is gated to wikidata/wikipedia-tagged ones only — a city
+  // has hundreds of small neighborhood mosques/churches; without the gate they
+  // would flood the 300-cap, while famous ones (Hassan II Mosque, Notre-Dame-
+  // style landmarks) are exactly the ones OSM tags with wikidata/wikipedia.
   return `[out:json][timeout:25];
 (
   nwr["tourism"~"attraction|museum|artwork|viewpoint|gallery|zoo|theme_park"]${around};
@@ -94,6 +98,8 @@ function buildSightsQuery(c: GeoPoint, r: number): string {
   nwr["leisure"~"park|garden"]${around};
   nwr["natural"="beach"]${around};
   nwr["shop"~"mall|department_store"]${around};
+  nwr["amenity"="place_of_worship"]["wikidata"]${around};
+  nwr["amenity"="place_of_worship"]["wikipedia"]${around};
 );
 out center 300;`;
 }
@@ -165,6 +171,7 @@ function classify(tags: Record<string, string>): PlaceCategory | null {
   if (tags.tourism === "museum" || tags.tourism === "gallery") return "museum";
   if (tags.tourism === "viewpoint") return "viewpoint";
   if (tags.tourism) return "attraction";
+  if (tags.amenity === "place_of_worship") return "monument";
   if (tags.amenity === "restaurant") return "restaurant";
   if (tags.amenity === "cafe") return "cafe";
   if (["bar", "pub", "nightclub"].includes(tags.amenity || "")) return "nightlife";

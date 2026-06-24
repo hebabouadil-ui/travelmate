@@ -9,7 +9,9 @@ export interface SeedCity {
   name: string;
   country: string;
   center: GeoPoint;
-  image: string;
+  /** Absent when we don't have a verified-working photo URL on hand — the UI
+   *  falls back to a clean placeholder rather than risk a broken image. */
+  image?: string;
 }
 
 export const SEED_CITIES: Record<string, SeedCity> = {
@@ -68,6 +70,11 @@ export const SEED_CITIES: Record<string, SeedCity> = {
     center: { lat: 40.7128, lng: -74.006 },
     image:
       "https://images.unsplash.com/photo-1496442226666-8d4d0e62e6e9?w=1200&q=80",
+  },
+  casablanca: {
+    name: "Casablanca",
+    country: "Morocco",
+    center: { lat: 33.5731, lng: -7.5898 },
   },
 };
 

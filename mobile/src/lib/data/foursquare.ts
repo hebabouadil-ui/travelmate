@@ -186,6 +186,7 @@ function toPlace(v: FsqVenue, kind: FsqVenue["category"] | string): Place {
     openingHours: v.openingHours,
     website: v.website,
     score: typeof v.rating === "number" ? Math.min(1, v.rating / 10) : 0.55,
+    rating: v.rating,
   };
 }
 

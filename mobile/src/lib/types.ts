@@ -100,6 +100,9 @@ export interface Place extends GeoPoint {
   bestTime?: string;
   /** Populated by the nearby (GPS) flow. */
   distanceKm?: number;
+  /** Real review rating (0..10) from Foursquare, when it actually returned
+   *  one. Never fabricated — absent rather than guessed when no source has it. */
+  rating?: number;
 }
 
 export type PlaceCategory =
@@ -192,6 +195,11 @@ export interface Itinerary {
   engine: "gemini" | "mock" | "openai" | "claude";
   /** Data-quality breakdown for the whole plan (provenance + confidence). */
   audit?: ItineraryAudit;
+  /** Full scored candidate pool considered for this trip (pre-selection),
+   *  attached only when `TripRequest.debug` is true. Lets audit tooling see
+   *  exactly which real candidates existed and were rejected, without
+   *  duplicating the engine's own scoring logic. */
+  debugPool?: Place[];
 }
 
 /** Self-audit of an itinerary's recommendation quality / data provenance. */
@@ -256,6 +264,10 @@ export interface TripRequest {
   profile?: Partial<TravelProfile>;
   /** "personalized" (interest-driven) or "recommended" (best-of). */
   mode?: ItineraryMode;
+  /** Internal: when true, the engine attaches its full scored candidate pool
+   *  to the returned Itinerary as `debugPool` — audit tooling only, never set
+   *  by the app UI. */
+  debug?: boolean;
 }
 
 export interface DestinationMatch {
@@ -263,6 +275,8 @@ export interface DestinationMatch {
   country: string;
   score: number;
   reason: string;
-  image: string;
+  /** Absent when we don't have a verified photo — UI shows a clean placeholder
+   *  rather than risk a broken/guessed image URL. */
+  image?: string;
   center: GeoPoint;
 }
