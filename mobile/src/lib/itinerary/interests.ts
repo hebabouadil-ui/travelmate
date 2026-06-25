@@ -99,9 +99,16 @@ export function composeBackbone<T extends { category: PlaceCategory; score?: num
   const wanted = categoriesForInterests(interests);
   const matching = candidates.filter((p) => wanted.has(p.category)).sort(byScore);
   const others = candidates.filter((p) => !wanted.has(p.category)).sort(byScore);
-  // Interest matches fill the day first; strongest non-matching sights only
-  // backfill the remainder so the day stays complete in thin-data cities.
-  return [...matching, ...others].slice(0, count);
+
+  // Interest matches fill the day first. Off-interest sights are strictly
+  // capped (≈30% of the backbone) so a covered, on-interest pool can't be
+  // diluted back into "famous monuments everywhere" — the exact complaint that
+  // removing an interest still produced a monument-heavy plan. When the city's
+  // real on-interest data is thin, the few strongest off-interest sights keep
+  // the day from being empty, but they can never dominate it.
+  const offInterestCap = Math.max(1, Math.ceil(count * 0.3));
+  const filler = others.slice(0, Math.min(offInterestCap, Math.max(0, count - matching.length)));
+  return [...matching, ...filler].slice(0, count);
 }
 
 /** A varied selection that rotates through categories (best-first within each)

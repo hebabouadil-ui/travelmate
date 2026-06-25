@@ -150,12 +150,21 @@ export function nearestWithinRadius(
     .map((p) => ({ p, d: haversineKm(anchor, p) }));
   const within = candidates.filter((c) => c.d <= maxKm);
 
+  // 1. Best UNUSED option within walking distance — the ideal.
   const unusedWithin = within.filter((c) => !exclude.has(c.p.id));
   if (unusedWithin.length) return pick(unusedWithin, rank);
-  if (allowReuse && within.length) return pick(within, rank);
 
+  // 2. Best UNUSED option anywhere. Variety beats proximity here: serving a
+  //    fresh restaurant a little farther away is far better than recommending
+  //    the same place at lunch and dinner three days running (the "food
+  //    recommendations barely change" / duplicate-stop complaint). A short
+  //    transit leg is acceptable; a repeated venue is not.
   const unused = candidates.filter((c) => !exclude.has(c.p.id));
   if (unused.length) return pick(unused, rank);
+
+  // 3. Only once everything is used do we reuse — nearest-within first, then
+  //    anywhere — so a thin-data city still never leaves a meal slot empty.
+  if (allowReuse && within.length) return pick(within, rank);
   return allowReuse && candidates.length ? pick(candidates, rank) : undefined;
 }
 

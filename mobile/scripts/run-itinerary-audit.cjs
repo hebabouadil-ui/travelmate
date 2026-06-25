@@ -110,13 +110,19 @@ async function runCase(tc) {
   console.log(`    by category:   ${JSON.stringify(byCategory)}`);
   console.log(`  Selected: ${selectedStops.length} stops across ${itin.days.length} days   |   Rejected: ${rejectedCount}`);
 
+  const curatedSelected = ranked.filter((r) => r.selected && r.place.curated).length;
+  const liveSelected = ranked.filter((r) => r.selected && !r.place.curated).length;
+  console.log(`  Provenance of selected: ${curatedSelected} curated (spine) + ${liveSelected} live-enriched`);
+
   console.log(`\n  -- ALL CANDIDATES, ranked by real FinalScore (selectionValue) --`);
-  console.log(`     [SEL/rej] score  tier  category    source      name`);
+  console.log(`     [SEL/rej] score  tier price cur category    source      name`);
   for (const r of ranked) {
     const tag = r.selected ? "SEL" : "rej";
     const tier = r.place.tier != null ? `T${r.place.tier}` : "T-";
+    const price = r.place.priceLevel ? "$".repeat(r.place.priceLevel).padEnd(4) : " -  ";
+    const cur = r.place.curated ? "CUR" : "   ";
     console.log(
-      `     [${tag}] ${fmt(r.finalScore)}  ${tier.padEnd(4)} ${r.place.category.padEnd(11)} ${r.place.source.padEnd(11)} ${r.place.name}`
+      `     [${tag}] ${fmt(r.finalScore)}  ${tier.padEnd(3)} ${price} ${cur} ${r.place.category.padEnd(11)} ${r.place.source.padEnd(11)} ${r.place.name}`
     );
   }
 

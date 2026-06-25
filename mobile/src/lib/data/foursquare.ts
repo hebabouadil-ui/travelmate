@@ -41,6 +41,7 @@ interface FsqResult {
   website?: string;
   tel?: string;
   rating?: number;
+  price?: number;
   photos?: FsqPhoto[];
 }
 interface FsqResponse { results?: FsqResult[] }
@@ -57,10 +58,11 @@ export interface FsqVenue {
   website?: string;
   tel?: string;
   rating?: number;
+  priceLevel?: 1 | 2 | 3 | 4;
 }
 
 const FIELDS =
-  "fsq_place_id,name,latitude,longitude,geocodes,location,categories,hours,website,tel,rating,photos";
+  "fsq_place_id,name,latitude,longitude,geocodes,location,categories,hours,website,tel,rating,price,photos";
 
 export function hasFoursquare(): boolean {
   return Boolean(ENV.foursquareApiKey);
@@ -111,6 +113,10 @@ function normalize(r: FsqResult): FsqVenue | null {
     website: r.website,
     tel: r.tel,
     rating: typeof r.rating === "number" ? r.rating : undefined,
+    priceLevel:
+      typeof r.price === "number" && r.price >= 1 && r.price <= 4
+        ? (Math.round(r.price) as 1 | 2 | 3 | 4)
+        : undefined,
   };
 }
 
@@ -194,6 +200,7 @@ function toPlace(v: FsqVenue, kind: FsqVenue["category"] | string): Place | null
     website: v.website,
     score: typeof v.rating === "number" ? Math.min(1, v.rating / 10) : 0.55,
     rating: v.rating,
+    priceLevel: v.priceLevel,
     experiences: classifyExperience(category, undefined, v.name),
   };
 }

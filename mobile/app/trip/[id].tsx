@@ -5,7 +5,6 @@ import {
   StyleSheet,
   ScrollView,
   Pressable,
-  Image,
   Share,
   Alert,
   Platform,
@@ -19,6 +18,7 @@ import Animated, { FadeIn, Layout } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { colors, font, radius, spacing, shadow } from "@/theme";
 import { TripMap } from "@/components/TripMap";
+import { SmartImage } from "@/components/SmartImage";
 import { StopCard } from "@/components/cards";
 import { PlaceSheet } from "@/components/PlaceSheet";
 import { GradientButton, EmptyState, Pill } from "@/components/ui";
@@ -129,7 +129,7 @@ export default function TripDetail() {
         {/* Hero */}
         <View style={styles.hero}>
           {img ? (
-            <Image source={{ uri: img }} style={StyleSheet.absoluteFill} />
+            <SmartImage uri={img} style={StyleSheet.absoluteFill as any} />
           ) : (
             <LinearGradient colors={colors.gradient} style={StyleSheet.absoluteFill} />
           )}
@@ -210,6 +210,19 @@ export default function TripDetail() {
                   ? ` Destination expertise: ${trip.audit.destinationConfidence}%.`
                   : ""}
               </Text>
+              <Pressable
+                style={styles.evidenceBtn}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  router.push(`/trip/evidence/${trip.id}`);
+                }}
+              >
+                <Icon name="search" size={15} color={colors.primary} />
+                <Text style={styles.evidenceBtnText}>
+                  View generation evidence — scores, sources & why each pick won
+                </Text>
+                <Icon name="chevron-forward" size={15} color={colors.textMuted} />
+              </Pressable>
             </View>
           </View>
         ) : null}
@@ -341,6 +354,8 @@ const styles = StyleSheet.create({
   auditValue: { color: colors.text, fontSize: font.h2, fontWeight: "900" },
   auditLabel: { color: colors.textFaint, fontSize: font.tiny, marginTop: 2 },
   auditNote: { color: colors.textMuted, fontSize: font.tiny, lineHeight: 17, marginTop: spacing.sm },
+  evidenceBtn: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginTop: spacing.md, paddingTop: spacing.md, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
+  evidenceBtnText: { color: colors.text, fontSize: font.tiny, fontWeight: "700", flex: 1 },
   highlightWrap: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginTop: spacing.md },
   highlightChip: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: colors.accent + "14", borderColor: colors.accent + "44", borderWidth: 1, borderRadius: radius.pill, paddingHorizontal: spacing.sm, paddingVertical: 5 },
   highlightText: { color: colors.accent, fontSize: font.tiny, fontWeight: "700" },

@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { Image, View, StyleSheet, ViewStyle, StyleProp, Animated, Easing } from "react-native";
 import { colors } from "@/theme";
 import { Icon } from "./Icon";
+import { toHttps } from "@/lib/data/imageValidation";
 
 /**
  * Image with graceful fallback + skeleton loading. While loading we show a
@@ -21,7 +22,11 @@ export function SmartImage({
   style?: StyleProp<ViewStyle>;
   emoji?: string;
 }) {
-  const first = uri || fallback;
+  // Upgrade to HTTPS on the way in — Android blocks cleartext, so an http://
+  // photo would otherwise render as a broken image with no chance to recover.
+  const httpsUri = toHttps(uri);
+  const httpsFallback = toHttps(fallback);
+  const first = httpsUri || httpsFallback;
   const [src, setSrc] = useState<string | undefined>(first);
   const [stage, setStage] = useState<0 | 1>(0);
   const [loading, setLoading] = useState(Boolean(first));
@@ -29,11 +34,11 @@ export function SmartImage({
   const shimmer = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    setSrc(uri || fallback);
+    setSrc(httpsUri || httpsFallback);
     setStage(0);
-    setLoading(Boolean(uri || fallback));
+    setLoading(Boolean(httpsUri || httpsFallback));
     setFailed(false);
-  }, [uri, fallback]);
+  }, [httpsUri, httpsFallback]);
 
   useEffect(() => {
     if (!loading) return;
@@ -50,9 +55,9 @@ export function SmartImage({
   }, [loading, shimmer]);
 
   const onError = () => {
-    if (stage === 0 && fallback && fallback !== src) {
+    if (stage === 0 && httpsFallback && httpsFallback !== src) {
       setStage(1);
-      setSrc(fallback);
+      setSrc(httpsFallback);
     } else {
       setFailed(true);
       setLoading(false);

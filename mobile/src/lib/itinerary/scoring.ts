@@ -46,7 +46,7 @@ const CATEGORY_VALUE: Record<PlaceCategory, number> = {
   shopping: 0.5,
 };
 
-/** Weights — popularity (fame) is intentionally the heaviest term. */
+/** Weights for the displayed 0..1 FinalScore (confidence/quality semantics). */
 const W_POPULARITY = 0.6;
 const W_CATEGORY = 0.3;
 const W_INTEREST = 0.2;
@@ -56,6 +56,60 @@ const W_BUDGET = 0.15;
 const W_HOURS = 0.03;
 const W_PHOTO = 0.03;
 const W_REVIEW = 0.1;
+const W_CURATED = 0.12;
+
+/**
+ * SELECTION weights (the uncapped `rankingScore` that actually decides which
+ * places make the plan). These are deliberately LARGE relative to the display
+ * weights: budget price-fit and interest match must be able to REORDER the
+ * pool, not just nudge it — that is the whole reason Luxury/Economy and
+ * different interest sets used to produce near-identical days. Curation and
+ * must-see tier dominate so a covered city's plan is built from its real
+ * landmarks and named venues, never a generic API result.
+ */
+const SEL_CURATED = 0.6;
+const SEL_TIER1 = 0.7;
+const SEL_TIER2 = 0.3;
+const SEL_INTEREST = 0.5;
+const SEL_PRICE = 0.5;
+const SEL_GEM = 0.06;
+const SEL_REVIEW = 0.12;
+const SEL_DISTANCE = 0.02; // per km — a gentle "keep it near the route" pull
+
+/** Categories whose spending level a budget tier should actually act on. A
+ *  traveller of any budget still visits the Colosseum, so price-fit is NOT
+ *  applied to sightseeing — only to where money is really spent. */
+const PRICED_CATEGORIES = new Set<PlaceCategory>([
+  "restaurant",
+  "cafe",
+  "nightlife",
+  "shopping",
+]);
+
+/** The price band (1..4) each budget tier is shopping in. */
+const BUDGET_PRICE_BAND: Record<Budget, [number, number]> = {
+  economy: [1, 2],
+  medium: [2, 3],
+  luxury: [3, 4],
+};
+
+/**
+ * −1..+1 alignment of a venue's price level with the traveller's budget tier.
+ * In-band = +1, one step outside = 0, two+ steps outside = −1. Non-venue
+ * categories return 0 (budget never gates seeing a landmark). An unpriced
+ * venue is neutral for economy/medium but a mild miss for luxury, which nudges
+ * a luxury trip toward venues we actually know are upscale (curated/Foursquare-
+ * priced) instead of an unpriced generic bar.
+ */
+export function budgetPriceFit(p: Place, budget: Budget = "medium"): number {
+  if (!PRICED_CATEGORIES.has(p.category)) return 0;
+  const price = p.priceLevel;
+  if (!price) return budget === "luxury" ? -0.4 : 0;
+  const [lo, hi] = BUDGET_PRICE_BAND[budget];
+  if (price >= lo && price <= hi) return 1;
+  const steps = price < lo ? lo - price : price - hi;
+  return Math.max(-1, 1 - steps);
+}
 
 /**
  * BudgetWeight: how well a place's category fits a traveller's spending tier.
@@ -121,20 +175,54 @@ export function attractionScore(
   s += (CATEGORY_VALUE[p.category] ?? 0.5) * W_CATEGORY;
   if (wanted.has(p.category)) s += W_INTEREST;
   if (p.verified) s += W_VERIFIED;
+  if (p.curated) s += W_CURATED;
   if (p.hiddenGem) s += W_GEM;
   s += budgetFit(p.category, budget) * W_BUDGET;
+  s += budgetPriceFit(p, budget) * 0.08;
   if (p.openingHours) s += W_HOURS;
   if (p.photoResolved) s += W_PHOTO;
   s += reviewValue(p) * W_REVIEW;
   return Math.min(1, s);
 }
 
+/** Tier selection boost (curated must-see > strong > optional). */
+function tierBoost(p: Place): number {
+  return p.tier === 1 ? SEL_TIER1 : p.tier === 2 ? SEL_TIER2 : 0;
+}
+
 /**
- * Selection value used when choosing which places make the cut. Tier-1 must-see
- * places dominate, then fame; distance is only a gentle tie-breaker (~0.005/km),
- * so a world-famous attraction is never dropped because a smaller one is closer.
- * Budget defaults to "medium" (no fit adjustment) so existing callers that
- * don't pass one see no behavior change.
+ * Intrinsic desirability used to RANK and SELECT candidates — the real
+ * decision signal, uncapped so its terms can reorder the pool (unlike the
+ * 0..1 display FinalScore, whose cap would flatten a luxury vs economy venue
+ * to the same 1.0). No distance term, so it can also be used to set
+ * `Place.score` before geographic clustering. Budget price-fit and interest
+ * match are first-class here, which is what finally makes Luxury ≠ Economy and
+ * History ≠ Nature ≠ Food produce visibly different plans.
+ */
+export function rankingScore(
+  p: Place,
+  interests: Interest[] = [],
+  budget: Budget = "medium"
+): number {
+  const wanted = categoriesForInterests(interests);
+  let s = fameValue(p) * W_POPULARITY;
+  s += (CATEGORY_VALUE[p.category] ?? 0.5) * W_CATEGORY;
+  if (wanted.has(p.category)) s += SEL_INTEREST;
+  if (p.curated) s += SEL_CURATED;
+  s += tierBoost(p);
+  s += budgetPriceFit(p, budget) * SEL_PRICE;
+  if (p.hiddenGem) s += SEL_GEM;
+  if (p.verified) s += W_VERIFIED;
+  s += reviewValue(p) * SEL_REVIEW;
+  return s;
+}
+
+/**
+ * Selection value used when choosing which places fill a specific slot (meals,
+ * nightlife, backfill): the intrinsic `rankingScore` minus a gentle distance
+ * pull so, all else close, a nearer-to-the-route option wins — but a curated
+ * must-see or a budget-matched venue is never dropped just because a generic
+ * place sits a little closer.
  */
 export function selectionValue(
   p: Place,
@@ -142,8 +230,7 @@ export function selectionValue(
   interests: Interest[] = [],
   budget: Budget = "medium"
 ): number {
-  const tierBoost = p.tier === 1 ? 0.5 : p.tier === 2 ? 0.2 : 0;
-  return attractionScore(p, interests, budget) + tierBoost - distanceKm * 0.005;
+  return rankingScore(p, interests, budget) - distanceKm * SEL_DISTANCE;
 }
 
 /**

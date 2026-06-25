@@ -62,15 +62,21 @@ export async function discoverPlaces(
     resolveRegion(center),
   ]);
 
-  // Wikidata candidates take priority (trusted, globally documented) ahead
-  // of the existing Foursquare/seed/OSM merge order, which is unchanged.
+  // Curated seeds are the SPINE: hand-verified local-expert picks with trusted
+  // coordinates, tier and price. They come FIRST so that on a name collision
+  // the curated entry wins and merely absorbs live enrichment (photo, hours,
+  // website, rating) — a live API result can never displace a curated pick.
+  // Then Wikidata (trusted, globally documented), then Foursquare venues, then
+  // raw OSM. This is the inversion that stops generic venues (e.g. a random
+  // "Alpha55" from a Foursquare nightlife search) from ever crowding out the
+  // curated must-sees and named venues of a covered city.
   let merged = mergeByName([
+    ...seeds,
     ...wikidata,
     ...fsqRest,
     ...fsqCafe,
     ...fsqBar,
     ...fsqShop,
-    ...seeds,
     ...live,
   ]);
 
@@ -127,17 +133,47 @@ function normalizeKey(query: string): string | null {
   return seed.name.toLowerCase();
 }
 
+/** Fields a live source may legitimately ADD to a curated place (enrichment
+ *  only — never overwriting curated identity, coordinates, tier or price). */
+function absorbEnrichment(into: Place, from: Place): void {
+  into.wikipediaUrl = into.wikipediaUrl || from.wikipediaUrl;
+  into.wikidataId = into.wikidataId || from.wikidataId;
+  into.wikipediaTitle = into.wikipediaTitle || from.wikipediaTitle;
+  into.imageUrl = into.imageUrl || from.imageUrl;
+  into.openingHours = into.openingHours || from.openingHours;
+  into.website = into.website || from.website;
+  into.address = into.address || from.address;
+  if (into.rating == null && typeof from.rating === "number") into.rating = from.rating;
+  if (into.popularity == null && typeof from.popularity === "number") {
+    into.popularity = from.popularity;
+  }
+}
+
+/**
+ * De-duplicate by normalized name. Curated entries (the spine) always win the
+ * slot and simply absorb live enrichment fields; otherwise the first (highest
+ * priority by merge order) entry wins and absorbs later duplicates' extras.
+ */
 function mergeByName(places: Place[]): Place[] {
   const map = new Map<string, Place>();
   for (const p of places) {
     const key = p.name.toLowerCase().replace(/[^a-z0-9]/g, "");
     const existing = map.get(key);
-    // Prefer curated seed entries (they carry better coords/labels) but keep
-    // live enrichment fields when seed is missing them.
     if (!existing) {
       map.set(key, p);
-    } else if (existing.source === "mock" && p.source === "overpass") {
-      existing.wikipediaUrl = existing.wikipediaUrl || p.wikipediaUrl;
+      continue;
+    }
+    if (existing.curated) {
+      // Curated stays; pull in any live fields it lacks.
+      absorbEnrichment(existing, p);
+    } else if (p.curated) {
+      // A curated duplicate arrived after a live one (shouldn't happen given
+      // merge order, but be safe): promote curated, keep the live enrichment.
+      absorbEnrichment(p, existing);
+      map.set(key, p);
+    } else {
+      // Two live entries for the same name: keep the first, absorb extras.
+      absorbEnrichment(existing, p);
     }
   }
   return Array.from(map.values());

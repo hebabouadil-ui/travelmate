@@ -1,11 +1,18 @@
 import type { Place, PlaceCategory } from "../types";
 import { classifyExperience } from "./relevance";
 
-type Seed = [string, PlaceCategory, number, number, boolean?, string?];
+type PriceLevel = 1 | 2 | 3 | 4;
+type Seed = [string, PlaceCategory, number, number, boolean?, string?, PriceLevel?];
 
-// [name, category, lat, lng, hiddenGem?, cuisine?]
+// [name, category, lat, lng, hiddenGem?, cuisine?, priceLevel?]
 // Expanded curated sets (~16–20 POIs/city) so even offline, multi-day plans
 // stay rich and every day has plenty to do.
+//
+// priceLevel (1 cheap/free … 4 luxury) is the budget engine's primary signal:
+// a Luxury trip leans 3–4, an Economy trip leans 1–2. It is set explicitly on
+// venues where it actually differentiates the experience (fine-dining vs a
+// local café, a rooftop club vs a tapas bar, a designer mall vs a souk) and
+// defaults by category for free outdoor sights.
 const DATA: Record<string, Seed[]> = {
   barcelona: [
     ["Sagrada Família", "monument", 41.4036, 2.1744],
@@ -58,18 +65,21 @@ const DATA: Record<string, Seed[]> = {
     ["El Badi Palace", "monument", 31.6181, -7.9862],
     ["Majorelle Garden", "park", 31.6417, -8.0033],
     ["Saadian Tombs", "monument", 31.6177, -7.9893],
-    ["The Souks", "shopping", 31.6295, -7.987],
-    ["Ben Youssef Madrasa", "monument", 31.6319, -7.9863],
-    ["Le Jardin Secret", "park", 31.6305, -7.9889, true],
-    ["Menara Gardens", "park", 31.6109, -8.0218],
-    ["Maison de la Photographie", "museum", 31.6326, -7.9846, true],
-    ["Nomad", "restaurant", 31.63, -7.9876, false, "moroccan"],
-    ["Al Fassia", "restaurant", 31.6356, -8.0123, false, "moroccan"],
-    ["Le Jardin", "restaurant", 31.6306, -7.9873, false, "moroccan"],
-    ["Café des Épices", "cafe", 31.6303, -7.9881, true, "moroccan"],
-    ["Bacha Coffee", "cafe", 31.6321, -7.9897, false, "coffee"],
-    ["Café Kessabine", "cafe", 31.6262, -7.9886, true, "moroccan"],
-    ["Medina Rooftop Views", "viewpoint", 31.6258, -7.9885, true],
+    ["The Souks", "shopping", 31.6295, -7.987, false, undefined, 1],
+    ["Ben Youssef Madrasa", "monument", 31.6319, -7.9863, false, undefined, 2],
+    ["Le Jardin Secret", "park", 31.6305, -7.9889, true, undefined, 1],
+    ["Menara Gardens", "park", 31.6109, -8.0218, false, undefined, 1],
+    ["Maison de la Photographie", "museum", 31.6326, -7.9846, true, undefined, 1],
+    ["Nomad", "restaurant", 31.63, -7.9876, false, "moroccan", 3],
+    ["Al Fassia", "restaurant", 31.6356, -8.0123, false, "moroccan", 3],
+    ["Le Jardin", "restaurant", 31.6306, -7.9873, false, "moroccan", 2],
+    ["Mechoui Alley", "restaurant", 31.6259, -7.9883, true, "street food", 1],
+    ["Le Foundouk", "restaurant", 31.6334, -7.9847, false, "moroccan", 3],
+    ["Amal Restaurant", "restaurant", 31.6389, -8.0095, true, "moroccan", 2],
+    ["Café des Épices", "cafe", 31.6303, -7.9881, true, "moroccan", 1],
+    ["Bacha Coffee", "cafe", 31.6321, -7.9897, false, "coffee", 3],
+    ["Café Kessabine", "cafe", 31.6262, -7.9886, true, "moroccan", 1],
+    ["Medina Rooftop Views", "viewpoint", 31.6258, -7.9885, true, undefined, 1],
   ],
   paris: [
     ["Eiffel Tower", "monument", 48.8584, 2.2945],
@@ -83,14 +93,17 @@ const DATA: Record<string, Seed[]> = {
     ["Tuileries Garden", "park", 48.8634, 2.3275],
     ["Le Marais", "landmark", 48.859, 2.362, true],
     ["Montmartre", "landmark", 48.8867, 2.3408],
-    ["Champs-Élysées", "shopping", 48.8698, 2.3078],
-    ["Sainte-Chapelle", "monument", 48.8554, 2.345],
-    ["Breizh Café", "restaurant", 48.8606, 2.3636, false, "crêperie"],
-    ["Le Comptoir", "restaurant", 48.8516, 2.3387, false, "french"],
-    ["Bouillon Pigalle", "restaurant", 48.8821, 2.3376, false, "french"],
-    ["Café de Flore", "cafe", 48.854, 2.3328, false, "coffee"],
-    ["Café Saint-Régis", "cafe", 48.8527, 2.3568, true, "coffee"],
-    ["Printemps Rooftop", "viewpoint", 48.8741, 2.3273, true],
+    ["Champs-Élysées", "shopping", 48.8698, 2.3078, false, undefined, 3],
+    ["Sainte-Chapelle", "monument", 48.8554, 2.345, false, undefined, 2],
+    ["Pont Alexandre III", "landmark", 48.8638, 2.3136, false, undefined, 1],
+    ["Galeries Lafayette Rooftop", "viewpoint", 48.8736, 2.332, true, undefined, 1],
+    ["Breizh Café", "restaurant", 48.8606, 2.3636, false, "crêperie", 2],
+    ["Le Comptoir", "restaurant", 48.8516, 2.3387, false, "french", 3],
+    ["Bouillon Pigalle", "restaurant", 48.8821, 2.3376, false, "french", 1],
+    ["Le Jules Verne", "restaurant", 48.8582, 2.2945, false, "fine dining", 4],
+    ["Café de Flore", "cafe", 48.854, 2.3328, false, "coffee", 3],
+    ["Café Saint-Régis", "cafe", 48.8527, 2.3568, true, "coffee", 2],
+    ["Printemps Rooftop", "viewpoint", 48.8741, 2.3273, true, undefined, 1],
   ],
   rome: [
     ["Colosseum", "monument", 41.8902, 12.4922],
@@ -106,12 +119,20 @@ const DATA: Record<string, Seed[]> = {
     ["Trastevere", "landmark", 41.8896, 12.4695, true],
     ["Piazza Navona", "landmark", 41.8992, 12.4731],
     ["Gianicolo Terrace", "viewpoint", 41.8917, 12.4631, true],
-    ["Campo de' Fiori Market", "shopping", 41.8956, 12.4722],
-    ["Da Enzo al 29", "restaurant", 41.8884, 12.4767, true, "roman"],
-    ["Roscioli", "restaurant", 41.8945, 12.4724, false, "italian"],
-    ["Pizzarium", "restaurant", 41.9072, 12.4476, true, "pizza"],
-    ["Sant'Eustachio Il Caffè", "cafe", 41.8987, 12.4753, false, "coffee"],
-    ["Giolitti Gelato", "cafe", 41.9004, 12.4768, false, "gelato"],
+    ["Giardino degli Aranci", "viewpoint", 41.8843, 12.4817, true, undefined, 1],
+    ["Villa Doria Pamphilj", "park", 41.8842, 12.4501, false, undefined, 1],
+    ["Roseto Comunale (Rose Garden)", "park", 41.8836, 12.4863, true, undefined, 1],
+    ["Villa Celimontana", "park", 41.8857, 12.4925, true, undefined, 1],
+    ["Lungotevere Riverside Walk", "viewpoint", 41.8902, 12.4663, false, undefined, 1],
+    ["Campo de' Fiori Market", "shopping", 41.8956, 12.4722, false, undefined, 1],
+    ["Da Enzo al 29", "restaurant", 41.8884, 12.4767, true, "roman", 2],
+    ["Roscioli", "restaurant", 41.8945, 12.4724, false, "italian", 3],
+    ["Pizzarium", "restaurant", 41.9072, 12.4476, true, "pizza", 1],
+    ["Aroma Restaurant", "restaurant", 41.8896, 12.4946, false, "fine dining", 4],
+    ["Sant'Eustachio Il Caffè", "cafe", 41.8987, 12.4753, false, "coffee", 1],
+    ["Giolitti Gelato", "cafe", 41.9004, 12.4768, false, "gelato", 1],
+    ["Terrazza Borromini", "nightlife", 41.9009, 12.4729, false, undefined, 4],
+    ["Freni e Frizioni", "nightlife", 41.8917, 12.4689, true, undefined, 2],
   ],
   dubai: [
     ["Burj Khalifa", "landmark", 25.1972, 55.2744],
@@ -177,26 +198,49 @@ const DATA: Record<string, Seed[]> = {
     ["Please Don't Tell", "nightlife", 40.7256, -73.9836, true],
   ],
   casablanca: [
-    ["Hassan II Mosque", "monument", 33.6086, -7.6325],
-    ["Corniche Ain Diab", "beach", 33.5878, -7.6822],
-    ["Casablanca Marina", "landmark", 33.6063, -7.6298],
-    ["Morocco Mall", "shopping", 33.5798, -7.6914],
-    ["Twin Center", "landmark", 33.5898, -7.6326],
-    ["Habous Quarter", "landmark", 33.5851, -7.6109, true],
-    ["Old Medina of Casablanca", "landmark", 33.6034, -7.6184],
-    ["Arab League Park", "park", 33.5921, -7.6259],
-    ["Mohammed V Square", "landmark", 33.5933, -7.6178],
-    ["Villa des Arts", "museum", 33.5942, -7.6324, true],
-    ["Cathédrale du Sacré-Cœur", "monument", 33.5944, -7.6261, true],
-    ["Anfa Place", "shopping", 33.5837, -7.6647],
-    ["La Sqala", "restaurant", 33.6024, -7.6217, true, "moroccan"],
-    ["Le Cabestan", "restaurant", 33.6075, -7.6402, false, "seafood"],
-    ["Rick's Café", "restaurant", 33.6029, -7.6219, false, "international"],
-    ["Sky 28", "nightlife", 33.5908, -7.6324, true],
-    ["Tahiti Beach Club", "nightlife", 33.5689, -7.7106, true],
-    ["Bodega", "nightlife", 33.5934, -7.6253, true],
-    ["Café Maure", "cafe", 33.6037, -7.6189, true, "moroccan"],
+    ["Hassan II Mosque", "monument", 33.6086, -7.6325, false, undefined, 2],
+    ["Corniche Ain Diab", "beach", 33.5878, -7.6822, false, undefined, 1],
+    ["Casablanca Marina", "landmark", 33.6063, -7.6298, false, undefined, 1],
+    ["Morocco Mall", "shopping", 33.5798, -7.6914, false, undefined, 4],
+    ["Twin Center", "landmark", 33.5898, -7.6326, false, undefined, 3],
+    ["Habous Quarter", "shopping", 33.5851, -7.6109, true, undefined, 1],
+    ["Old Medina of Casablanca", "landmark", 33.6034, -7.6184, false, undefined, 1],
+    ["Arab League Park", "park", 33.5921, -7.6259, false, undefined, 1],
+    ["Mohammed V Square", "landmark", 33.5933, -7.6178, false, undefined, 1],
+    ["Maarif", "shopping", 33.5876, -7.6324, false, undefined, 2],
+    ["Villa des Arts", "museum", 33.5942, -7.6324, true, undefined, 1],
+    ["Cathédrale du Sacré-Cœur", "monument", 33.5944, -7.6261, true, undefined, 1],
+    ["Anfa Place", "shopping", 33.5837, -7.6647, false, undefined, 3],
+    ["La Sqala", "restaurant", 33.6024, -7.6217, true, "moroccan", 2],
+    ["Le Cabestan", "restaurant", 33.6075, -7.6402, false, "seafood", 4],
+    ["Rick's Café", "restaurant", 33.6029, -7.6219, false, "international", 4],
+    ["La Bavaroise", "restaurant", 33.5949, -7.6175, false, "french", 3],
+    ["Le Rouget de l'Isle", "restaurant", 33.5901, -7.6308, false, "french", 4],
+    ["Iloli", "restaurant", 33.5887, -7.6336, true, "japanese", 3],
+    ["Restaurant du Port de Pêche", "restaurant", 33.6082, -7.6188, false, "seafood", 2],
+    ["Café Maure", "cafe", 33.6037, -7.6189, true, "moroccan", 1],
+    ["Bacha Coffee Casablanca", "cafe", 33.5799, -7.6912, false, "coffee", 3],
+    ["Sky 28", "nightlife", 33.5908, -7.6324, true, undefined, 4],
+    ["Le Cabestan Lounge", "nightlife", 33.6076, -7.6403, false, undefined, 4],
+    ["Tahiti Beach Club", "nightlife", 33.5689, -7.7106, true, undefined, 4],
+    ["Bodega", "nightlife", 33.5934, -7.6253, true, undefined, 2],
   ],
+};
+
+/** Sensible default spending level when a curated row doesn't specify one:
+ *  free outdoor sights are cheap, paid attractions/venues sit mid-tier. */
+const DEFAULT_PRICE: Record<PlaceCategory, PriceLevel> = {
+  park: 1,
+  beach: 1,
+  viewpoint: 1,
+  landmark: 1,
+  monument: 2,
+  museum: 2,
+  attraction: 2,
+  cafe: 1,
+  restaurant: 2,
+  nightlife: 3,
+  shopping: 2,
 };
 
 let counter = 0;
@@ -204,7 +248,7 @@ let counter = 0;
 export function getSeedPlaces(cityKey: string): Place[] {
   const rows = DATA[cityKey.trim().toLowerCase()];
   if (!rows) return [];
-  return rows.map(([name, category, lat, lng, hiddenGem, cuisine]) => ({
+  return rows.map(([name, category, lat, lng, hiddenGem, cuisine, priceLevel]) => ({
     id: `seed_${cityKey}_${counter++}`,
     name,
     category,
@@ -213,7 +257,12 @@ export function getSeedPlaces(cityKey: string): Place[] {
     hiddenGem: Boolean(hiddenGem),
     cuisine,
     tags: cuisine ? [cuisine] : [],
-    score: category === "restaurant" || category === "cafe" ? 0.6 : 0.85,
+    // Curated places are hand-verified local-expert picks: a strong, trusted
+    // base score and the `curated` flag so the engine treats them as the SPINE
+    // of the plan (live discovery only enriches them — see places.ts).
+    score: category === "restaurant" || category === "cafe" ? 0.72 : 0.9,
+    priceLevel: priceLevel ?? DEFAULT_PRICE[category],
+    curated: true,
     experiences: classifyExperience(category, undefined, name),
     source: "mock" as const,
   }));

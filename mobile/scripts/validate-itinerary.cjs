@@ -163,16 +163,23 @@ ok(K.isMatchingArticle("Park Güell", "Parc de la Ciutadella") === false, `diffe
 ok(K.isMatchingArticle("Colosseum", "Colosseum (disambiguation)", { disambiguation: "" }) === false, `disambiguation page -> rejected even if the title looks close`);
 ok(K.isMatchingArticle("Some Place", undefined) === false, `no article found -> rejected`);
 
-console.log("\n=== 19. Restaurant/Café Engine: real walking-distance constraint ===");
+console.log("\n=== 19. Restaurant/Café Engine: variety beats proximity, never empty ===");
 const anchor0 = { lat: 0, lng: 0 };
 const nearUsed = place({ id: "near", lat: 0, lng: 0.005 }); // ~0.56km
 const farNew = place({ id: "far", lat: 0, lng: 0.05 }); // ~5.6km
-const pickReuseNear = O.nearestWithinRadius(anchor0, [nearUsed, farNew], () => true, new Set(["near"]), 1.5, true);
-ok(pickReuseNear.id === "near", `reusing a walkable spot beats a brand-new one across town -> picked "${pickReuseNear.id}"`);
+// A FRESH spot across town beats RE-serving a walkable one already used: a
+// repeated venue (the same restaurant at lunch and dinner three days running)
+// is a worse plan than a short transit leg to somewhere new.
+const pickFreshOverReuse = O.nearestWithinRadius(anchor0, [nearUsed, farNew], () => true, new Set(["near"]), 1.5, true);
+ok(pickFreshOverReuse.id === "far", `an unused spot (even across town) beats reusing a walkable one -> picked "${pickFreshOverReuse.id}"`);
 const pickOnlyFar = O.nearestWithinRadius(anchor0, [farNew], () => true, new Set(), 1.5, true);
 ok(pickOnlyFar.id === "far", `nothing walkable exists -> widens rather than leaving the day without food, picked "${pickOnlyFar.id}"`);
 const pickUnusedNear = O.nearestWithinRadius(anchor0, [nearUsed, farNew], () => true, new Set(), 1.5, true);
 ok(pickUnusedNear.id === "near", `an unused walkable spot is simply the obvious best pick -> "${pickUnusedNear.id}"`);
+// When EVERYTHING is used, it still never leaves a slot empty — and then it
+// reuses the nearest walkable option rather than dragging across town.
+const pickReuseNearest = O.nearestWithinRadius(anchor0, [nearUsed, farNew], () => true, new Set(["near", "far"]), 1.5, true);
+ok(pickReuseNearest.id === "near", `all used -> reuses the nearest walkable spot, never empty -> "${pickReuseNearest.id}"`);
 
 console.log("\n=== 20. Nightlife Engine: a real district beats a closer isolated venue ===");
 const isolatedBar = place({ id: "isolated", lat: 0, lng: 0.001 }); // ~0.11km from anchor, alone

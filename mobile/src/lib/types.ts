@@ -98,6 +98,22 @@ export interface Place extends GeoPoint {
   confidence?: number;
   /** Priority tier from destination knowledge: 1 = must-see, 2 = strong, 3 = optional. */
   tier?: 1 | 2 | 3;
+  /**
+   * Spending level of this place, 1 (free / cheap) … 4 (luxury / fine-dining).
+   * Drives the budget engine: an Economy trip prefers 1–2, a Luxury trip
+   * prefers 3–4. Set explicitly on curated venues; inferred from category /
+   * OSM price tags for live places; `undefined` means "unknown / not priced"
+   * (most free outdoor sights), treated as cheap.
+   */
+  priceLevel?: 1 | 2 | 3 | 4;
+  /**
+   * True for hand-verified curated places (Destination Knowledge Pack / seed
+   * data) with trusted coordinates, tier and price. Curated places are the
+   * SPINE of a plan for a covered city — live discovery only enriches them and
+   * can never displace a curated pick from a prime slot. This is what makes the
+   * engine behave like a local expert instead of a raw place search.
+   */
+  curated?: boolean;
   imageUrl?: string;
   /** True once a real (Wikipedia/Foursquare) photo has been resolved for this
    *  place, so the UI knows it's not just a category placeholder. */
@@ -216,11 +232,15 @@ export interface Itinerary {
   engine: "gemini" | "mock" | "openai" | "claude";
   /** Data-quality breakdown for the whole plan (provenance + confidence). */
   audit?: ItineraryAudit;
-  /** Full scored candidate pool considered for this trip (pre-selection),
-   *  attached only when `TripRequest.debug` is true. Lets audit tooling see
-   *  exactly which real candidates existed and were rejected, without
-   *  duplicating the engine's own scoring logic. */
+  /** Top scored candidates considered for this trip (pre-selection), best-first
+   *  — both the ones that were selected and the ones that were rejected. Powers
+   *  the in-app "Generation evidence" screen (candidates, final scores, why each
+   *  pick won, what was rejected, data source) so the engine's behaviour is
+   *  inspectable on a real device, and lets offline audit tooling see exactly
+   *  which real candidates existed without duplicating the scoring logic. */
   debugPool?: Place[];
+  /** Wall-clock time the engine took to build this plan, in milliseconds. */
+  generationMs?: number;
 }
 
 /** Self-audit of an itinerary's recommendation quality / data provenance. */

@@ -1,18 +1,23 @@
 import type { Place } from "../types";
 import { enrichPlace } from "./wikipedia";
 import { foursquarePhoto } from "./foursquare";
+import { firstDisplayableImage, toHttps } from "./imageValidation";
 
 const VENUE_CATEGORIES = ["restaurant", "cafe", "nightlife", "shopping"];
 
 export interface StopMedia {
-  /** A real, subject-matched photo. Undefined means "show a placeholder" — we
-   *  NEVER return a generic stock or geo-nearby (possibly-wrong) image. */
+  /** A real, subject-matched, VALIDATED photo (exists, HTTPS, real image).
+   *  Undefined means "show a placeholder" — we never return a generic stock or
+   *  geo-nearby (possibly-wrong) image, and never an unvalidated URL. */
   imageUrl?: string;
   description?: string;
 }
 
 /**
- * Resolve the EXACT photo for a place, or nothing. Only two sources are trusted:
+ * Resolve the EXACT photo for a place, or nothing — and guarantee it actually
+ * displays. Two real sources are trusted, tried in the order that fits the
+ * place's kind, plus any photo the place already carries (e.g. a curated or
+ * Foursquare-search image):
  *
  *   - Foursquare venue photo (matched by name + location) — primary for
  *     restaurants/cafés/bars/shops.
@@ -20,11 +25,12 @@ export interface StopMedia {
  *     `isMatchingArticle` so it's the right subject, not a topic the search
  *     merely ranked.
  *
- * The old Commons "nearest geotagged photo" path was removed: it returned
- * photos of whatever happened to be near the coordinates (a frequent source of
- * WRONG images). The old category stock fallback was removed too: a generic
- * Unsplash photo is not this place. When neither real source yields a match we
- * return no image, and the UI shows a clean placeholder.
+ * EVERY candidate is run through the Image Validator (`firstDisplayableImage`):
+ * HTTPS-only, must exist (HTTP 2xx), must be a real `image/*`. The first that
+ * passes wins; if none do, we return no image and the UI shows a clean
+ * placeholder. This is the fix for "many attractions display broken images":
+ * a 404, an HTML error page, a login redirect or a cleartext URL can no longer
+ * reach a card.
  */
 export async function resolveStopMedia(place: Place, city: string): Promise<StopMedia> {
   const venueFirst = VENUE_CATEGORIES.includes(place.category);
@@ -35,8 +41,11 @@ export async function resolveStopMedia(place: Place, city: string): Promise<Stop
     ),
   ]);
 
-  const order = venueFirst ? [fsq, wiki.imageUrl] : [wiki.imageUrl, fsq];
-  const imageUrl = order.find((u): u is string => Boolean(u));
+  const existing = toHttps(place.imageUrl);
+  const ordered = venueFirst
+    ? [fsq, existing, wiki.imageUrl]
+    : [existing, wiki.imageUrl, fsq];
 
+  const imageUrl = await firstDisplayableImage(ordered);
   return { imageUrl, description: wiki.description };
 }

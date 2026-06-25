@@ -40,7 +40,7 @@ import {
   optimizeRoute,
   planPerDay,
 } from "./optimize";
-import { budgetFit, confidenceScore, isConfidentGem, recommendationReason, selectionValue, shouldFetchMore } from "./scoring";
+import { confidenceScore, isConfidentGem, rankingScore, recommendationReason, selectionValue, shouldFetchMore } from "./scoring";
 import {
   categoriesForInterests,
   composeBackbone,
@@ -120,6 +120,7 @@ function maxSightsPerDay(activity?: string): number {
  * is produced with template narration instead.
  */
 export async function generateItinerary(req: TripRequest): Promise<Itinerary> {
+  const startedAt = Date.now();
   // Use the exact picked coordinates when available (avoids ambiguous
   // re-geocoding that could land on the wrong "Málaga"); else geocode the text.
   const geo: GeocodeResult = req.center
@@ -174,6 +175,12 @@ export async function generateItinerary(req: TripRequest): Promise<Itinerary> {
   // Adapt each day to its forecast (rain/heat/cold/wind) before routing.
   weatherAdapt(days, pool, req);
 
+  // Trip-wide de-duplication: a place may be considered for more than one slot
+  // (e.g. a park as a daytime sight and, another day, a sunset spot), so drop
+  // any repeat — keep the first. finalizeDays then refills thinned days with
+  // fresh places, so an itinerary never lists the same place twice.
+  dedupeStops(days);
+
   // Guarantee every day is full (backfill from the OSM pool) + accurate routing.
   await finalizeDays(days, pool, geo.center, req);
 
@@ -209,7 +216,11 @@ export async function generateItinerary(req: TripRequest): Promise<Itinerary> {
     createdAt: new Date().toISOString(),
     engine,
     audit,
-    debugPool: req.debug ? scoredCandidates : undefined,
+    // Top candidates (best-first), capped so saved trips stay small. Includes
+    // both selected and rejected places, so the in-app evidence screen can show
+    // exactly what the engine considered and why the winners won.
+    debugPool: scoredCandidates.slice(0, 80),
+    generationMs: Date.now() - startedAt,
   };
 }
 
@@ -325,13 +336,16 @@ function applyTiers(days: ItineraryDay[], pack?: KnowledgePack): void {
   }
 }
 
-/** Best verified pool place matching a known name (tolerant token match). */
+/** Best pool place matching a known name (tolerant token match). A curated
+ *  entry always wins — it carries the trusted coordinates/tier/price — and we
+ *  fall back to the most famous live match only when nothing curated matches. */
 function bestPoolByName(name: string, pool: Place[], used: Set<string>): Place | null {
   let best: Place | null = null;
+  const rank = (p: Place) => (p.curated ? 1000 : 0) + (p.popularity ?? 0);
   for (const p of pool) {
     if (used.has(p.id)) continue;
     if (!looseMatch(name, p.name)) continue;
-    if (!best || (p.popularity ?? 0) > (best.popularity ?? 0)) best = p;
+    if (!best || rank(p) > rank(best)) best = p;
   }
   return best;
 }
@@ -570,6 +584,21 @@ function weatherAdapt(days: ItineraryDay[], pool: Place[], req: TripRequest): vo
   }
 }
 
+/** Remove any stop whose place already appears earlier in the trip (by
+ *  normalised name), keeping the first occurrence — the trip-wide guarantee
+ *  that no itinerary ever lists the same place twice. */
+function dedupeStops(days: ItineraryDay[]): void {
+  const seen = new Set<string>();
+  for (const d of days) {
+    d.stops = d.stops.filter((s) => {
+      const key = norm(s.place.name);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }
+}
+
 const MIN_STOPS_PER_DAY = 4;
 /** Same-category penalty applied per existing occurrence during backfill, so
  *  a thin day doesn't fill with five museums in a row just because museums
@@ -763,6 +792,7 @@ async function buildDeterministicDays(
     req.profile?.activityLevel === "intensive" ||
     req.interests.includes("nightlife") ||
     req.profile?.travelerType === "couple" ||
+    req.budget === "luxury" || // a luxury trip earns an evening out (rooftop/club)
     req.days === 1;
   // A food-focused trip may exceed the normal food caps; every other trip keeps
   // experiences at >=70% of the day (see `capFoodStops`).
@@ -834,15 +864,16 @@ function scorePlaces(
   travelerType?: TravelerType,
   budget?: Budget
 ): Place[] {
-  const boosted = categoriesForInterests(interests);
   const typeLean = travelerBoostCategories(travelerType);
 
   return places
     .map((p) => {
-      let score = p.score ?? 0.5;
-      if (boosted.has(p.category)) score += 0.35;
+      // The strong, uncapped composite: fame + category value + interest match
+      // + curation + must-see tier + budget price-fit. This is what makes the
+      // backbone (and the day clusters built from it) actually reflect the
+      // traveller's interests and budget instead of a fame-only sort.
+      let score = rankingScore(p, interests, budget);
       if (typeLean.has(p.category)) score += 0.12; // gentle traveller-type lean
-      if (p.hiddenGem) score += 0.08; // gentle nudge toward authentic spots
       if (
         isFood(p) &&
         foodPref &&
@@ -851,7 +882,6 @@ function scorePlaces(
       ) {
         score += 0.3;
       }
-      score += budgetFit(p.category, budget);
       return { ...p, score };
     })
     .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
@@ -882,6 +912,14 @@ function buildStops(
   // computed (see `buildDeterministicDays`); kept consistent with it so a day
   // that can't reach the routing step still has realistic estimates.
   let walkedKm = 0;
+
+  // Anti-repetition: a day shouldn't serve the same cuisine at lunch and
+  // dinner. We record each meal's cuisine and penalise a repeat at selection
+  // time, so the day reads like a curated food itinerary, not the same dish
+  // twice (the "food recommendations barely change" complaint).
+  const usedCuisines = new Set<string>();
+  const cuisinePenalty = (p: Place) =>
+    p.cuisine && usedCuisines.has(p.cuisine.toLowerCase()) ? 0.5 : 0;
 
   const push = (place: Place, daypart: Daypart, slot?: GuideSlot) => {
     const prev = stops[stops.length - 1]?.place;
@@ -937,6 +975,7 @@ function buildStops(
   );
   if (lunch) {
     usedFood.add(lunch.id);
+    if (lunch.cuisine) usedCuisines.add(lunch.cuisine.toLowerCase());
     push(lunch, "lunch", "lunch");
   }
 
@@ -966,10 +1005,14 @@ function buildStops(
     usedFood,
     WALK_RADIUS_KM,
     true,
-    (p) => selectionValue(p, haversineKm(last, p), req.interests, req.budget) + localBoost(p)
+    (p) =>
+      selectionValue(p, haversineKm(last, p), req.interests, req.budget) +
+      localBoost(p) -
+      cuisinePenalty(p)
   );
   if (dinner) {
     usedFood.add(dinner.id);
+    if (dinner.cuisine) usedCuisines.add(dinner.cuisine.toLowerCase());
     push(dinner, "dinner", "dinner");
   }
 
@@ -978,7 +1021,15 @@ function buildStops(
   // distance — so luxury vs. economy/nightlife-vs-other-interests trips
   // actually land on different venues.
   if (wantsEvening) {
-    const nightlifePool = pool.filter((p) => p.category === "nightlife");
+    const allNightlife = pool.filter((p) => p.category === "nightlife");
+    // Curated, real, named venues are the spine of the night out: when a
+    // covered city has them, choose ONLY from those (so a generic bar from a
+    // live "nightlife" search — the "Alpha55" problem — can never win the
+    // evening). The budget tier then decides which curated venue (a rooftop
+    // club vs an affordable tapas bar), and only an uncovered city falls back
+    // to the full live nightlife pool.
+    const curatedNightlife = allNightlife.filter((p) => p.curated);
+    const nightlifePool = curatedNightlife.length ? curatedNightlife : allNightlife;
     const evening =
       bestNightlifeVenue(
         last,
