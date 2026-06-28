@@ -19,6 +19,7 @@ import * as Haptics from "expo-haptics";
 import { colors, font, radius, spacing, shadow } from "@/theme";
 import { TripMap } from "@/components/TripMap";
 import { SmartImage } from "@/components/SmartImage";
+import { useDestinationHero } from "@/lib/useDestinationHero";
 import { StopCard } from "@/components/cards";
 import { PlaceSheet } from "@/components/PlaceSheet";
 import { GradientButton, EmptyState, Pill } from "@/components/ui";
@@ -63,6 +64,18 @@ export default function TripDetail() {
   const day = trip?.days[activeDay];
   const dayPlaces = useMemo(() => day?.stops.map((s) => s.place) ?? [], [day]);
 
+  // Hero photo: a stored/seed image if we have one, otherwise resolve a real
+  // photo at view time (and remember it on the trip so it's instant next open).
+  const staticHero = trip?.imageUrl || (trip ? cityImage(trip.destination) : undefined);
+  const heroImg = useDestinationHero(
+    staticHero,
+    trip?.destination ?? "",
+    undefined,
+    (url) => {
+      if (trip && !trip.imageUrl) updateTrip({ ...trip, imageUrl: url });
+    }
+  );
+
   if (!trip) {
     return (
       <SafeAreaView style={styles.safe}>
@@ -76,9 +89,6 @@ export default function TripDetail() {
     );
   }
 
-  // Only use a REAL city photo for the hero; otherwise fall back to the brand
-  // gradient (never a generic stock photo that could look like another city).
-  const img = trip.imageUrl || cityImage(trip.destination);
   const fav = favorites.includes(trip.id);
   const budget: Budget = (trip.profile.budget as Budget) ?? "medium";
 
@@ -128,8 +138,8 @@ export default function TripDetail() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 }}>
         {/* Hero */}
         <View style={styles.hero}>
-          {img ? (
-            <SmartImage uri={img} style={StyleSheet.absoluteFill as any} />
+          {heroImg ? (
+            <SmartImage uri={heroImg} style={StyleSheet.absoluteFill as any} />
           ) : (
             <LinearGradient colors={colors.gradient} style={StyleSheet.absoluteFill} />
           )}

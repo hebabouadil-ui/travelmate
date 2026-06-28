@@ -252,7 +252,10 @@ interface WikiSummary {
 }
 
 /** Real hero photo for a city (Wikipedia). Returns undefined if none found —
- *  callers should fall back to a gradient, NOT a generic city stock photo. */
+ *  callers should fall back to a gradient, NOT a generic city stock photo.
+ *  Tries the REST summary first (clean lead image), then a pageimages search
+ *  fallback — so a city whose summary happens to lack a thumbnail still gets a
+ *  real photo instead of an empty gradient. */
 export async function cityHeroImage(city: string): Promise<string | undefined> {
   // Use just the city name (drop ", Country") for the Wikipedia title.
   const name = city.split(",")[0].trim();
@@ -261,28 +264,66 @@ export async function cityHeroImage(city: string): Promise<string | undefined> {
     key,
     1000 * 60 * 60 * 24 * 30,
     async () => {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 8000);
-      try {
-        // REST summary resolves the exact article (with redirects) reliably.
-        const res = await fetch(
-          `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(name)}`,
-          { signal: controller.signal, headers: { Accept: "application/json" } }
-        );
-        if (res.ok) {
-          const s = (await res.json()) as WikiSummary;
-          if (s.type !== "disambiguation") {
-            // Thumbnail first — the original can be many MB and stall on slow data.
-            const img = s.thumbnail?.source ?? s.originalimage?.source;
-            if (img) return img;
-          }
-        }
-      } catch {
-        // fall through
-      } finally {
-        clearTimeout(timer);
-      }
-      return undefined;
-    }
+      const restImg = await cityHeroFromSummary(name);
+      if (restImg) return restImg;
+      // Fallback: the search+pageimages API finds a lead image even when the
+      // REST summary returns none (or the title needed disambiguation).
+      return cityHeroFromSearch(name);
+    },
+    (v) => !v
   ).catch(() => undefined);
+}
+
+async function cityHeroFromSummary(name: string): Promise<string | undefined> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8000);
+  try {
+    // REST summary resolves the exact article (with redirects) reliably.
+    const res = await fetch(
+      `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(name)}`,
+      { signal: controller.signal, headers: { Accept: "application/json" } }
+    );
+    if (res.ok) {
+      const s = (await res.json()) as WikiSummary;
+      if (s.type !== "disambiguation") {
+        // Thumbnail first — the original can be many MB and stall on slow data.
+        return s.thumbnail?.source ?? s.originalimage?.source;
+      }
+    }
+  } catch {
+    // fall through
+  } finally {
+    clearTimeout(timer);
+  }
+  return undefined;
+}
+
+async function cityHeroFromSearch(name: string): Promise<string | undefined> {
+  const params = new URLSearchParams({
+    action: "query",
+    format: "json",
+    prop: "pageimages",
+    piprop: "thumbnail",
+    pithumbsize: "1000",
+    generator: "search",
+    gsrsearch: `${name} city`,
+    gsrlimit: "1",
+    redirects: "1",
+    origin: "*",
+  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8000);
+  try {
+    const res = await fetch(`https://en.wikipedia.org/w/api.php?${params}`, {
+      signal: controller.signal,
+    });
+    if (!res.ok) return undefined;
+    const data = (await res.json()) as WikiResponse;
+    const page = Object.values(data.query?.pages ?? {})[0];
+    return page?.thumbnail?.source ?? page?.original?.source;
+  } catch {
+    return undefined;
+  } finally {
+    clearTimeout(timer);
+  }
 }
