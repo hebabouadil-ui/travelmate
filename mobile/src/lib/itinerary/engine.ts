@@ -26,7 +26,7 @@ import {
 } from "../data/knowledge";
 import { getWeather } from "../data/weather";
 import { buildOverview } from "../data/overviews";
-import { cityHeroImage as cityImageFor } from "../data/wikipedia";
+import { destinationHeroImage } from "../data/heroImage";
 import { resolveStopMedia } from "../data/media";
 import { currencyForCountry } from "../currency";
 import { dayRoute } from "../data/routing";
@@ -99,6 +99,10 @@ const DURATION: Record<PlaceCategory, number> = {
   cafe: 40,
   nightlife: 90,
   shopping: 60,
+  gallery: 45,
+  wellness: 90,
+  sports: 90,
+  entertainment: 120,
 };
 
 /**
@@ -143,9 +147,10 @@ export async function generateItinerary(req: TripRequest): Promise<Itinerary> {
       return pl;
     })
     .catch(() => [] as Place[]);
+  const countryHint = req.country ?? geo.country;
   const [weather, heroImage, rawPool] = await Promise.all([
     getWeather(geo.center, req.startDate, req.days),
-    cityImageFor(geo.name).catch(() => undefined),
+    destinationHeroImage(geo.name, countryHint).catch(() => undefined),
     poolPromise,
   ]);
 
@@ -510,7 +515,7 @@ function gateLowConfidence(days: ItineraryDay[]): void {
 // ── Weather-aware adaptation ────────────────────────────────────────────────
 
 function isIndoor(c: PlaceCategory): boolean {
-  return c === "museum" || c === "shopping";
+  return c === "museum" || c === "shopping" || c === "gallery" || c === "wellness" || c === "entertainment";
 }
 function isOutdoor(c: PlaceCategory): boolean {
   return c === "park" || c === "viewpoint" || c === "beach" || c === "monument" || c === "landmark";
@@ -816,12 +821,14 @@ async function buildDeterministicDays(
     const stops = capFoodStops(built, foodFocused);
     stops.forEach((st) => {
       // Deterministic "Recommended because…" — the V3 explainability rule.
+      const nightlifeDistrict =
+        st.place.category === "nightlife" && inNightlifeDistrict(st.place);
+      if (st.place.category === "nightlife") st.place.inNightlifeDistrict = nightlifeDistrict;
       st.place.recommendationReason = recommendationReason(st.place, {
         city: req.destination,
         interests: req.interests,
         distanceKm: haversineKm(center, st.place),
-        inNightlifeDistrict:
-          st.place.category === "nightlife" && inNightlifeDistrict(st.place),
+        inNightlifeDistrict: nightlifeDistrict,
       });
     });
     return {

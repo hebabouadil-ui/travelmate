@@ -101,7 +101,17 @@ const CATEGORY_IMAGES: Record<PlaceCategory, string[]> = {
     "https://images.unsplash.com/photo-1565060169187-5284a3f72f0a?w=500&q=70",
     "https://images.unsplash.com/photo-1518998053901-5348d3961a04?w=500&q=70",
   ],
+  gallery: [
+    "https://images.unsplash.com/photo-1554907984-15263bfd63bd?w=500&q=70",
+    "https://images.unsplash.com/photo-1565060169187-5284a3f72f0a?w=500&q=70",
+    "https://images.unsplash.com/photo-1518998053901-5348d3961a04?w=500&q=70",
+  ],
   attraction: [
+    "https://images.unsplash.com/photo-1493707553966-283afac8c358?w=500&q=70",
+    "https://images.unsplash.com/photo-1500835556837-99ac94a94552?w=500&q=70",
+    "https://images.unsplash.com/photo-1473625247510-8ceb1760943f?w=500&q=70",
+  ],
+  sports: [
     "https://images.unsplash.com/photo-1493707553966-283afac8c358?w=500&q=70",
     "https://images.unsplash.com/photo-1500835556837-99ac94a94552?w=500&q=70",
     "https://images.unsplash.com/photo-1473625247510-8ceb1760943f?w=500&q=70",
@@ -131,11 +141,20 @@ const CATEGORY_IMAGES: Record<PlaceCategory, string[]> = {
     "https://images.unsplash.com/photo-1448375240586-882707db888b?w=500&q=70",
     "https://images.unsplash.com/photo-1502082553048-f009c37129b9?w=500&q=70",
   ],
+  wellness: [
+    "https://images.unsplash.com/photo-1519331379826-f10be5486c6f?w=500&q=70",
+    "https://images.unsplash.com/photo-1448375240586-882707db888b?w=500&q=70",
+    "https://images.unsplash.com/photo-1502082553048-f009c37129b9?w=500&q=70",
+  ],
   viewpoint: [
     "https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=500&q=70",
     "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=500&q=70",
   ],
   nightlife: [
+    "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=500&q=70",
+    "https://images.unsplash.com/photo-1566737236500-c8ac43014a67?w=500&q=70",
+  ],
+  entertainment: [
     "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=500&q=70",
     "https://images.unsplash.com/photo-1566737236500-c8ac43014a67?w=500&q=70",
   ],

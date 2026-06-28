@@ -62,6 +62,9 @@ import {
   Wine,
   ShoppingBag,
   Target,
+  Flower2,
+  Dumbbell,
+  Clapperboard,
   Circle,
   Rocket,
   ArrowRight,
@@ -181,6 +184,9 @@ const MAP: Record<string, LucideIcon> = {
   wine: Wine,
   "shopping-bag": ShoppingBag,
   target: Target,
+  "flower-2": Flower2,
+  dumbbell: Dumbbell,
+  clapperboard: Clapperboard,
 };
 
 /** Names that should render filled (their non-outline variant). */

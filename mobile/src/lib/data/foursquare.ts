@@ -2,7 +2,7 @@ import { ENV } from "../env";
 import { withCache } from "../cache";
 import { makeId, slugify } from "../utils";
 import type { GeoPoint, Place, PlaceCategory } from "../types";
-import { isTouristIrrelevant, classifyExperience } from "./relevance";
+import { isTouristIrrelevant, classifyExperience, classifyNightlife } from "./relevance";
 
 /**
  * Foursquare Places integration. Foursquare is the PRIMARY source for venue-type
@@ -79,8 +79,12 @@ function mapCategory(cats?: FsqCategory[]): PlaceCategory {
   if (/coffee|caf|tea|bakery|dessert/.test(name)) return "cafe";
   if (/bar|pub|club|night|lounge|brewery|wine/.test(name)) return "nightlife";
   if (/mall|shop|store|market|boutique/.test(name)) return "shopping";
-  if (/museum|gallery/.test(name)) return "museum";
-  if (/park|garden|gnature/.test(name)) return "park";
+  if (/gallery/.test(name)) return "gallery";
+  if (/museum/.test(name)) return "museum";
+  if (/spa|massage|wellness|sauna|yoga/.test(name)) return "wellness";
+  if (/stadium|sports|gym|fitness|athletic/.test(name)) return "sports";
+  if (/cinema|movie theater|theatre|theater|amusement/.test(name)) return "entertainment";
+  if (/park|garden|nature/.test(name)) return "park";
   if (/monument|historic|landmark|temple|church|mosque|palace/.test(name)) return "monument";
   if (/restaurant|food|diner|eatery|grill|steak|pizz|sushi|kitchen/.test(name)) return "restaurant";
   return "restaurant"; // venue searches are food-led by default
@@ -202,6 +206,7 @@ function toPlace(v: FsqVenue, kind: FsqVenue["category"] | string): Place | null
     rating: v.rating,
     priceLevel: v.priceLevel,
     experiences: classifyExperience(category, undefined, v.name),
+    nightlifeType: category === "nightlife" ? classifyNightlife(v.name) : undefined,
   };
 }
 

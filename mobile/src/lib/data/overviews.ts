@@ -70,6 +70,21 @@ const INTEREST_PHRASE: Record<Interest, string> = {
   shopping: "great shopping",
   photography: "photogenic corners",
   nightlife: "a lively night scene",
+  history: "rich history",
+  adventure: "adventure and thrills",
+  culture: "authentic local culture",
+  family: "family-friendly fun",
+  luxury: "indulgent luxury",
+  hidden_gems: "off-the-beaten-path gems",
+  local_experiences: "genuine local experiences",
+  wellness: "spas and wellness",
+  relaxation: "easy, unhurried relaxation",
+  sports: "sports and active fun",
+  hiking: "scenic hikes",
+  art: "vibrant art",
+  festivals: "festivals and local events",
+  entertainment: "great entertainment",
+  road_trips: "scenic road trips",
 };
 
 /** Build a grounded overview when there's no curated copy and no live AI. */

@@ -1,4 +1,4 @@
-import type { ExperienceTag, PlaceCategory } from "../types";
+import type { ExperienceTag, NightlifeSubcategory, PlaceCategory } from "../types";
 
 /**
  * Tourist Relevance Filter + Candidate Classification.
@@ -137,6 +137,47 @@ const FAMILY_NAME_RE =
 const ADVENTURE_NAME_RE =
   /\b(hik(e|ing)|climb(ing)?|dive|diving|surf(ing)?|kayak|trail|safari|canyon|trek)\b/i;
 
+// ── Nightlife Subcategory Classification ───────────────────────────────────
+// Name keywords are checked first (the most specific real signal); OSM
+// `amenity` is the fallback for a plain bar/pub/club with no distinguishing
+// name. Every nightlife place gets a subcategory — "bar" is the honest,
+// generic default when no stronger signal exists, never an invented one.
+const ROOFTOP_RE = /\b(rooftop|roof[- ]?top|sky)\b/i;
+const JAZZ_RE = /\bjazz\b/i;
+const KARAOKE_RE = /\bkaraoke\b/i;
+const WINE_BAR_RE = /\b(wine\s?bar|wine\s?lounge|enoteca|vinoteca)\b/i;
+const COCKTAIL_RE = /\b(cocktail|speakeasy|mixology|lounge)\b/i;
+const SPORTS_BAR_RE = /\bsports?\s?bar\b/i;
+const BEACH_CLUB_RE = /\bbeach\s?club\b/i;
+const ELECTRONIC_RE = /\b(techno|electro|edm|house music|disco)\b/i;
+const LIVE_MUSIC_RE = /\b(live music|music\s?hall|concert hall)\b/i;
+const NIGHTCLUB_NAME_RE = /\bclub\b/i;
+
+/**
+ * Classify a real nightlife venue into the closed subcategory taxonomy
+ * (Bars, Rooftop Bars, Nightclubs, Cocktail Lounges, Live Music, Jazz Clubs,
+ * Sports Bars, Beach Clubs, Karaoke Bars, Wine Bars, Electronic Music
+ * Venues) from its name and, when known, its OSM tags. Only ever called for
+ * places already classified as category === "nightlife".
+ */
+export function classifyNightlife(
+  name: string,
+  tags?: Record<string, string | undefined>
+): NightlifeSubcategory {
+  const n = name.toLowerCase();
+  if (ROOFTOP_RE.test(n)) return "rooftop_bar";
+  if (JAZZ_RE.test(n)) return "jazz_club";
+  if (KARAOKE_RE.test(n)) return "karaoke_bar";
+  if (WINE_BAR_RE.test(n)) return "wine_bar";
+  if (SPORTS_BAR_RE.test(n)) return "sports_bar";
+  if (BEACH_CLUB_RE.test(n)) return "beach_club";
+  if (ELECTRONIC_RE.test(n)) return "electronic_venue";
+  if (LIVE_MUSIC_RE.test(n) || tags?.amenity === "music_venue") return "live_music";
+  if (tags?.amenity === "nightclub" || NIGHTCLUB_NAME_RE.test(n)) return "nightclub";
+  if (COCKTAIL_RE.test(n)) return "cocktail_lounge";
+  return "bar";
+}
+
 /**
  * Classify a candidate place into the closed set of experience tags, BEFORE
  * scoring. Deterministic: driven by category, real OSM/Wikidata tags, and
@@ -166,6 +207,10 @@ export function classifyExperience(
       out.add("history");
       out.add("architecture");
       break;
+    case "gallery":
+      out.add("photography");
+      out.add("architecture");
+      break;
     case "park":
       out.add("nature");
       out.add("photography");
@@ -191,6 +236,9 @@ export function classifyExperience(
       break;
     case "attraction":
       out.add("photography");
+      break;
+    case "sports":
+      out.add("adventure");
       break;
   }
 

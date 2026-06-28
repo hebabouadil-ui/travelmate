@@ -18,6 +18,21 @@ export const INTEREST_CATEGORIES: Record<Interest, PlaceCategory[]> = {
   shopping: ["shopping"],
   photography: ["viewpoint", "landmark", "monument"],
   nightlife: ["nightlife"],
+  history: ["monument", "landmark"],
+  adventure: ["viewpoint", "park", "sports"],
+  culture: ["museum", "gallery", "attraction", "monument"],
+  family: ["park", "beach", "attraction", "museum"],
+  luxury: ["restaurant", "shopping", "nightlife"],
+  hidden_gems: ["cafe", "viewpoint", "park", "landmark"],
+  local_experiences: ["restaurant", "cafe", "shopping"],
+  wellness: ["wellness"],
+  relaxation: ["beach", "park", "wellness"],
+  sports: ["sports"],
+  hiking: ["park", "viewpoint"],
+  art: ["gallery", "museum"],
+  festivals: ["entertainment", "attraction"],
+  entertainment: ["entertainment"],
+  road_trips: ["viewpoint", "landmark", "attraction"],
 };
 
 /**
@@ -35,16 +50,20 @@ export type BrowseCategory =
   | "museums"
   | "nature"
   | "shopping"
-  | "culture";
+  | "culture"
+  | "wellness"
+  | "entertainment";
 
 export const BROWSE_GROUPS: Record<BrowseCategory, PlaceCategory[]> = {
   food: ["restaurant", "cafe"],
   nightlife: ["nightlife"],
   history: ["monument", "landmark"],
-  museums: ["museum"],
+  museums: ["museum", "gallery"],
   nature: ["park", "beach", "viewpoint"],
   shopping: ["shopping"],
   culture: ["attraction"],
+  wellness: ["wellness"],
+  entertainment: ["sports", "entertainment"],
 };
 
 /** The browse group a real place category belongs to (exactly one). */
@@ -98,7 +117,7 @@ export function composeBackbone<T extends { category: PlaceCategory; score?: num
 
   const wanted = categoriesForInterests(interests);
   const matching = candidates.filter((p) => wanted.has(p.category)).sort(byScore);
-  const others = candidates.filter((p) => !wanted.has(p.category)).sort(byScore);
+  const others = candidates.filter((p) => !wanted.has(p.category));
 
   // Interest matches fill the day first. Off-interest sights are strictly
   // capped (≈30% of the backbone) so a covered, on-interest pool can't be
@@ -107,7 +126,16 @@ export function composeBackbone<T extends { category: PlaceCategory; score?: num
   // real on-interest data is thin, the few strongest off-interest sights keep
   // the day from being empty, but they can never dominate it.
   const offInterestCap = Math.max(1, Math.ceil(count * 0.3));
-  const filler = others.slice(0, Math.min(offInterestCap, Math.max(0, count - matching.length)));
+  const fillerCount = Math.min(offInterestCap, Math.max(0, count - matching.length));
+  // The filler itself must be a DIVERSE mix across whatever categories remain,
+  // never a flat best-score sort. Interests with no backbone category of their
+  // own (food, shopping, nightlife — all meal/evening-slot only) would otherwise
+  // always fall back to "next highest score" for their entire backbone, which is
+  // the same handful of famous monuments/landmarks every city's data ranks
+  // highest — making a Food+Shopping trip look identical to a Monuments trip.
+  // Spreading the filler across categories (parks, viewpoints, attractions...)
+  // keeps those interests visibly distinct instead of silently converging.
+  const filler = diverseMix(others, fillerCount);
   return [...matching, ...filler].slice(0, count);
 }
 
@@ -220,9 +248,11 @@ const NON_THEME_CATEGORIES: PlaceCategory[] = ["restaurant", "cafe", "nightlife"
  *  never be labeled with a theme its actual stops don't support. */
 const DAY_THEMES: { theme: string; categories: PlaceCategory[] }[] = [
   { theme: "Historic & Monuments", categories: ["monument", "landmark"] },
-  { theme: "Art & Museums", categories: ["museum"] },
+  { theme: "Art & Museums", categories: ["museum", "gallery"] },
   { theme: "Nature & Outdoors", categories: ["park", "beach", "viewpoint"] },
   { theme: "Markets & Shopping", categories: ["shopping"] },
+  { theme: "Wellness & Relaxation", categories: ["wellness"] },
+  { theme: "Sports & Entertainment", categories: ["sports", "entertainment"] },
 ];
 
 /** Minimum share of a day's sightseeing stops a single theme bucket must hold

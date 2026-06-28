@@ -2,7 +2,7 @@ import type { GeoPoint, Place, PlaceCategory } from "../types";
 import { makeId } from "../utils";
 import { formatAddress } from "../itinerary/validate";
 import { ENV } from "../env";
-import { isTouristIrrelevant, classifyExperience } from "./relevance";
+import { isTouristIrrelevant, classifyExperience, classifyNightlife } from "./relevance";
 
 // Overpass/Nominatim throttle or 406-reject anonymous requests. Identifying the
 // client with a descriptive User-Agent (etiquette requirement) and asking for
@@ -119,10 +119,11 @@ function buildSightsQuery(c: GeoPoint, r: number): string {
 (
   nwr["tourism"~"attraction|museum|artwork|viewpoint|gallery|zoo|theme_park"]${around};
   nwr["historic"~"monument|memorial|castle|ruins|archaeological_site|fort"]${around};
-  nwr["leisure"~"park|garden"]${around};
+  nwr["leisure"~"park|garden|sports_centre|stadium|water_park"]${around};
   nwr["natural"="beach"]${around};
   nwr["shop"~"mall|department_store"]${around};
   nwr["amenity"="marketplace"]${around};
+  nwr["amenity"~"cinema|theatre|spa"]${around};
   nwr["shop"~"boutique|fashion"]["wikidata"]${around};
   nwr["shop"~"boutique|fashion"]["wikipedia"]${around};
   nwr["amenity"="place_of_worship"]["wikidata"]${around};
@@ -147,7 +148,14 @@ out center 300;`;
 
 function toPlace(el: OverpassElement): Place | null {
   const tags = el.tags || {};
-  const name = tags.name || tags["name:en"];
+  // Prefer the English name only when the primary `name` is in a non-Latin
+  // script (CJK/Cyrillic/Greek/Arabic/Thai/…). Those neither read well in an
+  // English-language app nor match our curated (Latin-script) knowledge packs,
+  // so a Beijing/Tokyo/Athens landmark would otherwise arrive unmatchable. When
+  // the local name already uses Latin letters (incl. accents, e.g. "Sagrada
+  // Família"), keep it — that's the recognizable form travelers actually know.
+  const localName = tags.name;
+  const name = localName && /[a-z]/i.test(localName) ? localName : tags["name:en"] || localName;
   if (!name) return null;
   const lat = el.lat ?? el.center?.lat;
   const lon = el.lon ?? el.center?.lon;
@@ -189,6 +197,7 @@ function toPlace(el: OverpassElement): Place | null {
     score:
       isMajor ? 0.9 : category === "restaurant" || category === "cafe" ? 0.5 : 0.6,
     experiences: classifyExperience(category, tags, name),
+    nightlifeType: category === "nightlife" ? classifyNightlife(name, tags) : undefined,
     source: "overpass",
     wikidataId: tags.wikidata,
     wikipediaTitle: tags.wikipedia ? tags.wikipedia.replace(/^[a-z]+:/, "") : undefined,
@@ -205,16 +214,21 @@ function classify(tags: Record<string, string>): PlaceCategory | null {
     if (["monument", "memorial"].includes(tags.historic)) return "monument";
     return "landmark";
   }
-  if (tags.tourism === "museum" || tags.tourism === "gallery") return "museum";
+  if (tags.tourism === "museum") return "museum";
+  if (tags.tourism === "gallery") return "gallery";
   if (tags.tourism === "viewpoint") return "viewpoint";
   if (tags.tourism) return "attraction";
   if (tags.amenity === "place_of_worship") return "monument";
   if (tags.amenity === "marketplace") return "attraction";
+  if (tags.amenity === "cinema" || tags.amenity === "theatre") return "entertainment";
+  if (tags.amenity === "spa") return "wellness";
   if (tags.amenity === "restaurant") return "restaurant";
   if (tags.amenity === "cafe") return "cafe";
   if (tags.shop === "bakery") return "cafe";
   if (["bar", "pub", "nightclub", "biergarten", "music_venue"].includes(tags.amenity || ""))
     return "nightlife";
+  if (tags.leisure === "stadium" || tags.leisure === "sports_centre") return "sports";
+  if (tags.leisure === "water_park") return "entertainment";
   if (tags.leisure === "park" || tags.leisure === "garden") return "park";
   if (tags.natural === "beach") return "beach";
   if (tags.shop === "mall" || tags.shop === "department_store") return "shopping";

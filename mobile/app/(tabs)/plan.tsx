@@ -219,10 +219,20 @@ export default function Plan() {
                   size={15}
                   color={summary.hasPack ? colors.success : colors.primary}
                 />
-                <Text style={styles.factsTitle}>
-                  {summary.hasPack ? "Local expert coverage" : "Global coverage"}
-                </Text>
-                <Text style={styles.factsConf}>{summary.confidence}% confidence</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.factsTitle}>
+                    {summary.hasPack ? "Local expert coverage" : "Global coverage"}
+                  </Text>
+                  <Text style={styles.factsConf}>{summary.confidence}% planning confidence</Text>
+                </View>
+                {summary.hasPack ? (
+                  <View style={[styles.scorePill, { borderColor: scoreTone(summary.travelScore) }]}>
+                    <Text style={[styles.scorePillNum, { color: scoreTone(summary.travelScore) }]}>
+                      {summary.travelScore}
+                    </Text>
+                    <Text style={styles.scorePillLabel}>TRAVEL{"\n"}SCORE</Text>
+                  </View>
+                ) : null}
               </View>
               <View style={styles.factsRow}>
                 {summary.attractionCount != null ? (
@@ -240,6 +250,24 @@ export default function Plan() {
                   <Text style={{ fontWeight: "800" }}>Top experiences: </Text>
                   {summary.topExperiences.join(" · ")}
                 </Text>
+              ) : null}
+              {summary.neighborhoods.length ? (
+                <View style={styles.hoodWrap}>
+                  <Text style={styles.hoodLabel}>Where to stay</Text>
+                  <View style={styles.hoodRow}>
+                    {summary.neighborhoods.slice(0, 4).map((h) => (
+                      <View key={h} style={styles.hoodChip}>
+                        <Text style={styles.hoodChipText}>{h}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              ) : null}
+              {summary.transportTip ? (
+                <View style={styles.transportRow}>
+                  <Icon name="navigate-outline" size={13} color={colors.primary} />
+                  <Text style={styles.transportText}>{summary.transportTip}</Text>
+                </View>
               ) : null}
               {summary.weatherNote ? (
                 <Text style={styles.factsWeather} numberOfLines={2}>
@@ -351,6 +379,11 @@ export default function Plan() {
   );
 }
 
+/** Colour the travel-score badge by tier (success / brand / warning). */
+function scoreTone(n: number): string {
+  return n >= 85 ? colors.success : n >= 68 ? colors.primary : colors.warning;
+}
+
 function Fact({ icon, label, value }: { icon: any; label: string; value: string }) {
   return (
     <View style={styles.fact}>
@@ -369,11 +402,21 @@ const styles = StyleSheet.create({
   factsHeader: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: spacing.sm },
   factsTitle: { color: colors.text, fontSize: font.small, fontWeight: "800", flex: 1 },
   factsConf: { color: colors.success, fontSize: font.tiny, fontWeight: "800" },
-  factsRow: { flexDirection: "row", gap: spacing.sm, flexWrap: "wrap" },
+  scorePill: { alignItems: "center", justifyContent: "center", minWidth: 50, paddingHorizontal: 8, paddingVertical: 4, borderRadius: radius.md, borderWidth: 1.5 },
+  scorePillNum: { fontSize: font.h3, fontWeight: "900", lineHeight: 22 },
+  scorePillLabel: { fontSize: 8, fontWeight: "800", color: colors.textFaint, letterSpacing: 0.4, textAlign: "center", lineHeight: 9, marginTop: 1 },
+  factsRow: { flexDirection: "row", gap: spacing.sm, flexWrap: "wrap", marginTop: spacing.xs },
   fact: { flexDirection: "row", alignItems: "center", gap: 6, minWidth: "30%", flexGrow: 1, backgroundColor: colors.surface, borderRadius: radius.md, padding: spacing.sm },
   factLabel: { color: colors.textFaint, fontSize: font.tiny },
   factValue: { color: colors.text, fontSize: font.tiny, fontWeight: "800" },
   factsExp: { color: colors.textMuted, fontSize: font.tiny, lineHeight: 17, marginTop: spacing.sm },
+  hoodWrap: { marginTop: spacing.sm },
+  hoodLabel: { color: colors.textFaint, fontSize: 9, fontWeight: "800", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 6 },
+  hoodRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  hoodChip: { backgroundColor: colors.surface, borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1, borderColor: colors.border },
+  hoodChipText: { color: colors.textMuted, fontSize: font.tiny, fontWeight: "700" },
+  transportRow: { flexDirection: "row", gap: 6, marginTop: spacing.sm, alignItems: "flex-start" },
+  transportText: { flex: 1, color: colors.textMuted, fontSize: font.tiny, lineHeight: 16 },
   factsWeather: { color: colors.textMuted, fontSize: font.tiny, lineHeight: 16, marginTop: spacing.sm, fontStyle: "italic" },
   scroll: { padding: spacing.lg, paddingBottom: spacing.xxxl },
   title: { color: colors.text, fontSize: font.hero, fontWeight: "900", letterSpacing: -0.5 },

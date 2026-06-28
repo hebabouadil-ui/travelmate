@@ -4,10 +4,8 @@ import {
   View,
   Text,
   StyleSheet,
-  Image,
   Pressable,
   ScrollView,
-  ActivityIndicator,
   Linking,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
@@ -17,13 +15,13 @@ import { colors, font, radius, spacing, CATEGORY_META } from "@/theme";
 import { resolveStopMedia } from "@/lib/data/media";
 import { reverseGeocode } from "@/lib/data/geocode";
 import { openDirections, openInMaps } from "@/lib/navigation";
-import { hasExactPhoto } from "@/lib/itinerary/validate";
 import { GradientButton, GhostButton } from "./ui";
 
 /**
- * Rich place-detail sheet. Lazily fetches a high-quality photo + description
- * from Wikipedia when opened, and shows why-visit, duration, best time, area
- * and opening hours, with native directions.
+ * Rich place-detail sheet. No attraction photo — a premium category-gradient
+ * header with a large icon glyph instead — plus why-visit, duration, best
+ * time, area and opening hours (lazily enriched with a real Wikipedia
+ * description when opened), with native directions.
  */
 export function PlaceSheet({
   stop,
@@ -36,9 +34,6 @@ export function PlaceSheet({
   visible: boolean;
   onClose: () => void;
 }) {
-  const [loading, setLoading] = useState(false);
-  const [image, setImage] = useState<string | undefined>();
-  const [imageFailed, setImageFailed] = useState(false);
   const [desc, setDesc] = useState<string | undefined>();
   const [address, setAddress] = useState<string | undefined>();
 
@@ -47,21 +42,13 @@ export function PlaceSheet({
   useEffect(() => {
     let active = true;
     if (visible && place) {
-      setImage(place.imageUrl);
-      setImageFailed(false);
       setDesc(place.description);
       setAddress(place.address);
-      setLoading(true);
       resolveStopMedia(place, city)
         .then((m) => {
-          if (!active) return;
-          if (m.imageUrl) {
-            setImage(m.imageUrl);
-            setImageFailed(false);
-          }
-          if (m.description) setDesc(m.description);
+          if (active && m.description) setDesc(m.description);
         })
-        .finally(() => active && setLoading(false));
+        .catch(() => undefined);
       // Never show raw coordinates: reverse-geocode a human address when one
       // isn't already on the place (free, keyless, cached).
       if (!place.address) {
@@ -86,29 +73,14 @@ export function PlaceSheet({
           <View style={styles.handle} />
           <ScrollView showsVerticalScrollIndicator={false}>
             <View style={styles.hero}>
-              {image && !imageFailed ? (
-                <Image
-                  source={{ uri: image }}
-                  style={StyleSheet.absoluteFill}
-                  onError={() => setImageFailed(true)}
-                />
-              ) : (
-                <LinearGradient colors={colors.gradient} style={StyleSheet.absoluteFill} />
-              )}
+              <LinearGradient colors={[meta.color, "#15161B"]} style={StyleSheet.absoluteFill} />
+              <View style={styles.heroIconWrap}>
+                <Icon name={meta.icon as any} size={108} color="rgba(255,255,255,0.16)" strokeWidth={1.5} />
+              </View>
               <LinearGradient
                 colors={["transparent", "rgba(5,8,16,0.85)"]}
                 style={StyleSheet.absoluteFill}
               />
-              {loading ? (
-                <ActivityIndicator color={colors.white} style={styles.heroLoading} />
-              ) : !hasExactPhoto(place) ? (
-                // V3 photo honesty: never pass off a placeholder as the real
-                // thing — say so rather than implying a generic image is exact.
-                <View style={styles.placeholderChip}>
-                  <Icon name="image-outline" size={11} color={colors.white} />
-                  <Text style={styles.placeholderText}>Representative image</Text>
-                </View>
-              ) : null}
               <Pressable style={styles.close} onPress={onClose} hitSlop={8}>
                 <Icon name="close" size={20} color={colors.white} />
               </Pressable>
@@ -224,7 +196,7 @@ const styles = StyleSheet.create({
   },
   handle: { alignSelf: "center", width: 40, height: 5, borderRadius: 3, backgroundColor: colors.borderStrong, marginTop: spacing.sm, marginBottom: spacing.xs, zIndex: 2 },
   hero: { height: 240, justifyContent: "flex-end" },
-  heroLoading: { position: "absolute", top: spacing.lg, alignSelf: "center" },
+  heroIconWrap: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center" },
   close: { position: "absolute", top: spacing.md, right: spacing.md, width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(5,8,16,0.45)", alignItems: "center", justifyContent: "center" },
   heroBody: { padding: spacing.lg },
   catChip: { flexDirection: "row", alignItems: "center", gap: 4, alignSelf: "flex-start", paddingHorizontal: spacing.sm, paddingVertical: 4, borderRadius: radius.pill, marginBottom: spacing.sm },
@@ -236,8 +208,6 @@ const styles = StyleSheet.create({
   whyText: { flex: 1, color: colors.text, fontSize: font.body, lineHeight: 21, fontWeight: "600" },
   reasonBox: { flexDirection: "row", gap: spacing.sm, alignItems: "flex-start", backgroundColor: colors.success + "12", borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.md },
   reasonText: { flex: 1, color: colors.success, fontSize: font.small, lineHeight: 19, fontWeight: "700" },
-  placeholderChip: { position: "absolute", top: spacing.md, left: spacing.md, flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "rgba(5,8,16,0.55)", paddingHorizontal: spacing.sm, paddingVertical: 4, borderRadius: radius.pill },
-  placeholderText: { color: colors.white, fontSize: font.tiny, fontWeight: "600" },
   verifyRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: spacing.md },
   verifyText: { color: colors.textMuted, fontSize: font.tiny, fontWeight: "600" },
   desc: { color: colors.textMuted, fontSize: font.body, lineHeight: 22, marginBottom: spacing.lg },

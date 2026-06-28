@@ -102,6 +102,7 @@ export const CATEGORY_META: Record<
   attraction: { icon: "sparkles", color: "#0F766E", emoji: "", label: "Attraction" },
   monument: { icon: "landmark", color: "#8A7A5C", emoji: "", label: "Monument" },
   museum: { icon: "palette", color: "#7E6B8F", emoji: "", label: "Museum" },
+  gallery: { icon: "image", color: "#8F6B9A", emoji: "", label: "Gallery" },
   restaurant: { icon: "utensils", color: "#B4655A", emoji: "", label: "Restaurant" },
   cafe: { icon: "coffee", color: "#9A7B5A", emoji: "", label: "Café" },
   beach: { icon: "waves", color: "#5E8C9E", emoji: "", label: "Beach" },
@@ -110,6 +111,9 @@ export const CATEGORY_META: Record<
   landmark: { icon: "flag", color: "#A8894E", emoji: "", label: "Landmark" },
   nightlife: { icon: "wine", color: "#6E6A8F", emoji: "", label: "Nightlife" },
   shopping: { icon: "shopping-bag", color: "#A86F8A", emoji: "", label: "Shopping" },
+  wellness: { icon: "flower-2", color: "#6FA88A", emoji: "", label: "Wellness" },
+  sports: { icon: "dumbbell", color: "#4A7FA5", emoji: "", label: "Sports" },
+  entertainment: { icon: "clapperboard", color: "#C0703E", emoji: "", label: "Entertainment" },
 };
 
 export const DAYPART_META: Record<

@@ -31,6 +31,21 @@ export const INTERESTS: { value: Interest; label: string; emoji: string }[] = [
   { value: "shopping", label: "Shopping", emoji: "🛍️" },
   { value: "photography", label: "Photography", emoji: "📸" },
   { value: "nightlife", label: "Nightlife", emoji: "🌃" },
+  { value: "history", label: "History", emoji: "📜" },
+  { value: "adventure", label: "Adventure", emoji: "🧗" },
+  { value: "culture", label: "Culture", emoji: "🎭" },
+  { value: "family", label: "Family", emoji: "👨‍👩‍👧" },
+  { value: "luxury", label: "Luxury", emoji: "💎" },
+  { value: "hidden_gems", label: "Hidden Gems", emoji: "🔍" },
+  { value: "local_experiences", label: "Local Experiences", emoji: "🏘️" },
+  { value: "wellness", label: "Wellness", emoji: "🧘" },
+  { value: "relaxation", label: "Relaxation", emoji: "🌴" },
+  { value: "sports", label: "Sports", emoji: "⚽" },
+  { value: "hiking", label: "Hiking", emoji: "🥾" },
+  { value: "art", label: "Art", emoji: "🎨" },
+  { value: "festivals", label: "Festivals", emoji: "🎉" },
+  { value: "entertainment", label: "Entertainment", emoji: "🎬" },
+  { value: "road_trips", label: "Road Trips", emoji: "🚗" },
 ];
 
 export const FOOD_PREFERENCES: { value: FoodPreference; label: string }[] = [

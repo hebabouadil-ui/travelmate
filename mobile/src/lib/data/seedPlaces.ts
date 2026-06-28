@@ -1,5 +1,5 @@
 import type { Place, PlaceCategory } from "../types";
-import { classifyExperience } from "./relevance";
+import { classifyExperience, classifyNightlife } from "./relevance";
 
 type PriceLevel = 1 | 2 | 3 | 4;
 type Seed = [string, PlaceCategory, number, number, boolean?, string?, PriceLevel?];
@@ -241,6 +241,10 @@ const DEFAULT_PRICE: Record<PlaceCategory, PriceLevel> = {
   restaurant: 2,
   nightlife: 3,
   shopping: 2,
+  gallery: 1,
+  wellness: 3,
+  sports: 2,
+  entertainment: 3,
 };
 
 let counter = 0;
@@ -264,6 +268,7 @@ export function getSeedPlaces(cityKey: string): Place[] {
     priceLevel: priceLevel ?? DEFAULT_PRICE[category],
     curated: true,
     experiences: classifyExperience(category, undefined, name),
+    nightlifeType: category === "nightlife" ? classifyNightlife(name) : undefined,
     source: "mock" as const,
   }));
 }

@@ -29,6 +29,9 @@ const TYPE_MAP: Record<string, PlaceCategory> = {
   Q570116: "attraction", // tourist attraction
   Q9259: "monument", // World Heritage Site (UNESCO)
   Q40080: "beach", // beach
+  Q207694: "gallery", // art gallery
+  Q483110: "sports", // stadium
+  Q24354: "entertainment", // theatre
 };
 
 const DEFAULT_RADIUS_KM = 12;

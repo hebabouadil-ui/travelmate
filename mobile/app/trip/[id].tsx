@@ -299,7 +299,6 @@ export default function TripDetail() {
                     <StopCard
                       stop={stop}
                       index={i}
-                      city={trip.destination}
                       currency={trip.currency}
                       onPress={() => setSheetStop(stop)}
                       onRemove={() => removeStop(i)}

@@ -21,7 +21,22 @@ export type Interest =
   | "architecture"
   | "shopping"
   | "photography"
-  | "nightlife";
+  | "nightlife"
+  | "history"
+  | "adventure"
+  | "culture"
+  | "family"
+  | "luxury"
+  | "hidden_gems"
+  | "local_experiences"
+  | "wellness"
+  | "relaxation"
+  | "sports"
+  | "hiking"
+  | "art"
+  | "festivals"
+  | "entertainment"
+  | "road_trips";
 
 export type FoodPreference = "halal" | "vegetarian" | "vegan" | "none";
 
@@ -140,6 +155,14 @@ export interface Place extends GeoPoint {
    *  (see `classifyExperience` in `data/relevance.ts`), e.g. ["history",
    *  "architecture"]. Independent of `category`, which drives icon/grouping. */
   experiences?: ExperienceTag[];
+  /** For category === "nightlife": the specific kind of venue (bar, rooftop,
+   *  nightclub, jazz club…), classified from real tags/name — never set for
+   *  non-nightlife places. */
+  nightlifeType?: NightlifeSubcategory;
+  /** True when this nightlife venue sits in a real, OSM-density-confirmed
+   *  nightlife district (see `inNightlifeDistrict` in engine.ts) — never
+   *  guessed, and only ever set for category === "nightlife". */
+  inNightlifeDistrict?: boolean;
 }
 
 export type PlaceCategory =
@@ -153,7 +176,29 @@ export type PlaceCategory =
   | "viewpoint"
   | "landmark"
   | "nightlife"
-  | "shopping";
+  | "shopping"
+  | "gallery"
+  | "wellness"
+  | "sports"
+  | "entertainment";
+
+/** Closed taxonomy of real nightlife venue kinds, classified from OSM tags
+ *  and name keywords (see `classifyNightlife` in `data/relevance.ts`).
+ *  District-level "is this part of a lively nightlife district" signal is a
+ *  separate concern — see `Place.inNightlifeDistrict` below — this is about
+ *  the VENUE itself, not its surroundings. */
+export type NightlifeSubcategory =
+  | "bar"
+  | "rooftop_bar"
+  | "nightclub"
+  | "cocktail_lounge"
+  | "live_music"
+  | "jazz_club"
+  | "sports_bar"
+  | "beach_club"
+  | "karaoke_bar"
+  | "wine_bar"
+  | "electronic_venue";
 
 export type Daypart = "morning" | "lunch" | "afternoon" | "dinner" | "evening";
 

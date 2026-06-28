@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React from "react";
 import {
   Pressable,
   StyleSheet,
@@ -9,7 +9,6 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Icon } from "@/components/Icon";
 import * as Haptics from "expo-haptics";
 import type { DestinationMatch, ItineraryStop, Place } from "@/lib/types";
-import { resolveStopMedia } from "@/lib/data/media";
 import { getKnowledgePack } from "@/lib/data/knowledge";
 import { currencySymbol } from "@/lib/currency";
 import { SmartImage } from "./SmartImage";
@@ -122,7 +121,6 @@ export function DestinationMini({
 export function StopCard({
   stop,
   index,
-  city,
   currency = "EUR",
   onRemove,
   onNavigate,
@@ -130,7 +128,6 @@ export function StopCard({
 }: {
   stop: ItineraryStop;
   index: number;
-  city?: string;
   currency?: string;
   onRemove?: () => void;
   onNavigate?: () => void;
@@ -145,22 +142,6 @@ export function StopCard({
   const momentColor = slot?.color ?? daypart.color;
   const transport = TRANSPORT_META[stop.travelMode ?? "walk"];
 
-  // Photos are normally resolved up-front during generation and embedded on the
-  // place, so cards render the right image instantly. Only fall back to a lazy
-  // fetch for older saved trips that predate that (no photoResolved flag).
-  const [image, setImage] = useState(stop.place.imageUrl);
-  useEffect(() => {
-    if (stop.place.photoResolved || !city) return;
-    let active = true;
-    resolveStopMedia(stop.place, city)
-      .then((m) => {
-        if (active && m.imageUrl) setImage(m.imageUrl);
-      })
-      .catch(() => undefined);
-    return () => {
-      active = false;
-    };
-  }, [city, stop.place.photoResolved, stop.place.name, stop.place.category]);
   return (
     <View>
       {stop.travelFromPrevMin ? (
@@ -186,99 +167,102 @@ export function StopCard({
           onPress={onPress}
           style={({ pressed }) => [styles.stopCard, { transform: [{ scale: pressed ? 0.99 : 1 }] }]}
         >
-          <SmartImage
-            uri={image}
-            style={styles.stopImage}
-            emoji={meta.emoji}
-          />
+          <View style={styles.stopCardRow}>
+            <LinearGradient
+              colors={[meta.color + "33", meta.color + "12"]}
+              style={styles.stopIconBadge}
+            >
+              <Icon name={meta.icon as any} size={24} color={meta.color} strokeWidth={2} />
+            </LinearGradient>
 
-          <View style={styles.stopBody}>
-            <View style={styles.stopHeader}>
-              <View style={[styles.daypartPill, { backgroundColor: momentColor + "22" }]}>
-                <Icon name={momentIcon as any} size={11} color={momentColor} />
-                <Text style={[styles.daypartText, { color: momentColor }]}>{momentLabel}</Text>
+            <View style={styles.stopBody}>
+              <View style={styles.stopHeader}>
+                <View style={[styles.daypartPill, { backgroundColor: momentColor + "22" }]}>
+                  <Icon name={momentIcon as any} size={11} color={momentColor} />
+                  <Text style={[styles.daypartText, { color: momentColor }]}>{momentLabel}</Text>
+                </View>
+                <View style={styles.badgeRow}>
+                  {stop.place.tier === 1 && (
+                    <View style={styles.tier1}>
+                      <Icon name="star" size={10} color={colors.warning} fill />
+                      <Text style={styles.tier1Text}>Must-see</Text>
+                    </View>
+                  )}
+                  {stop.place.hiddenGem && (
+                    <View style={styles.gem}>
+                      <Icon name="diamond" size={10} color={colors.accent} />
+                      <Text style={styles.gemText}>Hidden gem</Text>
+                    </View>
+                  )}
+                  {stop.place.verified && (
+                    <View style={styles.verified}>
+                      <Icon name="checkmark-circle" size={11} color={colors.success} />
+                      <Text style={styles.verifiedText}>Verified</Text>
+                    </View>
+                  )}
+                </View>
               </View>
-              <View style={styles.badgeRow}>
-                {stop.place.tier === 1 && (
-                  <View style={styles.tier1}>
-                    <Icon name="star" size={10} color={colors.warning} fill />
-                    <Text style={styles.tier1Text}>Must-see</Text>
-                  </View>
-                )}
-                {stop.place.hiddenGem && (
-                  <View style={styles.gem}>
-                    <Icon name="diamond" size={10} color={colors.accent} />
-                    <Text style={styles.gemText}>Hidden gem</Text>
-                  </View>
-                )}
-                {stop.place.verified && (
-                  <View style={styles.verified}>
-                    <Icon name="checkmark-circle" size={11} color={colors.success} />
-                    <Text style={styles.verifiedText}>Verified</Text>
-                  </View>
-                )}
-              </View>
-            </View>
 
-            <Text style={styles.stopName} numberOfLines={2} ellipsizeMode="tail">
-              {stop.place.name}
-            </Text>
-            <View style={styles.stopMetaRow}>
-              <Icon name={meta.icon} size={13} color={meta.color} strokeWidth={2} />
-              <Text style={styles.stopMeta}>{meta.label}</Text>
-              <Text style={styles.stopDot2}>·</Text>
-              <Icon name="time-outline" size={12} color={colors.textFaint} />
-              <Text style={styles.stopMeta}>{stop.durationMin}m</Text>
-              {stop.estimatedCost ? (
-                <>
-                  <Text style={styles.stopDot2}>·</Text>
-                  <Text style={styles.stopMeta}>{currencySymbol(currency)}{stop.estimatedCost}</Text>
-                </>
+              <Text style={styles.stopName} numberOfLines={2} ellipsizeMode="tail">
+                {stop.place.name}
+              </Text>
+              <View style={styles.stopMetaRow}>
+                <Icon name={meta.icon} size={13} color={meta.color} strokeWidth={2} />
+                <Text style={styles.stopMeta}>{meta.label}</Text>
+                <Text style={styles.stopDot2}>·</Text>
+                <Icon name="time-outline" size={12} color={colors.textFaint} />
+                <Text style={styles.stopMeta}>{stop.durationMin}m</Text>
+                {stop.estimatedCost ? (
+                  <>
+                    <Text style={styles.stopDot2}>·</Text>
+                    <Text style={styles.stopMeta}>{currencySymbol(currency)}{stop.estimatedCost}</Text>
+                  </>
+                ) : null}
+                {stop.place.bestTime ? (
+                  <>
+                    <Text style={styles.stopDot2}>·</Text>
+                    <Icon name="sunny-outline" size={12} color={colors.accent} />
+                    <Text style={[styles.stopMeta, { color: colors.accent }]}>{stop.place.bestTime}</Text>
+                  </>
+                ) : null}
+                {typeof stop.place.confidence === "number" ? (
+                  <>
+                    <Text style={styles.stopDot2}>·</Text>
+                    <View style={[styles.confDot, { backgroundColor: confColor(stop.place.confidence) }]} />
+                    <Text style={[styles.stopMeta, { color: confColor(stop.place.confidence), fontWeight: "700" }]}>
+                      {Math.round(stop.place.confidence * 100)}%
+                    </Text>
+                  </>
+                ) : null}
+              </View>
+
+              {stop.note ? <Text style={styles.stopNote} numberOfLines={2}>{stop.note}</Text> : null}
+
+              {stop.place.recommendationReason ? (
+                <View style={styles.reasonRow}>
+                  <Icon name="checkmark-circle" size={13} color={colors.success} />
+                  <Text style={styles.reasonText} numberOfLines={2}>{stop.place.recommendationReason}</Text>
+                </View>
               ) : null}
-              {stop.place.bestTime ? (
-                <>
-                  <Text style={styles.stopDot2}>·</Text>
-                  <Icon name="sunny-outline" size={12} color={colors.accent} />
-                  <Text style={[styles.stopMeta, { color: colors.accent }]}>{stop.place.bestTime}</Text>
-                </>
-              ) : null}
-              {typeof stop.place.confidence === "number" ? (
-                <>
-                  <Text style={styles.stopDot2}>·</Text>
-                  <View style={[styles.confDot, { backgroundColor: confColor(stop.place.confidence) }]} />
-                  <Text style={[styles.stopMeta, { color: confColor(stop.place.confidence), fontWeight: "700" }]}>
-                    {Math.round(stop.place.confidence * 100)}%
-                  </Text>
-                </>
-              ) : null}
-            </View>
 
-            {stop.note ? <Text style={styles.stopNote} numberOfLines={2}>{stop.note}</Text> : null}
-
-            {stop.place.recommendationReason ? (
-              <View style={styles.reasonRow}>
-                <Icon name="checkmark-circle" size={13} color={colors.success} />
-                <Text style={styles.reasonText} numberOfLines={2}>{stop.place.recommendationReason}</Text>
+              <View style={styles.stopActions}>
+                <View style={styles.stopAction}>
+                  <Icon name="information-circle-outline" size={14} color={colors.primary} />
+                  <Text style={[styles.stopActionText, { color: colors.primary }]}>Details</Text>
+                </View>
+                {onNavigate && (
+                  <Pressable onPress={onNavigate} style={styles.stopAction} hitSlop={6}>
+                    <Icon name="navigate" size={14} color={colors.accent} />
+                    <Text style={[styles.stopActionText, { color: colors.accent }]}>Go</Text>
+                  </Pressable>
+                )}
+                {onRemove && (
+                  <Pressable onPress={onRemove} style={styles.stopAction} hitSlop={6}>
+                    <Icon name="trash-outline" size={14} color={colors.danger} />
+                    <Text style={[styles.stopActionText, { color: colors.danger }]}>Remove</Text>
+                  </Pressable>
+                )}
               </View>
-            ) : null}
-
-            <View style={styles.stopActions}>
-              <View style={styles.stopAction}>
-                <Icon name="information-circle-outline" size={14} color={colors.primary} />
-                <Text style={[styles.stopActionText, { color: colors.primary }]}>Details</Text>
-              </View>
-              {onNavigate && (
-                <Pressable onPress={onNavigate} style={styles.stopAction} hitSlop={6}>
-                  <Icon name="navigate" size={14} color={colors.accent} />
-                  <Text style={[styles.stopActionText, { color: colors.accent }]}>Go</Text>
-                </Pressable>
-              )}
-              {onRemove && (
-                <Pressable onPress={onRemove} style={styles.stopAction} hitSlop={6}>
-                  <Icon name="trash-outline" size={14} color={colors.danger} />
-                  <Text style={[styles.stopActionText, { color: colors.danger }]}>Remove</Text>
-                </Pressable>
-              )}
             </View>
           </View>
         </Pressable>
@@ -416,8 +400,9 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     marginBottom: spacing.md,
   },
-  stopImage: { width: "100%", height: 116, backgroundColor: colors.surfaceAlt },
-  stopBody: { padding: spacing.lg },
+  stopCardRow: { flexDirection: "row", gap: spacing.md, padding: spacing.lg, alignItems: "flex-start" },
+  stopIconBadge: { width: 52, height: 52, borderRadius: radius.md, alignItems: "center", justifyContent: "center" },
+  stopBody: { flex: 1 },
   travelConnector: {
     flexDirection: "row",
     alignItems: "center",

@@ -351,6 +351,11 @@ const unknownSummary = K.destinationSummary("Some Tiny Village");
 ok(unknownSummary.hasPack === false && unknownSummary.attractionCount === null, `unknown city: no pack, count unknown (honest)`);
 ok(unknownSummary.confidence === K.GLOBAL_ENGINE_CONFIDENCE, `unknown city: global-engine confidence baseline (still works worldwide)`);
 ok(unknownSummary.topExperiences.length === 0 && unknownSummary.weatherNote === null, `unknown city: no invented experiences or weather claims`);
+// Premium destination-card fields (§32): travel score, neighborhoods, transport.
+ok(marraSummary.travelScore >= 70 && marraSummary.travelScore <= 100, `Marrakech: composite travel score in range (${marraSummary.travelScore})`);
+ok(Array.isArray(marraSummary.neighborhoods) && marraSummary.neighborhoods.includes("Medina"), `Marrakech: popular neighborhoods exposed`);
+ok(typeof marraSummary.transportTip === "string" && marraSummary.transportTip.length > 0, `Marrakech: transport tip present`);
+ok(unknownSummary.travelScore === K.GLOBAL_ENGINE_CONFIDENCE && unknownSummary.neighborhoods.length === 0 && unknownSummary.transportTip === null, `unknown city: premium fields stay honest (baseline score, no invented hoods/transport)`);
 
 console.log("\n=== 33. Benchmark: the 9 audit destinations (offline-verifiable dimensions) ===");
 const BENCHMARK = ["Marrakech","Tangier","Chefchaouen","Madrid","Paris","Rome","Tokyo","Kyoto","Bangkok"];
