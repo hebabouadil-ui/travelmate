@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { destinationHeroImage } from "./data/heroImage";
 import { categoryImage } from "./data/wikipedia";
+import type { GeoPoint } from "./types";
 
 /**
  * Resolve a destination hero image, guaranteeing a real photo every time.
@@ -22,6 +23,7 @@ export function useDestinationHero(
   staticUrl: string | undefined,
   destination: string,
   country?: string,
+  center?: GeoPoint,
   onResolved?: (url: string) => void
 ): string | undefined {
   // A stable, real travel photo to show instantly when we have no static one.
@@ -44,7 +46,7 @@ export function useDestinationHero(
     setResolved(fallback);
     if (!destination.trim()) return;
     let alive = true;
-    destinationHeroImage(destination, country)
+    destinationHeroImage(destination, country, center)
       .then((url) => {
         if (alive && url) {
           setResolved(url);
@@ -57,7 +59,7 @@ export function useDestinationHero(
     };
     // onResolved is intentionally excluded — it's a stable intent, not a dep.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [staticUrl, destination, country, fallback]);
+  }, [staticUrl, destination, country, center?.lat, center?.lng, fallback]);
 
   return resolved;
 }

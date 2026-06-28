@@ -2,6 +2,15 @@ import { withCache } from "../cache";
 import { slugify } from "../utils";
 import { isMatchingArticle } from "./knowledge";
 import type { PlaceCategory } from "../types";
+import { ENV } from "../env";
+
+// Wikimedia's API policy blocks requests with a missing/generic User-Agent
+// (a default okhttp UA on Android gets 403'd), so every Wikipedia/Commons
+// call MUST identify itself — exactly like our Overpass requests do.
+const WIKI_HEADERS: Record<string, string> = {
+  "User-Agent": `VoyageAI-Mobile/1.0 (${ENV.osmContactEmail})`,
+  Accept: "application/json",
+};
 
 interface WikiResponse {
   query?: {
@@ -68,7 +77,7 @@ export async function enrichPlace(
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 8000);
       try {
-        const res = await fetch(url, { signal: controller.signal });
+        const res = await fetch(url, { signal: controller.signal, headers: WIKI_HEADERS });
         if (!res.ok) throw new Error(`wiki ${res.status}`);
         const data = (await res.json()) as WikiResponse;
         const pages = data.query?.pages;
@@ -220,7 +229,7 @@ export async function commonsPhotoNear(
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 7000);
       try {
-        const res = await fetch(url, { signal: controller.signal });
+        const res = await fetch(url, { signal: controller.signal, headers: WIKI_HEADERS });
         if (!res.ok) return undefined;
         const data = (await res.json()) as CommonsResponse;
         const pages = Object.values(data.query?.pages ?? {});
@@ -281,7 +290,7 @@ async function cityHeroFromSummary(name: string): Promise<string | undefined> {
     // REST summary resolves the exact article (with redirects) reliably.
     const res = await fetch(
       `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(name)}`,
-      { signal: controller.signal, headers: { Accept: "application/json" } }
+      { signal: controller.signal, headers: WIKI_HEADERS }
     );
     if (res.ok) {
       const s = (await res.json()) as WikiSummary;
@@ -316,6 +325,7 @@ async function cityHeroFromSearch(name: string): Promise<string | undefined> {
   try {
     const res = await fetch(`https://en.wikipedia.org/w/api.php?${params}`, {
       signal: controller.signal,
+      headers: WIKI_HEADERS,
     });
     if (!res.ok) return undefined;
     const data = (await res.json()) as WikiResponse;

@@ -70,7 +70,8 @@ export default function TripDetail() {
   const heroImg = useDestinationHero(
     staticHero,
     trip?.destination ?? "",
-    undefined,
+    trip?.country,
+    trip?.center,
     (url) => {
       if (trip && !trip.imageUrl) updateTrip({ ...trip, imageUrl: url });
     }

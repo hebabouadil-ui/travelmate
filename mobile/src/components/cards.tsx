@@ -42,7 +42,7 @@ export function DestinationCard({
   // Use the seed photo when present, else resolve a real one at view time so
   // every destination (e.g. Casablanca, which ships no static image) shows a
   // photo rather than an empty placeholder.
-  const heroImg = useDestinationHero(match.image, match.name, match.country);
+  const heroImg = useDestinationHero(match.image, match.name, match.country, match.center);
   return (
     <Pressable
       onPress={() => {

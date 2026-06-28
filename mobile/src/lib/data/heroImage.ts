@@ -1,8 +1,9 @@
 import { withCache } from "../cache";
 import { slugify } from "../utils";
 import { generateHeroImage } from "../ai/geminiImage";
-import { cityHeroImage, enrichPlace } from "./wikipedia";
+import { cityHeroImage, enrichPlace, commonsPhotoNear } from "./wikipedia";
 import { getKnowledgePack } from "./knowledge";
+import type { GeoPoint } from "../types";
 
 /**
  * The ONE premium hero photo for a destination page. Tries, in order: a
@@ -16,7 +17,8 @@ import { getKnowledgePack } from "./knowledge";
  */
 export async function destinationHeroImage(
   destination: string,
-  country?: string
+  country?: string,
+  center?: GeoPoint
 ): Promise<string | undefined> {
   const subject = country ? `${destination}, ${country}` : destination;
   const key = `herov2:${slugify(subject)}`;
@@ -27,15 +29,23 @@ export async function destinationHeroImage(
       const generated = await generateHeroImage(subject).catch(() => undefined);
       if (generated) return generated;
 
+      // 1) The city's own Wikipedia article photo (a clean cityscape lead image).
       const city = await cityHeroImage(destination);
       if (city) return city;
 
-      // Last resort for a curated destination: its #1 must-see landmark photo.
+      // 2) For a curated destination, its #1 must-see landmark photo (iconic).
       const pack = getKnowledgePack(destination);
       const landmark = pack?.mustSee?.[0];
       if (landmark) {
         const { imageUrl } = await enrichPlace(landmark, pack!.city, "landmark");
         if (imageUrl) return imageUrl;
+      }
+
+      // 3) Any real geotagged photo uploaded at the city centre (Wikimedia
+      //    Commons geosearch) — works for places without a tidy article image.
+      if (center) {
+        const near = await commonsPhotoNear(center.lat, center.lng);
+        if (near) return near;
       }
       return undefined;
     },

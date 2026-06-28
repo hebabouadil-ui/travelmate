@@ -6,12 +6,13 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 /**
  * Render at the app's designed type scale regardless of the device's system
  * font-size / display-size setting. Phones set to a large accessibility font
- * were blowing every screen up — headings overflowed and words wrapped
- * mid-letter ("Recommende d", "Mediu m"). We allow a *small* bump (1.15) so the
- * app still honours accessibility a little, but never enough to break layout.
+ * were blowing every screen up — headings overflowed, option chips/cards grew
+ * oversized and words wrapped mid-letter ("Recommende d", "Mediu m"). We pin
+ * text to its designed size (no system up-scaling) so layouts stay compact and
+ * premium on every device.
  */
 type WithDefaults = { defaultProps?: { allowFontScaling?: boolean; maxFontSizeMultiplier?: number } };
-const TEXT_DEFAULTS = { allowFontScaling: true, maxFontSizeMultiplier: 1.15 };
+const TEXT_DEFAULTS = { allowFontScaling: false, maxFontSizeMultiplier: 1.0 };
 (RNText as unknown as WithDefaults).defaultProps = {
   ...(RNText as unknown as WithDefaults).defaultProps,
   ...TEXT_DEFAULTS,
