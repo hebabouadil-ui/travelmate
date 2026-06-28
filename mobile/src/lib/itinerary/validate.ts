@@ -52,7 +52,7 @@ export function validateCandidate(
   if (!p.name || !p.name.trim()) return "unknown_location";
   if (!Number.isFinite(p.lat) || !Number.isFinite(p.lng)) return "missing_coordinates";
   if (!p.category || !VALID_CATEGORIES.has(p.category)) return "unknown_category";
-  if (/^closed$/i.test(p.openingHours?.trim() ?? "")) return "closed_permanently";
+  if (/^(closed|off)$/i.test(p.openingHours?.trim() ?? "")) return "closed_permanently";
   if (center && haversineKm(p, center) > maxRadiusKm) return "outside_destination";
   if (seenNames?.has(normName(p.name))) return "duplicate";
   return null;

@@ -32,6 +32,8 @@ interface FsqResult {
   fsq_place_id?: string;
   fsq_id?: string;
   name?: string;
+  /** Foursquare's "is this still open" estimate: VeryLikelyOpen … VeryLikelyClosed. */
+  closed_bucket?: string;
   latitude?: number;
   longitude?: number;
   geocodes?: { main?: { latitude?: number; longitude?: number } };
@@ -62,7 +64,13 @@ export interface FsqVenue {
 }
 
 const FIELDS =
-  "fsq_place_id,name,latitude,longitude,geocodes,location,categories,hours,website,tel,rating,price,photos";
+  "fsq_place_id,name,latitude,longitude,geocodes,location,categories,hours,website,tel,rating,price,photos,closed_bucket";
+
+/** Foursquare's freshness signal — drop venues it believes have shut down, so a
+ *  place that closed years ago never lands in an itinerary. */
+function isFsqClosed(r: FsqResult): boolean {
+  return (r.closed_bucket || "").toLowerCase().includes("likelyclosed");
+}
 
 export function hasFoursquare(): boolean {
   return Boolean(ENV.foursquareApiKey);
@@ -174,6 +182,7 @@ export async function foursquareSearch(
       const results = await fsqFetch(url);
       if (!results) return [];
       return results
+        .filter((r) => !isFsqClosed(r))
         .map(normalize)
         .filter((v): v is FsqVenue => !!v && v.lat != null && v.lng != null)
         .map((v) => toPlace(v, kind))

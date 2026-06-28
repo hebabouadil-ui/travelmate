@@ -2,7 +2,7 @@ import type { GeoPoint, Place, PlaceCategory } from "../types";
 import { makeId } from "../utils";
 import { formatAddress } from "../itinerary/validate";
 import { ENV } from "../env";
-import { isTouristIrrelevant, classifyExperience, classifyNightlife } from "./relevance";
+import { isTouristIrrelevant, isPermanentlyClosed, classifyExperience, classifyNightlife } from "./relevance";
 
 // Overpass/Nominatim throttle or 406-reject anonymous requests. Identifying the
 // client with a descriptive User-Agent (etiquette requirement) and asking for
@@ -168,6 +168,9 @@ function toPlace(el: OverpassElement): Place | null {
   // app — reject big-box retail/utilities/industrial before they ever reach
   // scoring (see relevance.ts).
   if (isTouristIrrelevant(name, tags)) return null;
+  // Never surface a place OSM marks as closed/disused/demolished — the
+  // "closed since 2019" class of stale data must never reach an itinerary.
+  if (isPermanentlyClosed(tags)) return null;
 
   // Hidden-gem heuristic: places without wikidata/wikipedia tags and not
   // explicitly major attractions are more likely off-the-beaten-path.

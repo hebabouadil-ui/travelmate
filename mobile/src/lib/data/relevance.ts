@@ -38,7 +38,24 @@ const IRRELEVANT_NAME_PARTS = [
   "cvs\\b",
   "dollarama",
   "dollar tree",
+  "dollar general",
+  "family dollar",
   "ace hardware",
+  // Discount / off-price chains — real shops, but not a travel experience.
+  "winners",
+  "marshalls",
+  "t\\.?j\\.? ?maxx",
+  "homesense",
+  "value village",
+  "giant tiger",
+  "big lots",
+  "ross dress",
+  "no frills",
+  "food basics",
+  "shoppers drug mart",
+  "rexall",
+  "loblaws",
+  "metro inc",
 ];
 
 const IRRELEVANT_NAME_RE = new RegExp(
@@ -125,6 +142,35 @@ export function isTouristIrrelevant(
   if (tags.office) return true;
   if (tags.building && IRRELEVANT_BUILDING_TAGS.has(tags.building)) return true;
   if (tags.landuse === "industrial" || tags.landuse === "garages") return true;
+  return false;
+}
+
+/**
+ * Reject places that no longer operate. OSM marks closures with lifecycle-
+ * prefixed tags (disused:/abandoned:/was:/removed:/demolished:/razed:/closed:),
+ * explicit disused/abandoned flags, opening_hours that say closed/off, or a
+ * past end_date — none of which should ever reach an itinerary (the "closed
+ * since 2019" complaint). Live/active places return false.
+ */
+const LIFECYCLE_PREFIX_RE =
+  /^(disused|abandoned|was|removed|demolished|razed|destroyed|closed|construction|proposed|planned):/i;
+
+export function isPermanentlyClosed(
+  tags?: Record<string, string | undefined>
+): boolean {
+  if (!tags) return false;
+  for (const k of Object.keys(tags)) {
+    if (LIFECYCLE_PREFIX_RE.test(k)) return true;
+  }
+  if (/^(yes|1|true)$/i.test(tags.disused ?? "")) return true;
+  if (/^(yes|1|true)$/i.test(tags.abandoned ?? "")) return true;
+  const oh = (tags.opening_hours ?? "").trim().toLowerCase();
+  if (oh === "closed" || oh === "off") return true;
+  const end = tags.end_date;
+  if (end) {
+    const year = parseInt(end.slice(0, 4), 10);
+    if (Number.isFinite(year) && year <= new Date().getFullYear()) return true;
+  }
   return false;
 }
 
