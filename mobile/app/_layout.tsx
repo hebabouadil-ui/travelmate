@@ -1,6 +1,25 @@
 import "react-native-gesture-handler";
 import { useEffect } from "react";
+import { Text as RNText, TextInput as RNTextInput } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+
+/**
+ * Render at the app's designed type scale regardless of the device's system
+ * font-size / display-size setting. Phones set to a large accessibility font
+ * were blowing every screen up — headings overflowed and words wrapped
+ * mid-letter ("Recommende d", "Mediu m"). We allow a *small* bump (1.15) so the
+ * app still honours accessibility a little, but never enough to break layout.
+ */
+type WithDefaults = { defaultProps?: { allowFontScaling?: boolean; maxFontSizeMultiplier?: number } };
+const TEXT_DEFAULTS = { allowFontScaling: true, maxFontSizeMultiplier: 1.15 };
+(RNText as unknown as WithDefaults).defaultProps = {
+  ...(RNText as unknown as WithDefaults).defaultProps,
+  ...TEXT_DEFAULTS,
+};
+(RNTextInput as unknown as WithDefaults).defaultProps = {
+  ...(RNTextInput as unknown as WithDefaults).defaultProps,
+  ...TEXT_DEFAULTS,
+};
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { Stack, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";

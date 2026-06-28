@@ -19,7 +19,7 @@ import { INTERESTS, BUDGETS } from "@/lib/onboarding-config";
 import type { Budget, GeoPoint, Interest, ItineraryMode, TripRequest } from "@/lib/types";
 import { generateItinerary } from "@/lib/itinerary/engine";
 import { useProfile } from "@/store/useProfile";
-import { SEED_CITIES } from "@/lib/data/seed";
+import { SEED_CITIES, findSeedCity } from "@/lib/data/seed";
 import { searchCities, type CitySuggestion } from "@/lib/data/search";
 import { destinationSummary } from "@/lib/data/knowledge";
 import { GeneratingOverlay } from "@/components/GeneratingOverlay";
@@ -63,6 +63,13 @@ export default function Plan() {
     if (params.destination) {
       setDestination(params.destination);
       setPicked(true);
+      // Resolve THIS destination's own center/country — never carry over a
+      // stale pickedCenter from a previous selection, or we'd plan the new
+      // city's name around the old city's coordinates (e.g. "Dubai" built
+      // around Marrakech). Unknown cities reset to null → the engine geocodes.
+      const seed = findSeedCity(params.destination);
+      setPickedCenter(seed ? seed.center : null);
+      setPickedCountry(seed?.country ?? null);
     }
   }, [params.destination]);
 

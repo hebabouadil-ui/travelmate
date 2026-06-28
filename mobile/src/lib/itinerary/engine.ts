@@ -13,6 +13,7 @@ import type {
 } from "../types";
 import { addDays, haversineKm, makeId } from "../utils";
 import { geocode, type GeocodeResult } from "../data/geocode";
+import { findSeedCity } from "../data/seed";
 import { discoverPlaces } from "../data/places";
 import { enrichPopularity } from "../data/popularity";
 import {
@@ -127,14 +128,30 @@ export async function generateItinerary(req: TripRequest): Promise<Itinerary> {
   const startedAt = Date.now();
   // Use the exact picked coordinates when available (avoids ambiguous
   // re-geocoding that could land on the wrong "Málaga"); else geocode the text.
-  const geo: GeocodeResult = req.center
-    ? {
-        name: req.destination.split(",")[0].trim() || req.destination,
-        center: req.center,
-        displayName: req.destination,
-        country: req.country,
-      }
-    : await geocode(req.destination);
+  let geo: GeocodeResult;
+  if (req.center) {
+    geo = {
+      name: req.destination.split(",")[0].trim() || req.destination,
+      center: req.center,
+      displayName: req.destination,
+      country: req.country,
+    };
+    // Defense-in-depth: if the destination names a known city but the supplied
+    // center sits far from it, that center is stale/mismatched (a UI carry-over
+    // from a previous selection) — trust the NAMED city so we never plan e.g.
+    // "Dubai" around Marrakech's coordinates.
+    const seed = findSeedCity(req.destination);
+    if (seed && haversineKm(req.center, seed.center) > 75) {
+      geo = {
+        name: seed.name,
+        center: seed.center,
+        displayName: `${seed.name}, ${seed.country}`,
+        country: seed.country,
+      };
+    }
+  } else {
+    geo = await geocode(req.destination);
+  }
 
   // Destination knowledge pack — curated expert data. Used to tier/guarantee
   // real must-sees. This is the "knowledge first" principle: AI never sees a
