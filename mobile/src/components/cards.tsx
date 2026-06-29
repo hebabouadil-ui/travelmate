@@ -39,10 +39,9 @@ export function DestinationCard({
   const tone =
     match.score >= 85 ? colors.success : match.score >= 70 ? colors.accent : colors.warning;
   const pack = getKnowledgePack(match.name);
-  // Use the seed photo when present, else resolve a real one at view time so
-  // every destination (e.g. Casablanca, which ships no static image) shows a
-  // photo rather than an empty placeholder.
-  const hero = useDestinationHero(match.image, match.name, match.country, match.center);
+  // Use the seed photo when present, else resolve a real, on-topic one at view
+  // time (landmark → city image). Falls back to a gradient, never a random photo.
+  const hero = useDestinationHero(match.image, match.name, match.country);
   return (
     <Pressable
       onPress={() => {
@@ -51,7 +50,7 @@ export function DestinationCard({
       }}
       style={({ pressed }) => [styles.destCard, shadow.card, { transform: [{ scale: pressed ? 0.985 : 1 }] }]}
     >
-      <SmartImage uri={hero.uri} fallback={hero.fallback} style={styles.destImage} />
+      <SmartImage uri={hero} style={styles.destImage} />
       <LinearGradient
         colors={["transparent", "rgba(5,8,16,0.15)", "rgba(5,8,16,0.92)"]}
         style={StyleSheet.absoluteFill}

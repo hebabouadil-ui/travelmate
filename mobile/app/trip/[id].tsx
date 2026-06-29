@@ -38,6 +38,37 @@ function cityImage(name: string): string | undefined {
   )?.image;
 }
 
+// Group a day's stops into time-of-day sections so each day reads like a
+// curated guide (Morning → Afternoon → Evening → Night) instead of one long list.
+type PeriodKey = "morning" | "afternoon" | "evening" | "night" | "day";
+const PERIOD_META: Record<PeriodKey, { label: string; icon: string }> = {
+  morning: { label: "Morning", icon: "partly-sunny" },
+  afternoon: { label: "Afternoon", icon: "sunny-outline" },
+  evening: { label: "Evening", icon: "cloud-sun" },
+  night: { label: "Night", icon: "star" },
+  day: { label: "Day", icon: "time-outline" },
+};
+function periodKey(t?: string): PeriodKey {
+  const h = t ? parseInt(t.slice(0, 2), 10) : NaN;
+  if (!Number.isFinite(h)) return "day";
+  if (h < 12) return "morning";
+  if (h < 17) return "afternoon";
+  if (h < 21) return "evening";
+  return "night";
+}
+function groupStops<T extends { startTime?: string }>(
+  stops: T[]
+): { key: PeriodKey; items: { stop: T; i: number }[] }[] {
+  const groups: { key: PeriodKey; items: { stop: T; i: number }[] }[] = [];
+  stops.forEach((stop, i) => {
+    const key = periodKey(stop.startTime);
+    const last = groups[groups.length - 1];
+    if (last && last.key === key) last.items.push({ stop, i });
+    else groups.push({ key, items: [{ stop, i }] });
+  });
+  return groups;
+}
+
 function AuditStat({ value, label }: { value: string; label: string }) {
   return (
     <View style={styles.auditStat}>
@@ -71,7 +102,6 @@ export default function TripDetail() {
     staticHero,
     trip?.destination ?? "",
     trip?.country,
-    trip?.center,
     (url) => {
       if (trip && !trip.imageUrl) updateTrip({ ...trip, imageUrl: url });
     }
@@ -139,7 +169,7 @@ export default function TripDetail() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 }}>
         {/* Hero */}
         <View style={styles.hero}>
-          <SmartImage uri={hero.uri} fallback={hero.fallback} style={StyleSheet.absoluteFill as any} />
+          <SmartImage uri={hero} style={StyleSheet.absoluteFill as any} />
           <LinearGradient colors={["rgba(5,8,16,0.5)", "transparent", "rgba(11,15,26,1)"]} style={StyleSheet.absoluteFill} />
           <View style={[styles.heroNav, { paddingTop: topPad }]}>
             <Pressable onPress={() => router.back()} style={styles.navBtn} hitSlop={8}>
@@ -301,17 +331,28 @@ export default function TripDetail() {
               {day.stops.length === 0 ? (
                 <Text style={styles.emptyDay}>No stops left for this day. Remove fewer, or regenerate the trip.</Text>
               ) : (
-                day.stops.map((stop, i) => (
-                  <Animated.View key={`${stop.place.id}-${i}`} layout={Layout.springify()}>
-                    <StopCard
-                      stop={stop}
-                      index={i}
-                      currency={trip.currency}
-                      onPress={() => setSheetStop(stop)}
-                      onRemove={() => removeStop(i)}
-                      onNavigate={() => openDirections(stop.place, stop.place.name)}
-                    />
-                  </Animated.View>
+                groupStops(day.stops).map((group) => (
+                  <View key={`${group.key}-${group.items[0].i}`}>
+                    <View style={styles.periodHeader}>
+                      <View style={styles.periodIcon}>
+                        <Icon name={PERIOD_META[group.key].icon} size={13} color={colors.primary} strokeWidth={2} />
+                      </View>
+                      <Text style={styles.periodLabel}>{PERIOD_META[group.key].label}</Text>
+                      <View style={styles.periodRule} />
+                    </View>
+                    {group.items.map(({ stop, i }) => (
+                      <Animated.View key={`${stop.place.id}-${i}`} layout={Layout.springify()}>
+                        <StopCard
+                          stop={stop}
+                          index={i}
+                          currency={trip.currency}
+                          onPress={() => setSheetStop(stop)}
+                          onRemove={() => removeStop(i)}
+                          onNavigate={() => openDirections(stop.place, stop.place.name)}
+                        />
+                      </Animated.View>
+                    ))}
+                  </View>
                 ))
               )}
             </View>
@@ -340,6 +381,10 @@ export default function TripDetail() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
+  periodHeader: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginTop: spacing.lg, marginBottom: spacing.sm },
+  periodIcon: { width: 26, height: 26, borderRadius: 13, backgroundColor: colors.primary + "14", alignItems: "center", justifyContent: "center" },
+  periodLabel: { color: colors.text, fontSize: font.small, fontWeight: "800", letterSpacing: 0.4, textTransform: "uppercase" },
+  periodRule: { flex: 1, height: 1, backgroundColor: colors.border, marginLeft: spacing.xs },
   hero: { height: 280, justifyContent: "space-between" },
   heroNav: { flexDirection: "row", justifyContent: "space-between", paddingHorizontal: spacing.lg, paddingTop: spacing.sm },
   navBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(5,8,16,0.4)", alignItems: "center", justifyContent: "center" },
