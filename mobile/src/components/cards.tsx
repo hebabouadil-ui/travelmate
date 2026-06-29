@@ -12,6 +12,7 @@ import type { DestinationMatch, ItineraryStop, Place } from "@/lib/types";
 import { getKnowledgePack } from "@/lib/data/knowledge";
 import { currencySymbol } from "@/lib/currency";
 import { useDestinationHero } from "@/lib/useDestinationHero";
+import { useStopPhoto } from "@/lib/useStopPhoto";
 import { SmartImage } from "./SmartImage";
 import {
   colors,
@@ -118,19 +119,21 @@ export function DestinationMini({
   );
 }
 
-/** A single itinerary stop — timeline style. */
+/** A single itinerary stop — a clean, photo-led timeline card. */
 export function StopCard({
   stop,
   index,
   currency = "EUR",
+  city = "",
   onRemove,
-  onNavigate,
   onPress,
 }: {
   stop: ItineraryStop;
   index: number;
   currency?: string;
+  city?: string;
   onRemove?: () => void;
+  /** Accepted for call-site compatibility; directions live in the detail sheet. */
   onNavigate?: () => void;
   onPress?: () => void;
 }) {
@@ -142,6 +145,11 @@ export function StopCard({
   const momentIcon = slot?.icon ?? daypart.icon;
   const momentColor = slot?.color ?? daypart.color;
   const transport = TRANSPORT_META[stop.travelMode ?? "walk"];
+  // Real, place-specific photo (resolved lazily); category badge if none.
+  const photo = useStopPhoto(stop.place, city);
+  // One badge only — keep the card calm (must-see > hidden gem > verified).
+  const topBadge =
+    stop.place.tier === 1 ? "mustsee" : stop.place.hiddenGem ? "gem" : stop.place.verified ? "verified" : null;
 
   return (
     <View>
@@ -169,39 +177,38 @@ export function StopCard({
           style={({ pressed }) => [styles.stopCard, { transform: [{ scale: pressed ? 0.99 : 1 }] }]}
         >
           <View style={styles.stopCardRow}>
-            <LinearGradient
-              colors={[meta.color + "33", meta.color + "12"]}
-              style={styles.stopIconBadge}
-            >
-              <Icon name={meta.icon as any} size={24} color={meta.color} strokeWidth={2} />
-            </LinearGradient>
+            {photo ? (
+              <SmartImage uri={photo} style={styles.stopThumb} />
+            ) : (
+              <LinearGradient colors={[meta.color + "33", meta.color + "12"]} style={styles.stopThumb}>
+                <Icon name={meta.icon as any} size={26} color={meta.color} strokeWidth={2} />
+              </LinearGradient>
+            )}
 
             <View style={styles.stopBody}>
-              <View style={styles.stopHeader}>
+              <View style={styles.stopHeaderRow}>
                 <View style={[styles.daypartPill, { backgroundColor: momentColor + "22" }]}>
                   <Icon name={momentIcon as any} size={11} color={momentColor} />
                   <Text style={[styles.daypartText, { color: momentColor }]}>{momentLabel}</Text>
                 </View>
-                <View style={styles.badgeRow}>
-                  {stop.place.tier === 1 && (
-                    <View style={styles.tier1}>
-                      <Icon name="star" size={10} color={colors.warning} fill />
-                      <Text style={styles.tier1Text}>Must-see</Text>
-                    </View>
-                  )}
-                  {stop.place.hiddenGem && (
-                    <View style={styles.gem}>
-                      <Icon name="diamond" size={10} color={colors.accent} />
-                      <Text style={styles.gemText}>Hidden gem</Text>
-                    </View>
-                  )}
-                  {stop.place.verified && (
-                    <View style={styles.verified}>
-                      <Icon name="checkmark-circle" size={11} color={colors.success} />
-                      <Text style={styles.verifiedText}>Verified</Text>
-                    </View>
-                  )}
-                </View>
+                {topBadge === "mustsee" && (
+                  <View style={styles.tier1}>
+                    <Icon name="star" size={10} color={colors.warning} fill />
+                    <Text style={styles.tier1Text}>Must-see</Text>
+                  </View>
+                )}
+                {topBadge === "gem" && (
+                  <View style={styles.gem}>
+                    <Icon name="diamond" size={10} color={colors.accent} />
+                    <Text style={styles.gemText}>Hidden gem</Text>
+                  </View>
+                )}
+                {topBadge === "verified" && (
+                  <View style={styles.verified}>
+                    <Icon name="checkmark-circle" size={11} color={colors.success} />
+                    <Text style={styles.verifiedText}>Verified</Text>
+                  </View>
+                )}
               </View>
 
               <Text style={styles.stopName} numberOfLines={2} ellipsizeMode="tail">
@@ -211,7 +218,6 @@ export function StopCard({
                 <Icon name={meta.icon} size={13} color={meta.color} strokeWidth={2} />
                 <Text style={styles.stopMeta}>{meta.label}</Text>
                 <Text style={styles.stopDot2}>·</Text>
-                <Icon name="time-outline" size={12} color={colors.textFaint} />
                 <Text style={styles.stopMeta}>{stop.durationMin}m</Text>
                 {stop.estimatedCost ? (
                   <>
@@ -219,52 +225,14 @@ export function StopCard({
                     <Text style={styles.stopMeta}>{currencySymbol(currency)}{stop.estimatedCost}</Text>
                   </>
                 ) : null}
-                {stop.place.bestTime ? (
-                  <>
-                    <Text style={styles.stopDot2}>·</Text>
-                    <Icon name="sunny-outline" size={12} color={colors.accent} />
-                    <Text style={[styles.stopMeta, { color: colors.accent }]}>{stop.place.bestTime}</Text>
-                  </>
-                ) : null}
-                {typeof stop.place.confidence === "number" ? (
-                  <>
-                    <Text style={styles.stopDot2}>·</Text>
-                    <View style={[styles.confDot, { backgroundColor: confColor(stop.place.confidence) }]} />
-                    <Text style={[styles.stopMeta, { color: confColor(stop.place.confidence), fontWeight: "700" }]}>
-                      {Math.round(stop.place.confidence * 100)}%
-                    </Text>
-                  </>
-                ) : null}
-              </View>
-
-              {stop.note ? <Text style={styles.stopNote} numberOfLines={2}>{stop.note}</Text> : null}
-
-              {stop.place.recommendationReason ? (
-                <View style={styles.reasonRow}>
-                  <Icon name="checkmark-circle" size={13} color={colors.success} />
-                  <Text style={styles.reasonText} numberOfLines={2}>{stop.place.recommendationReason}</Text>
-                </View>
-              ) : null}
-
-              <View style={styles.stopActions}>
-                <View style={styles.stopAction}>
-                  <Icon name="information-circle-outline" size={14} color={colors.primary} />
-                  <Text style={[styles.stopActionText, { color: colors.primary }]}>Details</Text>
-                </View>
-                {onNavigate && (
-                  <Pressable onPress={onNavigate} style={styles.stopAction} hitSlop={6}>
-                    <Icon name="navigate" size={14} color={colors.accent} />
-                    <Text style={[styles.stopActionText, { color: colors.accent }]}>Go</Text>
-                  </Pressable>
-                )}
-                {onRemove && (
-                  <Pressable onPress={onRemove} style={styles.stopAction} hitSlop={6}>
-                    <Icon name="trash-outline" size={14} color={colors.danger} />
-                    <Text style={[styles.stopActionText, { color: colors.danger }]}>Remove</Text>
-                  </Pressable>
-                )}
               </View>
             </View>
+
+            {onRemove && (
+              <Pressable onPress={onRemove} style={styles.removeBtn} hitSlop={10}>
+                <Icon name="trash-outline" size={15} color={colors.textFaint} />
+              </Pressable>
+            )}
           </View>
         </Pressable>
       </View>
@@ -401,7 +369,10 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     marginBottom: spacing.md,
   },
-  stopCardRow: { flexDirection: "row", gap: spacing.md, padding: spacing.lg, alignItems: "flex-start" },
+  stopCardRow: { flexDirection: "row", gap: spacing.md, padding: spacing.md, alignItems: "center" },
+  stopThumb: { width: 88, height: 88, borderRadius: radius.md, alignItems: "center", justifyContent: "center", overflow: "hidden" },
+  stopHeaderRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 6, flexWrap: "wrap" },
+  removeBtn: { alignSelf: "flex-start", padding: 2 },
   stopIconBadge: { width: 52, height: 52, borderRadius: radius.md, alignItems: "center", justifyContent: "center" },
   stopBody: { flex: 1 },
   travelConnector: {

@@ -346,6 +346,7 @@ export default function TripDetail() {
                           stop={stop}
                           index={i}
                           currency={trip.currency}
+                          city={trip.destination}
                           onPress={() => setSheetStop(stop)}
                           onRemove={() => removeStop(i)}
                           onNavigate={() => openDirections(stop.place, stop.place.name)}
