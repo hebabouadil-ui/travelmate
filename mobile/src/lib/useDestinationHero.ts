@@ -3,21 +3,28 @@ import { destinationHeroImage } from "./data/heroImage";
 import { categoryImage } from "./data/wikipedia";
 import type { GeoPoint } from "./types";
 
+export interface HeroImage {
+  /** Best real photo we have (a static/seed URL, or one fetched at view time).
+   *  May be undefined while loading or if every live source failed. */
+  uri?: string;
+  /** A guaranteed real-travel-photo fallback from the bundled CDN pool, tried
+   *  by SmartImage if `uri` fails — and if even this fails, SmartImage shows a
+   *  clean gradient, never a broken image. */
+  fallback: string;
+}
+
 /**
- * Resolve a destination hero image, guaranteeing a real photo every time.
+ * Resolve a destination hero image as a {uri, fallback} pair for SmartImage.
  *
- * Order of preference:
- *  1. A static URL we already have (a seed photo, or a trip's stored imageUrl).
- *  2. Otherwise show a real travel photo from our bundled, CDN-backed pool
- *     IMMEDIATELY (so a card is never blank), then…
- *  3. …try to upgrade to a city-specific photo at view time. If that live
- *     lookup succeeds we swap it in (and call `onResolved` so callers can
- *     persist it); if the device can't reach the photo source, the nice
- *     pool photo simply stays — never an empty gradient or broken glyph.
+ * - `uri`: a static/seed photo when we have one, otherwise a real photo fetched
+ *   at view time (Wikipedia article → must-see landmark → Commons geosearch).
+ * - `fallback`: a real travel photo from our bundled pool, shown immediately and
+ *   whenever `uri` is missing or fails to load.
  *
- * This is deliberately resilient: the upgrade step uses Wikipedia, which isn't
- * reachable on every network, so we must never depend on it for *a* photo to
- * appear — only for a *better* one.
+ * The point: the hero NEVER appears broken. Real city photo when any source is
+ * reachable; a generic travel photo otherwise; a gradient only if even that
+ * can't load. `onResolved` fires once with a freshly fetched URL so callers can
+ * persist it.
  */
 export function useDestinationHero(
   staticUrl: string | undefined,
@@ -25,31 +32,26 @@ export function useDestinationHero(
   country?: string,
   center?: GeoPoint,
   onResolved?: (url: string) => void
-): string | undefined {
-  // A stable, real travel photo to show instantly when we have no static one.
-  // Uses the generic "attraction" pool (neutral scenery, not a recognizable
-  // monument that would look wrong for the wrong city) and upsizes it for a
-  // crisp full-width hero. Seeded by name so cities don't all share one shot.
+): HeroImage {
   const fallback = useMemo(() => {
     const base = categoryImage("attraction", destination || country || "city");
     return base.replace(/w=\d+/, "w=1200").replace(/q=\d+/, "q=80");
   }, [destination, country]);
 
-  const [resolved, setResolved] = useState<string | undefined>(staticUrl || fallback);
+  const [uri, setUri] = useState<string | undefined>(staticUrl);
 
   useEffect(() => {
     if (staticUrl) {
-      setResolved(staticUrl);
+      setUri(staticUrl);
       return;
     }
-    // Show the pool photo right away, then try to upgrade to a real city shot.
-    setResolved(fallback);
+    setUri(undefined);
     if (!destination.trim()) return;
     let alive = true;
     destinationHeroImage(destination, country, center)
       .then((url) => {
         if (alive && url) {
-          setResolved(url);
+          setUri(url);
           onResolved?.(url);
         }
       })
@@ -57,9 +59,9 @@ export function useDestinationHero(
     return () => {
       alive = false;
     };
-    // onResolved is intentionally excluded — it's a stable intent, not a dep.
+    // onResolved excluded on purpose — stable intent, not a dep.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [staticUrl, destination, country, center?.lat, center?.lng, fallback]);
+  }, [staticUrl, destination, country, center?.lat, center?.lng]);
 
-  return resolved;
+  return { uri, fallback };
 }

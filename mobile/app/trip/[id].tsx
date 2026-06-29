@@ -67,7 +67,7 @@ export default function TripDetail() {
   // Hero photo: a stored/seed image if we have one, otherwise resolve a real
   // photo at view time (and remember it on the trip so it's instant next open).
   const staticHero = trip?.imageUrl || (trip ? cityImage(trip.destination) : undefined);
-  const heroImg = useDestinationHero(
+  const hero = useDestinationHero(
     staticHero,
     trip?.destination ?? "",
     trip?.country,
@@ -139,11 +139,7 @@ export default function TripDetail() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 }}>
         {/* Hero */}
         <View style={styles.hero}>
-          {heroImg ? (
-            <SmartImage uri={heroImg} style={StyleSheet.absoluteFill as any} />
-          ) : (
-            <LinearGradient colors={colors.gradient} style={StyleSheet.absoluteFill} />
-          )}
+          <SmartImage uri={hero.uri} fallback={hero.fallback} style={StyleSheet.absoluteFill as any} />
           <LinearGradient colors={["rgba(5,8,16,0.5)", "transparent", "rgba(11,15,26,1)"]} style={StyleSheet.absoluteFill} />
           <View style={[styles.heroNav, { paddingTop: topPad }]}>
             <Pressable onPress={() => router.back()} style={styles.navBtn} hitSlop={8}>

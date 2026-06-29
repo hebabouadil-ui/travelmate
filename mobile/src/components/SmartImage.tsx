@@ -1,44 +1,52 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Image, View, StyleSheet, ViewStyle, StyleProp, Animated, Easing } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { colors } from "@/theme";
-import { Icon } from "./Icon";
 import { toHttps } from "@/lib/data/imageValidation";
 
 /**
- * Image with graceful fallback + skeleton loading. While loading we show a
- * subtle shimmering neutral skeleton (never a bright solid colour). If the
- * primary URI fails it tries the fallback URI, then settles on a quiet neutral
- * placeholder with a faint image glyph — never a repeated mismatched photo.
+ * Image with a multi-source fallback chain + skeleton loading. It tries each
+ * candidate URL in order (primary, then any fallbacks) and only gives up when
+ * every one has failed — at which point it shows a clean, premium gradient,
+ * NEVER a broken-image glyph. This is what makes a hero "never look broken":
+ * worst case is a tasteful gradient, best case is the real photo.
  */
+const FALLBACK_GRADIENT = ["#3b3f47", "#20222a"] as const;
+
 export function SmartImage({
   uri,
   fallback,
+  fallbacks,
   style,
-  // `emoji` kept for call-site compatibility but no longer rendered (premium look).
+  // `emoji` kept for call-site compatibility but no longer rendered.
   emoji: _emoji,
 }: {
   uri?: string;
   fallback?: string;
+  /** Extra ordered fallbacks tried after `uri`/`fallback` all fail. */
+  fallbacks?: string[];
   style?: StyleProp<ViewStyle>;
   emoji?: string;
 }) {
-  // Upgrade to HTTPS on the way in — Android blocks cleartext, so an http://
-  // photo would otherwise render as a broken image with no chance to recover.
-  const httpsUri = toHttps(uri);
-  const httpsFallback = toHttps(fallback);
-  const first = httpsUri || httpsFallback;
-  const [src, setSrc] = useState<string | undefined>(first);
-  const [stage, setStage] = useState<0 | 1>(0);
-  const [loading, setLoading] = useState(Boolean(first));
-  const [failed, setFailed] = useState(false);
+  // Build the ordered, de-duplicated, HTTPS-upgraded candidate list. Android
+  // blocks cleartext, so an http:// photo would otherwise break with no recovery.
+  const sources = useMemo(() => {
+    const list = [uri, fallback, ...(fallbacks ?? [])]
+      .map((u) => toHttps(u))
+      .filter((u): u is string => Boolean(u));
+    return Array.from(new Set(list));
+  }, [uri, fallback, fallbacks]);
+  const key = sources.join("|");
+
+  const [idx, setIdx] = useState(0);
+  const [loading, setLoading] = useState(sources.length > 0);
   const shimmer = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    setSrc(httpsUri || httpsFallback);
-    setStage(0);
-    setLoading(Boolean(httpsUri || httpsFallback));
-    setFailed(false);
-  }, [httpsUri, httpsFallback]);
+    setIdx(0);
+    setLoading(sources.length > 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
 
   useEffect(() => {
     if (!loading) return;
@@ -54,14 +62,13 @@ export function SmartImage({
     return () => loop.stop();
   }, [loading, shimmer]);
 
+  const src = idx < sources.length ? sources[idx] : undefined;
+  const exhausted = !src; // ran past the end of the chain (or never had a source)
+
   const onError = () => {
-    if (stage === 0 && httpsFallback && httpsFallback !== src) {
-      setStage(1);
-      setSrc(httpsFallback);
-    } else {
-      setFailed(true);
-      setLoading(false);
-    }
+    const next = idx + 1;
+    setIdx(next); // advance; once past the end, src is undefined → gradient shows
+    if (next >= sources.length) setLoading(false);
   };
 
   const shimmerOpacity = shimmer.interpolate({
@@ -71,8 +78,14 @@ export function SmartImage({
 
   return (
     <View style={[styles.wrap, style]}>
-      {src && !failed ? (
+      {/* Premium gradient base — always present, so a slow/failed photo never
+          shows as "broken"; a loaded photo simply covers it. */}
+      <LinearGradient colors={FALLBACK_GRADIENT} style={StyleSheet.absoluteFill} />
+
+      {!exhausted ? (
         <Image
+          // Force a fresh mount per candidate so onError/onLoad fire reliably.
+          key={src}
           source={{ uri: src }}
           style={StyleSheet.absoluteFill}
           resizeMode="cover"
@@ -81,11 +94,7 @@ export function SmartImage({
         />
       ) : null}
 
-      {(!src || failed) && (
-        <Icon name="image" size={22} color={colors.textFaint} strokeWidth={1.75} />
-      )}
-
-      {loading && !failed ? (
+      {loading && !exhausted ? (
         <Animated.View
           pointerEvents="none"
           style={[StyleSheet.absoluteFill, styles.skeleton, { opacity: shimmerOpacity }]}
